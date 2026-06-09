@@ -1,7 +1,19 @@
 # 식탁 일기 — CLAUDE.md
 
 함께 먹는 사람들의 식사 추억 기록 + 우리만의 맛집 지도 웹앱.
-로컬에서 동작하는 MVP. 백엔드 없음, localStorage에 모든 데이터 저장.
+Supabase 백엔드 연결 완료. Vercel 배포 완료. PWA 설치 가능.
+
+---
+
+## 배포 정보
+
+| 항목 | 내용 |
+|---|---|
+| 서비스 URL | https://meal-app-nine-snowy.vercel.app |
+| GitHub | https://github.com/mygenie1/meal-app |
+| Vercel 계정 | mygenie1 |
+| Supabase 프로젝트 | jsesigubkqnddcjqusjv (mygenie1 개인 계정) |
+| Supabase URL | https://jsesigubkqnddcjqusjv.supabase.co |
 
 ---
 
@@ -23,10 +35,11 @@
 | 라우팅 | react-router-dom 7 |
 | 날짜 | date-fns 4 (locale: ko) |
 | 지도 | Leaflet 1.9 + react-leaflet 5 |
-| 지오코딩 | Nominatim (OpenStreetMap 무료 API) |
+| 지오코딩 | Nominatim (OpenStreetMap 무료 API, countrycodes=kr) |
 | 지도 타일 | CartoDB Light — `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png` |
 | 고유ID | uuid 14 |
-| 데이터 저장 | localStorage (`mealapp_data` 키) |
+| 데이터 저장 | Supabase (PostgreSQL) |
+| PWA | vite-plugin-pwa + Workbox |
 
 ---
 
@@ -69,18 +82,29 @@ warm-light #a07850  보조 텍스트, 레이블
 ```
 meal-app/
 ├── public/
+│   ├── favicon.svg
+│   ├── icon.svg                         PWA 아이콘 원본 (포크+스푼, warm-brown)
+│   ├── icon-192x192.png                 PWA 아이콘
+│   ├── icon-512x512.png                 PWA 아이콘
+│   ├── apple-touch-icon.png             iOS 홈화면 아이콘
+│   └── offline.html                     오프라인 폴백 페이지
+├── scripts/
+│   └── gen-icons.mjs                    SVG → PNG 아이콘 생성 스크립트
 ├── src/
-│   ├── App.jsx                          라우팅 루트, AppProvider 래핑
+│   ├── App.jsx                          라우팅 루트, AppProvider 래핑, 오프라인/에러 처리
 │   ├── main.jsx                         React 진입점
 │   ├── index.css                        Tailwind 지시어, 전역 스타일, Leaflet 팝업 오버라이드
 │   │
+│   ├── lib/
+│   │   └── supabase.js                  Supabase 클라이언트 초기화
+│   │
 │   ├── context/
-│   │   └── AppContext.jsx               전체 상태 관리 + localStorage 동기화
+│   │   └── AppContext.jsx               전체 상태 관리 + Supabase CRUD
 │   │
 │   ├── components/
 │   │   ├── common/
 │   │   │   ├── BottomNav.jsx            하단 탭 네비게이션 (SVG 아이콘)
-│   │   │   ├── Header.jsx               상단 헤더 (현재 거의 미사용, 각 페이지가 직접 작성)
+│   │   │   ├── Header.jsx               상단 헤더
 │   │   │   ├── Modal.jsx                바텀시트 모달 (모바일: 하단 슬라이드, 데스크톱: 중앙)
 │   │   │   └── StarRating.jsx           별점 입력/표시 (1~5, 클릭 토글)
 │   │   │
@@ -88,9 +112,9 @@ meal-app/
 │   │   │   └── CalendarGrid.jsx         월간 달력 그리드, 날짜별 식사 썸네일 표시
 │   │   │
 │   │   ├── MealRecord/
-│   │   │   ├── MealForm.jsx             식사 기록 입력 폼 (사진 → 식당명 → 위치 → 별점 → 한줄평 → 메모 → 태그)
+│   │   │   ├── MealForm.jsx             식사 기록 입력 폼 + 위치 geocoding (blur 시 자동 검색)
 │   │   │   ├── MealCard.jsx             식사 기록 카드 (사진 + 정보 표시)
-│   │   │   └── DayDetail.jsx            날짜 클릭 시 모달 내용 (기록 없으면 폼, 있으면 목록)
+│   │   │   └── DayDetail.jsx            날짜 클릭 시 모달 내용
 │   │   │
 │   │   ├── Map/
 │   │   │   └── MealMap.jsx              Leaflet 지도 + 핀 + 팝업 미리보기
@@ -107,52 +131,39 @@ meal-app/
 │       ├── IngredientsPage.jsx          재료 목록
 │       └── SpacesPage.jsx               스페이스 관리
 │
+├── .env                                 Supabase 환경변수 (gitignore, Vercel에 별도 설정)
 ├── tailwind.config.js                   커스텀 색상(cream, warm) + 폰트 정의
 ├── postcss.config.js
-├── vite.config.js
+├── vite.config.js                       PWA 플러그인 포함
 └── package.json
 ```
 
 ---
 
-## 데이터 구조
+## Supabase DB 구조
 
-localStorage 키 `mealapp_data`에 아래 형태로 저장:
+데이터는 localStorage 대신 Supabase PostgreSQL에 저장됨.
+`currentSpaceId`만 localStorage에 저장 (UI 상태값).
 
-```js
-{
-  currentSpaceId: string | null,
-  spaces: [
-    {
-      id: string,           // uuid
-      name: string,
-      emoji: string,        // 스페이스 아이콘
-      code: string,         // 6자리 대문자 코드 (참가용)
-      createdAt: string,    // ISO 날짜
-      meals: [
-        {
-          id: string,
-          date: string,           // "yyyy-MM-dd"
-          createdAt: string,
-          photo: string,          // base64 DataURL (선택)
-          restaurantName: string, // 선택
-          location: string,       // 주소 텍스트 (선택, 지오코딩에 사용)
-          lat: number,            // 캐시된 위도 (선택)
-          lng: number,            // 캐시된 경도 (선택)
-          rating: number,         // 0~5
-          review: string,         // 한줄평
-          memo: string,
-          tag: string,            // '집밥' | '외식' | '카페' | '배달' | ''
-        }
-      ],
-      ingredients: {
-        toBuy: [{ id, text, done }],
-        remaining: [{ id, text, done }],
-      }
-    }
-  ]
-}
+### 테이블
+
 ```
+spaces        id, name, emoji, code(6자리 unique), created_at
+meals         id, space_id(FK), date, restaurant_name, location, lat, lng,
+              rating, review, memo, tag, photo(base64), created_at
+ingredients   id, space_id(FK), type(toBuy|remaining), text, done, created_at
+meal_photos   id, meal_id(FK), storage_path, created_at  ← 향후 Storage 연동용
+```
+
+### RLS 정책
+- 모든 테이블: anon 전체 허용 (인증 없는 MVP)
+
+### 환경변수 (.env)
+```
+VITE_SUPABASE_URL=https://jsesigubkqnddcjqusjv.supabase.co
+VITE_SUPABASE_ANON_KEY=...
+```
+Vercel 배포 시 대시보드 → Settings → Environment Variables에 동일하게 설정 필요.
 
 ---
 
@@ -161,8 +172,8 @@ localStorage 키 `mealapp_data`에 아래 형태로 저장:
 ### 스페이스 시스템
 - 하나의 앱에 스페이스 여러 개 생성 가능
 - 각 스페이스는 이름 + 이모지 아이콘 + 6자리 랜덤 코드 보유
-- 코드 공유 → 같은 기기에서 해당 스페이스로 전환 (MVP 한계: 기기 간 공유 불가)
-- 스페이스 삭제 시 다음 스페이스로 자동 전환
+- 코드 공유 → **어느 기기에서도** 해당 스페이스로 참가 가능 (Supabase 덕분에)
+- 스페이스 삭제 시 다음 스페이스로 자동 전환 (meals, ingredients CASCADE 삭제)
 
 ### 달력
 - `date-fns`로 월간 그리드 생성 (일요일 시작)
@@ -175,12 +186,16 @@ localStorage 키 `mealapp_data`에 아래 형태로 저장:
 - 모든 필드 선택사항 (사진만 올려도 저장 가능)
 - 사진: FileReader로 base64 변환하여 저장
 - 필드 순서: 사진 → 식당이름 → 위치 → 별점 → 한줄평 → 메모 → 태그
-- 위치 입력 시 지도에 핀 자동 생성 (Nominatim 지오코딩)
+- 위치 입력 후 포커스 이탈(blur) 시 Nominatim 자동 geocoding
+  - countrycodes=kr 파라미터로 한국 주소 정확도 향상
+  - 검색 성공: 초록색 "지도에 핀으로 표시됩니다"
+  - 검색 실패: 주황색 "주소를 찾을 수 없어요"
+  - lat/lng를 meal 객체에 저장 → 지도에 즉시 반영
 
 ### 맛집 지도 (MealMap)
 - 스페이스 없어도 지도 표시 (서울 기본 좌표)
 - **모든 스페이스**의 위치 있는 식사를 한 지도에 표시
-- Nominatim API로 주소 → 좌표 변환 (비동기, 로딩 오버레이 표시)
+- lat/lng 캐시 우선 사용, 없으면 Nominatim 재조회 후 DB에 저장
 - 핀 색상은 태그별로 구분 (집밥: 초록, 외식: 노랑, 카페: 핑크, 배달: 파랑)
 - 핀 클릭 → Leaflet Popup에 사진 + 식당명 + 별점 + 리뷰 + 날짜 표시
 - 빈 상태: 지도 위 반투명 오버레이로 안내 문구
@@ -193,6 +208,12 @@ localStorage 키 `mealapp_data`에 아래 형태로 저장:
 ### 홈(달력) 통계 배너
 - 현재 스페이스 이름 + 이번 달 식사 횟수 표시
 - 횟수별 다른 메시지 (0회, 1회, 2~4회, 5~9회, 10회+)
+
+### PWA
+- 홈화면 설치 가능 (Android Chrome / iOS Safari)
+- 앱 이름: 식탁일기 / 테마 컬러: #6b4f3a
+- 오프라인 감지 시 OfflineBanner 표시 (App.jsx)
+- Workbox로 앱 쉘 전체 프리캐시 → 오프라인에서도 앱 로드 가능
 
 ---
 
@@ -240,11 +261,6 @@ npm run dev
 4. 재료 목록 (부가 기능)
 5. 요리 추천 (MVP에서 제외)
 
-### 향후 추가할 기능
-- 카카오 로그인 (현재는 로그인 없음)
-- 실제 기기 간 스페이스 공유 (백엔드 필요)
-- Vercel 배포 예정
-
 ### 디자인 원칙
 - 심플하고 깔끔하되 다이어리 감성
 - 사진이 잘 보이는 레이아웃 최우선
@@ -253,9 +269,25 @@ npm run dev
 
 ---
 
-## 현재 MVP 한계 및 향후 과제
+## 완료된 작업
 
-- **스페이스 공유**: 현재는 같은 기기 내에서만 동작. 실제 공유는 백엔드(DB + 인증) 필요
-- **사진 저장**: base64로 localStorage 저장 → 용량 한계 있음. 실서비스 시 S3 등 파일 스토리지 필요
-- **지오코딩 캐싱**: 현재 좌표를 meal 객체에 저장하지 않아 매번 API 호출. `lat/lng` 필드에 캐싱하는 로직 추가 필요
-- **오프라인**: Nominatim 지오코딩은 인터넷 필요. 오프라인 시 위치 없는 식사만 표시됨
+| 작업 | 내용 |
+|---|---|
+| Supabase 연결 | localStorage → Supabase DB 전환, 크로스 디바이스 스페이스 공유 가능 |
+| PWA 설정 | vite-plugin-pwa, 아이콘 3종, 오프라인 페이지, Workbox 프리캐시 |
+| 스페이스 코드 참가 버그 수정 | handleJoin async/await 누락 수정, 에러 피드백 추가 |
+| 위치 검색 버그 수정 | blur 시 geocoding, countrycodes=kr 추가, lat/lng 저장 |
+| Supabase 에러 피드백 | loadError 상태, 환경변수 누락 경고, 에러 화면 |
+| Vercel 배포 | https://meal-app-nine-snowy.vercel.app |
+
+---
+
+## 다음 단계
+
+### 우선순위 높음
+- **카카오 로그인 연동** — 현재 인증 없음, RLS도 anon 전체 허용 상태
+
+### 향후 과제
+- **사진 저장**: base64 → Supabase Storage (meal_photos 테이블 이미 설계됨)
+- **스페이스 권한**: 로그인 후 내 스페이스만 보이도록 RLS 정책 강화
+- **오프라인 데이터**: Supabase 실패 시 로컬 캐시 fallback
