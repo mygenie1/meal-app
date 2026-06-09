@@ -11,6 +11,7 @@ export default function SpaceManager() {
   const [emoji, setEmoji] = useState('🍽️')
   const [code, setCode] = useState('')
   const [joinError, setJoinError] = useState('')
+  const [joining, setJoining] = useState(false)
 
   function handleCreate(e) {
     e.preventDefault()
@@ -21,15 +22,17 @@ export default function SpaceManager() {
     setShowCreate(false)
   }
 
-  function handleJoin(e) {
+  async function handleJoin(e) {
     e.preventDefault()
-    const result = joinByCode(code.trim())
+    setJoining(true)
+    setJoinError('')
+    const result = await joinByCode(code.trim())
+    setJoining(false)
     if (result) {
       setCode('')
-      setJoinError('')
       setShowJoin(false)
     } else {
-      setJoinError('코드를 찾을 수 없어요. 같은 기기에서만 참가 가능합니다.')
+      setJoinError('코드를 찾을 수 없어요. 올바른 코드인지 확인해주세요.')
     }
   }
 
@@ -179,8 +182,12 @@ export default function SpaceManager() {
             <button type="button" onClick={() => setShowJoin(false)} className="flex-1 py-2 rounded-xl border border-cream-300 text-warm-brown text-sm hover:bg-cream-200">
               취소
             </button>
-            <button type="submit" className="flex-1 py-2 rounded-xl bg-warm-brown text-white text-sm hover:bg-warm-dark">
-              참가
+            <button
+              type="submit"
+              disabled={joining}
+              className="flex-1 py-2 rounded-xl bg-warm-brown text-white text-sm hover:bg-warm-dark disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {joining ? '검색 중...' : '참가'}
             </button>
           </div>
         </form>

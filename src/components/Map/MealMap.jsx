@@ -34,8 +34,17 @@ function makeIcon(color) {
 }
 
 async function geocode(locationStr) {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationStr)}&format=json&limit=1`
-  const res = await fetch(url, { headers: { 'Accept-Language': 'ko' } })
+  const params = new URLSearchParams({
+    q: locationStr,
+    format: 'json',
+    limit: '1',
+    countrycodes: 'kr',
+    'accept-language': 'ko',
+  })
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?${params}`,
+    { headers: { 'Accept-Language': 'ko' } }
+  )
   const data = await res.json()
   if (data[0]) return [parseFloat(data[0].lat), parseFloat(data[0].lon)]
   return null

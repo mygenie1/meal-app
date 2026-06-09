@@ -8,6 +8,8 @@ const TAGS = ['집밥', '외식', '카페', '배달']
 const emptyForm = {
   restaurantName: '',
   location: '',
+  lat: null,
+  lng: null,
   rating: 0,
   review: '',
   memo: '',
@@ -15,8 +17,28 @@ const emptyForm = {
   photo: '',
 }
 
+async function geocodeKr(query) {
+  const params = new URLSearchParams({
+    q: query,
+    format: 'json',
+    limit: '1',
+    countrycodes: 'kr',
+    'accept-language': 'ko',
+  })
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?${params}`,
+    { headers: { 'Accept-Language': 'ko' } }
+  )
+  const data = await res.json()
+  if (data[0]) return [parseFloat(data[0].lat), parseFloat(data[0].lon)]
+  return null
+}
+
 export default function MealForm({ date, onSubmit, onCancel, initial }) {
-  const [form, setForm] = useState(initial || emptyForm)
+  const [form, setForm] = useState({ ...emptyForm, ...initial })
+  const [geoStatus, setGeoStatus] = useState(
+    () => (initial?.lat && initial?.lng) ? 'found' : 'idle'
+  )
   const fileRef = useRef()
 
   function set(key, val) {
@@ -31,10 +53,56 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     reader.readAsDataURL(file)
   }
 
-  function handleSubmit(e) {
-    e.preventDefault()
-    onSubmit({ ...form, date: format(date, 'yyyy-MM-dd') })
+  function handleLocationChange(e) {
+    const value = e.target.value
+    setForm(prev => ({ ...prev, location: value, lat: null, lng: null }))
+    setGeoStatus('idle')
   }
+
+  async function handleLocationBlur() {
+    const location = form.location.trim()
+    if (!location || form.lat) return  // 비어있거나 이미 좌표 있으면 skip
+
+    setGeoStatus('loading')
+    try {
+      const coords = await geocodeKr(location)
+      if (coords) {
+        setForm(prev => ({ ...prev, lat: coords[0], lng: coords[1] }))
+        setGeoStatus('found')
+      } else {
+        setGeoStatus('notfound')
+      }
+    } catch {
+      setGeoStatus('notfound')
+    }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+
+    let { lat, lng } = form
+
+    // 위치 있지만 좌표 미확보 (blur 없이 바로 저장 누른 경우)
+    if (form.location.trim() && !lat && geoStatus === 'idle') {
+      setGeoStatus('loading')
+      try {
+        const coords = await geocodeKr(form.location)
+        if (coords) {
+          lat = coords[0]
+          lng = coords[1]
+          setGeoStatus('found')
+        } else {
+          setGeoStatus('notfound')
+        }
+      } catch {
+        setGeoStatus('notfound')
+      }
+    }
+
+    onSubmit({ ...form, date: format(date, 'yyyy-MM-dd'), lat, lng })
+  }
+
+  const isGeocoding = geoStatus === 'loading'
 
   return (
     <form onSubmit={handleSubmit}>
@@ -113,11 +181,27 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           <input
             type="text"
             value={form.location}
-            onChange={e => set('location', e.target.value)}
+            onChange={handleLocationChange}
+            onBlur={handleLocationBlur}
             placeholder="예: 서울 마포구 연남동"
             className="w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors"
           />
-          <p className="text-[11px] text-cream-400 mt-1 ml-1">입력하면 지도에 핀으로 표시돼요</p>
+          {/* 지오코딩 상태 */}
+          {geoStatus === 'idle' && !form.location && (
+            <p className="text-[11px] text-cream-400 mt-1 ml-1">입력하면 지도에 핀으로 표시돼요</p>
+          )}
+          {geoStatus === 'idle' && form.location && (
+            <p className="text-[11px] text-cream-400 mt-1 ml-1">입력 완료 후 잠시 기다려주세요</p>
+          )}
+          {geoStatus === 'loading' && (
+            <p className="text-[11px] text-warm-light mt-1 ml-1">주소 검색 중...</p>
+          )}
+          {geoStatus === 'found' && (
+            <p className="text-[11px] text-green-600 mt-1 ml-1">지도에 핀으로 표시됩니다</p>
+          )}
+          {geoStatus === 'notfound' && (
+            <p className="text-[11px] text-amber-500 mt-1 ml-1">주소를 찾을 수 없어요. 더 자세히 입력해보세요</p>
+          )}
         </div>
 
         {/* 별점 */}
@@ -183,9 +267,10 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
         </button>
         <button
           type="submit"
-          className="flex-1 py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors"
+          disabled={isGeocoding}
+          className="flex-1 py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          저장하기
+          {isGeocoding ? '주소 확인 중...' : '저장하기'}
         </button>
       </div>
     </form>
