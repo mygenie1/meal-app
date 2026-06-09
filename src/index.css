@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Noto Sans KR', system-ui, sans-serif;
+  background-color: #fdfcf9;
+  color: #3d2b1f;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+/* 스크롤바 스타일 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #faf7f0;
+}
+::-webkit-scrollbar-thumb {
+  background: #d9c4a8;
+  border-radius: 3px;
+}
+
+/* 달력 날짜 호버 */
+.calendar-day:hover {
+  background-color: #f5ede0;
+}
+
+/* Leaflet 팝업 스타일 오버라이드 */
+.leaflet-popup-content-wrapper {
+  border-radius: 14px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+.leaflet-popup-content {
+  margin: 12px !important;
+}
+.leaflet-popup-tip {
+  background: white !important;
+}
+
+/* 별점 */
+.star-filled {
+  color: #c4a882;
+}
+.star-empty {
+  color: #e5ddd5;
+}
+
+/* 지도 핀 */
+.meal-pin {
+  background: #6b4f3a;
+  border: 2px solid white;
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+}
