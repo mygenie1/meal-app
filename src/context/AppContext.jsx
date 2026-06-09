@@ -49,6 +49,7 @@ export function AppProvider({ children }) {
     () => localStorage.getItem(SPACE_KEY) || null
   )
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
   const currentSpace = spaces.find(s => s.id === currentSpaceId) || null
 
@@ -65,6 +66,7 @@ export function AppProvider({ children }) {
 
   async function loadAll() {
     setLoading(true)
+    setLoadError(null)
     try {
       const [
         { data: spacesData, error: e1 },
@@ -76,8 +78,10 @@ export function AppProvider({ children }) {
         supabase.from('ingredients').select('*').order('created_at'),
       ])
 
-      if (e1 || e2 || e3) {
-        console.error('Supabase load error:', e1 || e2 || e3)
+      const firstError = e1 || e2 || e3
+      if (firstError) {
+        console.error('Supabase load error:', firstError)
+        setLoadError(firstError.message || 'Supabase 연결 오류')
         return
       }
 
@@ -329,6 +333,7 @@ export function AppProvider({ children }) {
         spaces,
         currentSpace,
         loading,
+        loadError,
         createSpace,
         switchSpace,
         deleteSpace,

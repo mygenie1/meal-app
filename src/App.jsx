@@ -35,7 +35,7 @@ function OfflineBanner() {
 }
 
 function AppContent() {
-  const { loading } = useApp()
+  const { loading, loadError } = useApp()
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
 
   useEffect(() => {
@@ -55,6 +55,27 @@ function AppContent() {
     return (
       <div className="min-h-svh flex items-center justify-center bg-cream-50">
         <p className="text-sm text-warm-light">불러오는 중...</p>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-svh flex flex-col items-center justify-center bg-cream-50 px-8 text-center">
+        <div className="w-16 h-16 rounded-full bg-cream-200 flex items-center justify-center mb-5">
+          <svg className="w-8 h-8 text-warm-light" fill="none" stroke="currentColor" strokeWidth="1.4" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+        </div>
+        <p className="font-semibold text-warm-dark mb-2">데이터를 불러올 수 없어요</p>
+        <p className="text-xs text-warm-light mb-1 leading-relaxed">Supabase 연결에 실패했습니다.</p>
+        <p className="text-[11px] text-cream-400 mb-6 font-mono bg-cream-100 px-3 py-2 rounded-xl">{loadError}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="bg-warm-brown text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-warm-dark transition-colors"
+        >
+          다시 시도
+        </button>
       </div>
     )
   }

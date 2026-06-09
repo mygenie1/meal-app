@@ -12,14 +12,23 @@ export default function SpaceManager() {
   const [code, setCode] = useState('')
   const [joinError, setJoinError] = useState('')
   const [joining, setJoining] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
 
-  function handleCreate(e) {
+  async function handleCreate(e) {
     e.preventDefault()
     if (!name.trim()) return
-    createSpace(name.trim(), emoji)
-    setName('')
-    setEmoji('🍽️')
-    setShowCreate(false)
+    setCreating(true)
+    setCreateError('')
+    const result = await createSpace(name.trim(), emoji)
+    setCreating(false)
+    if (result) {
+      setName('')
+      setEmoji('🍽️')
+      setShowCreate(false)
+    } else {
+      setCreateError('스페이스 생성에 실패했어요. 네트워크 연결과 Supabase 설정을 확인해주세요.')
+    }
   }
 
   async function handleJoin(e) {
@@ -148,17 +157,28 @@ export default function SpaceManager() {
           <input
             type="text"
             value={name}
-            onChange={e => setName(e.target.value)}
+            onChange={e => { setName(e.target.value); setCreateError('') }}
             placeholder="스페이스 이름 (예: 우리 가족 식탁)"
             className="w-full px-3 py-2 rounded-xl bg-white border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
             autoFocus
           />
+          {createError && (
+            <p className="text-xs text-red-400">{createError}</p>
+          )}
           <div className="flex gap-2">
-            <button type="button" onClick={() => setShowCreate(false)} className="flex-1 py-2 rounded-xl border border-cream-300 text-warm-brown text-sm hover:bg-cream-200">
+            <button
+              type="button"
+              onClick={() => { setShowCreate(false); setCreateError('') }}
+              className="flex-1 py-2 rounded-xl border border-cream-300 text-warm-brown text-sm hover:bg-cream-200"
+            >
               취소
             </button>
-            <button type="submit" className="flex-1 py-2 rounded-xl bg-warm-brown text-white text-sm hover:bg-warm-dark">
-              만들기
+            <button
+              type="submit"
+              disabled={creating}
+              className="flex-1 py-2 rounded-xl bg-warm-brown text-white text-sm hover:bg-warm-dark disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {creating ? '만드는 중...' : '만들기'}
             </button>
           </div>
         </form>
