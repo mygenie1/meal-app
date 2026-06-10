@@ -66,6 +66,114 @@ export function AppProvider({ children }) {
     loadAll()
   }, [])
 
+  // Supabase Realtime 구독 — 다른 기기/사용자의 변경사항 실시간 반영
+  useEffect(() => {
+    const spacesChannel = supabase
+      .channel('realtime:spaces')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'spaces' }, ({ eventType, new: newRow, old: oldRow }) => {
+        if (eventType === 'INSERT') {
+          setSpaces(prev => {
+            if (prev.find(s => s.id === newRow.id)) return prev
+            return [...prev, {
+              id: newRow.id,
+              name: newRow.name,
+              emoji: newRow.emoji,
+              code: newRow.code,
+              createdAt: newRow.created_at,
+              meals: [],
+              ingredients: { toBuy: [], remaining: [] },
+            }]
+          })
+        } else if (eventType === 'UPDATE') {
+          setSpaces(prev => prev.map(s =>
+            s.id === newRow.id
+              ? { ...s, name: newRow.name, emoji: newRow.emoji, code: newRow.code }
+              : s
+          ))
+        } else if (eventType === 'DELETE') {
+          setSpaces(prev => {
+            const next = prev.filter(s => s.id !== oldRow.id)
+            setCurrentSpaceId(cur => cur === oldRow.id ? (next[0]?.id || null) : cur)
+            return next
+          })
+        }
+      })
+      .subscribe()
+
+    const mealsChannel = supabase
+      .channel('realtime:meals')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meals' }, ({ eventType, new: newRow, old: oldRow }) => {
+        if (eventType === 'INSERT') {
+          setSpaces(prev => prev.map(s => {
+            if (s.id !== newRow.space_id) return s
+            if (s.meals.find(m => m.id === newRow.id)) return s // 이미 로컬에 추가됨
+            return { ...s, meals: [...s.meals, rowToMeal(newRow)] }
+          }))
+        } else if (eventType === 'UPDATE') {
+          setSpaces(prev => prev.map(s => {
+            if (s.id !== newRow.space_id) return s
+            return { ...s, meals: s.meals.map(m => m.id === newRow.id ? rowToMeal(newRow) : m) }
+          }))
+        } else if (eventType === 'DELETE') {
+          // DELETE 이벤트의 old는 id만 포함 → 전체 스페이스에서 제거
+          setSpaces(prev => prev.map(s => ({
+            ...s,
+            meals: s.meals.filter(m => m.id !== oldRow.id),
+          })))
+        }
+      })
+      .subscribe()
+
+    const ingredientsChannel = supabase
+      .channel('realtime:ingredients')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ingredients' }, ({ eventType, new: newRow, old: oldRow }) => {
+        if (eventType === 'INSERT') {
+          setSpaces(prev => prev.map(s => {
+            if (s.id !== newRow.space_id) return s
+            const type = newRow.type
+            if (s.ingredients[type]?.find(i => i.id === newRow.id)) return s // 이미 로컬에 추가됨
+            return {
+              ...s,
+              ingredients: {
+                ...s.ingredients,
+                [type]: [...(s.ingredients[type] || []), rowToIngredient(newRow)],
+              },
+            }
+          }))
+        } else if (eventType === 'UPDATE') {
+          setSpaces(prev => prev.map(s => {
+            if (s.id !== newRow.space_id) return s
+            const type = newRow.type
+            return {
+              ...s,
+              ingredients: {
+                ...s.ingredients,
+                [type]: s.ingredients[type].map(i =>
+                  i.id === newRow.id ? rowToIngredient(newRow) : i
+                ),
+              },
+            }
+          }))
+        } else if (eventType === 'DELETE') {
+          // DELETE 이벤트의 old는 id만 포함 → 전체 스페이스/타입에서 제거
+          setSpaces(prev => prev.map(s => ({
+            ...s,
+            ingredients: {
+              toBuy: s.ingredients.toBuy.filter(i => i.id !== oldRow.id),
+              remaining: s.ingredients.remaining.filter(i => i.id !== oldRow.id),
+            },
+          })))
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(spacesChannel)
+      supabase.removeChannel(mealsChannel)
+      supabase.removeChannel(ingredientsChannel)
+    }
+  }, [])
+
   async function loadAll() {
     setLoading(true)
     setLoadError(null)
