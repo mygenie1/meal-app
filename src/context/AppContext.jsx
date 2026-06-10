@@ -70,9 +70,9 @@ export function AppProvider({ children }) {
     else localStorage.removeItem(SPACE_KEY)
   }, [currentSpaceId])
 
-  // 앱 시작 시 Supabase에서 전체 데이터 로드
+  // 앱 시작 시 spaces만 빠르게 로드 → 나머지는 백그라운드
   useEffect(() => {
-    loadAll(0)
+    boot(0)
   }, [])
 
   // Supabase Realtime 구독 — 다른 기기/사용자의 변경사항 실시간 반영
@@ -184,65 +184,86 @@ export function AppProvider({ children }) {
   }, [])
 
   const MAX_RETRIES = 3
-  const RETRY_DELAYS = [1500, 3000, 5000] // 재시도 간격 (ms)
+  const RETRY_DELAYS = [1500, 3000, 5000]
 
-  async function loadAll(attempt = 0) {
+  // Phase 1: spaces만 빠르게 조회 — DB 웜업 후 앱 즉시 오픈
+  async function boot(attempt = 0) {
     setLoading(true)
     setLoadError(null)
     setRetryAttempt(attempt)
 
     try {
-      const [
-        { data: spacesData, error: e1 },
-        { data: mealsData, error: e2 },
-        { data: ingredientsData, error: e3 },
-      ] = await Promise.all([
-        supabase.from('spaces').select('*').order('created_at'),
-        supabase.from('meals').select('*').order('created_at'),
-        supabase.from('ingredients').select('*').order('created_at'),
-      ])
+      const { data: spacesData, error } = await supabase
+        .from('spaces')
+        .select('*')
+        .order('created_at')
 
-      const firstError = e1 || e2 || e3
-      if (firstError) throw new Error(firstError.message || 'Supabase 쿼리 오류')
+      if (error) throw new Error(error.message || 'spaces 조회 오류')
 
-      const built = (spacesData || []).map(s => ({
+      const spaceList = (spacesData || []).map(s => ({
         id: s.id,
         name: s.name,
         emoji: s.emoji,
         code: s.code,
         createdAt: s.created_at,
-        meals: (mealsData || []).filter(m => m.space_id === s.id).map(rowToMeal),
-        ingredients: {
-          toBuy: (ingredientsData || [])
-            .filter(i => i.space_id === s.id && i.type === 'toBuy')
-            .map(rowToIngredient),
-          remaining: (ingredientsData || [])
-            .filter(i => i.space_id === s.id && i.type === 'remaining')
-            .map(rowToIngredient),
-        },
+        meals: [],
+        ingredients: { toBuy: [], remaining: [] },
       }))
 
-      setSpaces(built)
-
-      // 저장된 currentSpaceId가 없거나 DB에 없으면 첫 번째로 초기화
+      setSpaces(spaceList)
       setCurrentSpaceId(prev => {
-        if (prev && built.find(s => s.id === prev)) return prev
-        return built[0]?.id || null
+        if (prev && spaceList.find(s => s.id === prev)) return prev
+        return spaceList[0]?.id || null
       })
-
       setLoading(false)
+
+      // Phase 2: 각 space의 meals + ingredients 백그라운드 로드 (에러 있어도 앱 유지)
+      loadAllSpaceData(spaceList).catch(err =>
+        console.warn('백그라운드 데이터 로드 실패:', err)
+      )
     } catch (err) {
-      console.error(`Supabase load error (시도 ${attempt + 1}/${MAX_RETRIES}):`, err)
+      console.error(`Supabase boot error (시도 ${attempt + 1}/${MAX_RETRIES}):`, err)
 
       if (attempt < MAX_RETRIES - 1) {
-        // 자동 재시도 — 로딩 상태 유지
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
-        return loadAll(attempt + 1)
+        await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]))
+        return boot(attempt + 1)
       }
 
-      // 모든 재시도 소진
-      setLoadError(err.name === 'AbortError' ? '연결 시간이 초과됐어요 (타임아웃)' : (err.message || 'Supabase 연결 오류'))
-      setLoading(false)
+      // 모든 재시도 소진 → 앱은 열되 에러 배너 표시
+      const msg = err.name === 'AbortError'
+        ? '연결 시간이 초과됐어요 (타임아웃)'
+        : (err.message || 'Supabase 연결 오류')
+      setLoadError(msg)
+      setLoading(false) // 빈 상태로 앱 오픈
+    }
+  }
+
+  // Phase 2: 각 space의 meals + ingredients를 순차 로드 (DB 부하 분산)
+  async function loadAllSpaceData(spaceList) {
+    for (const space of spaceList) {
+      try {
+        const [
+          { data: mealsData, error: e1 },
+          { data: ingredientsData, error: e2 },
+        ] = await Promise.all([
+          supabase.from('meals').select('*').eq('space_id', space.id).order('created_at'),
+          supabase.from('ingredients').select('*').eq('space_id', space.id).order('created_at'),
+        ])
+
+        if (e1) throw new Error(e1.message)
+        if (e2) throw new Error(e2.message)
+
+        setSpaces(prev => prev.map(s => s.id !== space.id ? s : {
+          ...s,
+          meals: (mealsData || []).map(rowToMeal),
+          ingredients: {
+            toBuy: (ingredientsData || []).filter(i => i.type === 'toBuy').map(rowToIngredient),
+            remaining: (ingredientsData || []).filter(i => i.type === 'remaining').map(rowToIngredient),
+          },
+        }))
+      } catch (err) {
+        console.warn(`Space ${space.id} 데이터 로드 실패:`, err)
+      }
     }
   }
 
@@ -467,7 +488,7 @@ export function AppProvider({ children }) {
         loading,
         loadError,
         retryAttempt,
-        reload: () => loadAll(0),
+        reload: () => boot(0),
         createSpace,
         switchSpace,
         deleteSpace,

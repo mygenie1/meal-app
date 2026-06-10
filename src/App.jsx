@@ -35,9 +35,32 @@ function OfflineBanner() {
   )
 }
 
+function ConnectErrorBanner({ message, onRetry, onDismiss }) {
+  return (
+    <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3">
+      <svg className="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+      </svg>
+      <p className="text-xs text-amber-700 flex-1">Supabase 연결 실패 — 데이터 없이 시작합니다</p>
+      <button
+        onClick={onRetry}
+        className="text-xs text-amber-700 font-medium underline hover:no-underline shrink-0"
+      >
+        재시도
+      </button>
+      <button onClick={onDismiss} className="text-amber-400 hover:text-amber-600 shrink-0 ml-1">
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 function AppContent() {
   const { loading, loadError, retryAttempt, reload } = useApp()
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
+  const [errorDismissed, setErrorDismissed] = useState(false)
 
   useEffect(() => {
     const goOnline  = () => setIsOffline(false)
@@ -49,6 +72,11 @@ function AppContent() {
       window.removeEventListener('offline', goOffline)
     }
   }, [])
+
+  // 재시도 시 배너 다시 표시
+  useEffect(() => {
+    if (loadError) setErrorDismissed(false)
+  }, [loadError])
 
   if (isOffline) return <OfflineBanner />
 
@@ -64,7 +92,6 @@ function AppContent() {
             <p className="text-xs text-warm-light mt-1">Supabase 서버에 재연결하고 있어요</p>
           )}
         </div>
-        {/* 재시도 진행 도트 */}
         <div className="flex gap-1.5">
           {[0, 1, 2].map(i => (
             <div
@@ -79,29 +106,15 @@ function AppContent() {
     )
   }
 
-  if (loadError) {
-    return (
-      <div className="min-h-svh flex flex-col items-center justify-center bg-cream-50 px-8 text-center">
-        <div className="w-16 h-16 rounded-full bg-cream-200 flex items-center justify-center mb-5">
-          <svg className="w-8 h-8 text-warm-light" fill="none" stroke="currentColor" strokeWidth="1.4" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-          </svg>
-        </div>
-        <p className="font-semibold text-warm-dark mb-2">연결에 실패했어요</p>
-        <p className="text-xs text-warm-light mb-1 leading-relaxed">3회 재시도 후에도 연결되지 않았어요.</p>
-        <p className="text-[11px] text-cream-400 mb-6 font-mono bg-cream-100 px-3 py-2 rounded-xl max-w-xs break-all">{loadError}</p>
-        <button
-          onClick={reload}
-          className="bg-warm-brown text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-warm-dark transition-colors active:scale-95"
-        >
-          다시 시도
-        </button>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-svh max-w-lg mx-auto flex flex-col bg-cream-50">
+      {loadError && !errorDismissed && (
+        <ConnectErrorBanner
+          message={loadError}
+          onRetry={() => { setErrorDismissed(true); reload() }}
+          onDismiss={() => setErrorDismissed(true)}
+        />
+      )}
       <main className="flex-1 flex flex-col">
         <Routes>
           <Route path="/" element={<HomePage />} />
