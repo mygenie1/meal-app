@@ -3,6 +3,15 @@ import { NavLink } from 'react-router-dom'
 const tabs = [
   {
     to: '/',
+    label: '홈',
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" />
+      </svg>
+    ),
+  },
+  {
+    to: '/calendar',
     label: '달력',
     icon: (
       <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
