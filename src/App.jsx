@@ -36,7 +36,7 @@ function OfflineBanner() {
 }
 
 function AppContent() {
-  const { loading, loadError } = useApp()
+  const { loading, loadError, retryAttempt, reload } = useApp()
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
 
   useEffect(() => {
@@ -54,8 +54,27 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-svh flex items-center justify-center bg-cream-50">
-        <p className="text-sm text-warm-light">불러오는 중...</p>
+      <div className="min-h-svh flex flex-col items-center justify-center bg-cream-50 gap-4">
+        <div className="w-10 h-10 rounded-full border-2 border-cream-300 border-t-warm-brown animate-spin" />
+        <div className="text-center">
+          <p className="text-sm font-medium text-warm-dark">
+            {retryAttempt === 0 ? '연결 중...' : `재시도 중... (${retryAttempt + 1}/3)`}
+          </p>
+          {retryAttempt > 0 && (
+            <p className="text-xs text-warm-light mt-1">Supabase 서버에 재연결하고 있어요</p>
+          )}
+        </div>
+        {/* 재시도 진행 도트 */}
+        <div className="flex gap-1.5">
+          {[0, 1, 2].map(i => (
+            <div
+              key={i}
+              className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+                i <= retryAttempt ? 'bg-warm-brown' : 'bg-cream-300'
+              }`}
+            />
+          ))}
+        </div>
       </div>
     )
   }
@@ -68,12 +87,12 @@ function AppContent() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
           </svg>
         </div>
-        <p className="font-semibold text-warm-dark mb-2">데이터를 불러올 수 없어요</p>
-        <p className="text-xs text-warm-light mb-1 leading-relaxed">Supabase 연결에 실패했습니다.</p>
-        <p className="text-[11px] text-cream-400 mb-6 font-mono bg-cream-100 px-3 py-2 rounded-xl">{loadError}</p>
+        <p className="font-semibold text-warm-dark mb-2">연결에 실패했어요</p>
+        <p className="text-xs text-warm-light mb-1 leading-relaxed">3회 재시도 후에도 연결되지 않았어요.</p>
+        <p className="text-[11px] text-cream-400 mb-6 font-mono bg-cream-100 px-3 py-2 rounded-xl max-w-xs break-all">{loadError}</p>
         <button
-          onClick={() => window.location.reload()}
-          className="bg-warm-brown text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-warm-dark transition-colors"
+          onClick={reload}
+          className="bg-warm-brown text-white px-6 py-3 rounded-full text-sm font-medium hover:bg-warm-dark transition-colors active:scale-95"
         >
           다시 시도
         </button>

@@ -60,6 +60,7 @@ export function AppProvider({ children }) {
   )
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
+  const [retryAttempt, setRetryAttempt] = useState(0) // 0 = 첫 시도, 1~2 = 재시도 중
 
   const currentSpace = spaces.find(s => s.id === currentSpaceId) || null
 
@@ -71,7 +72,7 @@ export function AppProvider({ children }) {
 
   // 앱 시작 시 Supabase에서 전체 데이터 로드
   useEffect(() => {
-    loadAll()
+    loadAll(0)
   }, [])
 
   // Supabase Realtime 구독 — 다른 기기/사용자의 변경사항 실시간 반영
@@ -182,9 +183,14 @@ export function AppProvider({ children }) {
     }
   }, [])
 
-  async function loadAll() {
+  const MAX_RETRIES = 3
+  const RETRY_DELAYS = [1500, 3000, 5000] // 재시도 간격 (ms)
+
+  async function loadAll(attempt = 0) {
     setLoading(true)
     setLoadError(null)
+    setRetryAttempt(attempt)
+
     try {
       const [
         { data: spacesData, error: e1 },
@@ -197,11 +203,7 @@ export function AppProvider({ children }) {
       ])
 
       const firstError = e1 || e2 || e3
-      if (firstError) {
-        console.error('Supabase load error:', firstError)
-        setLoadError(firstError.message || 'Supabase 연결 오류')
-        return
-      }
+      if (firstError) throw new Error(firstError.message || 'Supabase 쿼리 오류')
 
       const built = (spacesData || []).map(s => ({
         id: s.id,
@@ -227,7 +229,19 @@ export function AppProvider({ children }) {
         if (prev && built.find(s => s.id === prev)) return prev
         return built[0]?.id || null
       })
-    } finally {
+
+      setLoading(false)
+    } catch (err) {
+      console.error(`Supabase load error (시도 ${attempt + 1}/${MAX_RETRIES}):`, err)
+
+      if (attempt < MAX_RETRIES - 1) {
+        // 자동 재시도 — 로딩 상태 유지
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
+        return loadAll(attempt + 1)
+      }
+
+      // 모든 재시도 소진
+      setLoadError(err.name === 'AbortError' ? '연결 시간이 초과됐어요 (타임아웃)' : (err.message || 'Supabase 연결 오류'))
       setLoading(false)
     }
   }
@@ -452,6 +466,8 @@ export function AppProvider({ children }) {
         currentSpace,
         loading,
         loadError,
+        retryAttempt,
+        reload: () => loadAll(0),
         createSpace,
         switchSpace,
         deleteSpace,

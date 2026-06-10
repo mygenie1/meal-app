@@ -10,7 +10,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
+// 15초 타임아웃 — 응답 없는 연결이 무한 대기하지 않도록
+function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), 15000)
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(id))
+}
+
 export const supabase = createClient(
   supabaseUrl ?? '',
-  supabaseAnonKey ?? ''
+  supabaseAnonKey ?? '',
+  { global: { fetch: fetchWithTimeout } }
 )
