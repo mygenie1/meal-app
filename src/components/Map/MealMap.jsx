@@ -50,10 +50,13 @@ async function geocode(locationStr) {
   return null
 }
 
+const FILTER_TAGS = ['전체', '집밥', '외식', '카페', '배달']
+
 export default function MealMap() {
   const { spaces, cacheGeocoords } = useApp()
   const [pins, setPins] = useState([])
   const [loading, setLoading] = useState(false)
+  const [activeTag, setActiveTag] = useState('')
 
   // 모든 스페이스의 위치 있는 식사 + 소속 spaceId 함께 수집
   const mealsWithLocation = useMemo(() =>
@@ -101,13 +104,45 @@ export default function MealMap() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mealsWithLocation.length, uncachedKey])
 
+  const filteredPins = activeTag === ''
+    ? pins
+    : pins.filter(({ meal }) => meal.tag === activeTag)
+
   const center = pins.length > 0 ? pins[0].coords : [37.5665, 126.9780]
 
   return (
     <div className="relative">
+      {/* 태그 필터 */}
+      <div className="flex gap-2 mb-3 overflow-x-auto pb-1 scrollbar-hide">
+        {FILTER_TAGS.map(tag => {
+          const isAll = tag === '전체'
+          const isActive = isAll ? activeTag === '' : activeTag === tag
+          const dotColor = TAG_COLORS[tag]
+          return (
+            <button
+              key={tag}
+              onClick={() => setActiveTag(isAll ? '' : tag)}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors active:scale-95 ${
+                isActive
+                  ? 'bg-warm-brown text-white shadow-sm'
+                  : 'bg-cream-100 text-warm-brown border border-cream-200 hover:bg-cream-200'
+              }`}
+            >
+              {dotColor && (
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ background: isActive ? 'rgba(255,255,255,0.7)' : dotColor }}
+                />
+              )}
+              {tag}
+            </button>
+          )
+        })}
+      </div>
+
       {/* 로딩 오버레이 */}
       {loading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-cream-50/80 rounded-2xl">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-cream-50/80 rounded-2xl" style={{ top: '44px' }}>
           <p className="text-sm text-warm-light">위치 찾는 중...</p>
         </div>
       )}
@@ -124,7 +159,7 @@ export default function MealMap() {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           />
-          {pins.map(({ meal, coords }) => (
+          {filteredPins.map(({ meal, coords }) => (
             <Marker
               key={meal.id}
               position={coords}
@@ -147,9 +182,12 @@ export default function MealMap() {
                     />
                   )}
                   <p style={{ fontWeight: 600, fontSize: '14px', margin: '0 0 2px', color: '#3d2b1f' }}>
-                    {meal.restaurantName || meal.location}
+                    {meal.title || meal.restaurantName || meal.location}
                   </p>
-                  {meal.location && meal.restaurantName && (
+                  {meal.restaurantName && (meal.title || meal.location) && (
+                    <p style={{ fontSize: '12px', color: '#6b4f3a', margin: '0 0 2px' }}>{meal.restaurantName}</p>
+                  )}
+                  {meal.location && (
                     <p style={{ fontSize: '11px', color: '#a07850', margin: '0 0 4px' }}>
                       📍 {meal.location}
                     </p>
@@ -176,7 +214,7 @@ export default function MealMap() {
 
       {/* 빈 상태 — 지도 위에 오버레이 */}
       {mealsWithLocation.length === 0 && !loading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={{ top: '44px' }}>
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl px-6 py-5 text-center shadow-sm">
             <p className="text-2xl mb-2">📍</p>
             <p className="text-sm font-medium text-warm-dark mb-1">아직 등록된 맛집이 없어요</p>
@@ -185,15 +223,13 @@ export default function MealMap() {
         </div>
       )}
 
-      {/* 태그 범례 */}
-      {pins.length > 0 && (
-        <div className="flex gap-4 flex-wrap mt-3 px-1">
-          {Object.entries(TAG_COLORS).map(([tag, color]) => (
-            <div key={tag} className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full border border-white shadow-sm" style={{ background: color }} />
-              <span className="text-xs text-warm-light">{tag}</span>
-            </div>
-          ))}
+      {/* 필터 결과 없음 안내 */}
+      {mealsWithLocation.length > 0 && filteredPins.length === 0 && !loading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={{ top: '44px' }}>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl px-6 py-5 text-center shadow-sm">
+            <p className="text-sm font-medium text-warm-dark mb-1">해당 태그의 맛집이 없어요</p>
+            <p className="text-xs text-warm-light">다른 태그를 선택해보세요</p>
+          </div>
         </div>
       )}
     </div>
