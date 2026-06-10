@@ -7,14 +7,17 @@ const TAG_STYLES = {
   '배달': 'bg-blue-50 text-blue-700 border-blue-200',
 }
 
+const MEAL_TIME_STYLE = 'text-[10px] px-1.5 py-0.5 rounded-full bg-cream-200 text-warm-light font-medium'
+
 export default function MealCard({ meal, onEdit, onDelete }) {
+  const thumbPhoto = meal.photos?.[0] || meal.photo || ''
   const hasContent = meal.title || meal.restaurantName || meal.location || meal.rating > 0 || meal.review || meal.memo
 
   return (
     <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden">
-      {meal.photo && (
+      {thumbPhoto && (
         <img
-          src={meal.photo}
+          src={thumbPhoto}
           alt="식사 사진"
           className="w-full object-cover"
           style={{ maxHeight: '220px' }}
@@ -43,11 +46,16 @@ export default function MealCard({ meal, onEdit, onDelete }) {
                 </p>
               )}
             </div>
-            {meal.tag && (
-              <span className={`text-xs px-2.5 py-1 rounded-full font-medium border shrink-0 ${TAG_STYLES[meal.tag] || 'bg-cream-100 text-warm-light border-cream-200'}`}>
-                {meal.tag}
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {meal.mealTime && (
+                <span className={MEAL_TIME_STYLE}>{meal.mealTime}</span>
+              )}
+              {meal.tag && (
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${TAG_STYLES[meal.tag] || 'bg-cream-100 text-warm-light border-cream-200'}`}>
+                  {meal.tag}
+                </span>
+              )}
+            </div>
           </div>
 
           {meal.rating > 0 && (
@@ -64,7 +72,6 @@ export default function MealCard({ meal, onEdit, onDelete }) {
         </div>
       )}
 
-      {/* 사진만 있고 나머지 없을 때도 버튼은 표시 */}
       <div className="px-4 py-2 flex gap-3 border-t border-cream-100">
         <button
           onClick={onEdit}

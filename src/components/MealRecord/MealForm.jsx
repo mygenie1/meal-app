@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import StarRating from '../common/StarRating'
 import { useApp } from '../../context/AppContext'
@@ -60,6 +60,8 @@ const TAGS = [
   { key: '배달', desc: '배달 음식 주문' },
 ]
 
+const MEAL_TIMES = ['아침', '점심', '저녁']
+
 const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
 const LABEL_CLS = 'text-xs text-warm-light mb-1.5 block font-medium'
 
@@ -67,10 +69,17 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   const { currentSpace, deleteIngredient } = useApp()
 
   const [step, setStep] = useState(() => initial?.tag ? 'form' : 'tag')
-  const [form, setForm] = useState({
+  const [formDate, setFormDate] = useState(
+    () => initial?.date ?? format(date, 'yyyy-MM-dd')
+  )
+  const [form, setForm] = useState(() => ({
     title: '', restaurantName: '', location: '', lat: null, lng: null,
-    rating: 0, review: '', memo: '', tag: '', photo: '', ...initial,
-  })
+    rating: 0, review: '', memo: '', tag: '', mealTime: '',
+    ...initial,
+    photos: initial?.photos?.length > 0
+      ? initial.photos
+      : (initial?.photo ? [initial.photo] : []),
+  }))
   const [geoStatus, setGeoStatus] = useState(
     () => (initial?.lat && initial?.lng) ? 'found' : 'idle'
   )
@@ -82,12 +91,22 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     setForm(prev => ({ ...prev, [key]: val }))
   }
 
-  function handlePhoto(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => set('photo', ev.target.result)
-    reader.readAsDataURL(file)
+  function handlePhotos(e) {
+    const files = Array.from(e.target.files)
+    const canAdd = 5 - form.photos.length
+    files.slice(0, canAdd).forEach(file => {
+      const reader = new FileReader()
+      reader.onload = ev => setForm(prev => ({
+        ...prev,
+        photos: prev.photos.length < 5 ? [...prev.photos, ev.target.result] : prev.photos,
+      }))
+      reader.readAsDataURL(file)
+    })
+    e.target.value = ''
+  }
+
+  function removePhoto(i) {
+    setForm(prev => ({ ...prev, photos: prev.photos.filter((_, j) => j !== i) }))
   }
 
   function handleLocationChange(e) {
@@ -133,7 +152,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       await Promise.all(usedIngredientIds.map(id => deleteIngredient('remaining', id)))
     }
 
-    onSubmit({ ...form, date: format(date, 'yyyy-MM-dd'), lat, lng })
+    onSubmit({ ...form, date: formDate, lat, lng })
   }
 
   function selectTag(tag) {
@@ -145,16 +164,25 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   const remainingIngredients = currentSpace?.ingredients?.remaining || []
   const style = TAG_STYLE[form.tag] || {}
 
-  // ── Step 1: 태그 선택 ────────────────────────────────────────────
+  // ── Step 1: 날짜 + 태그 선택 + 끼니 ────────────────────────────────
   if (step === 'tag') {
     return (
       <div>
-        <p className="text-xs text-warm-light font-medium mb-1">
-          {format(date, 'yyyy년 M월 d일 (eee)', { locale: ko })}
-        </p>
+        {/* 날짜 선택 */}
+        <div className="mb-4">
+          <label className={LABEL_CLS}>날짜</label>
+          <input
+            type="date"
+            value={formDate}
+            onChange={e => setFormDate(e.target.value)}
+            className={INPUT_CLS}
+          />
+        </div>
+
         <p className="text-lg font-semibold text-warm-dark mb-5">어떤 식사였나요?</p>
 
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        {/* 태그 그리드 — 클릭 시 Step 2로 이동 */}
+        <div className="grid grid-cols-2 gap-3 mb-5">
           {TAGS.map(({ key, desc }) => {
             const s = TAG_STYLE[key]
             return (
@@ -176,6 +204,27 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           })}
         </div>
 
+        {/* 끼니 선택 */}
+        <div className="mb-6">
+          <label className={LABEL_CLS}>끼니</label>
+          <div className="flex gap-2">
+            {MEAL_TIMES.map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => set('mealTime', form.mealTime === t ? '' : t)}
+                className={`flex-1 py-2.5 rounded-2xl text-sm font-medium border transition-colors active:scale-95 ${
+                  form.mealTime === t
+                    ? 'bg-warm-brown text-white border-warm-brown'
+                    : 'bg-cream-100 text-warm-light border-cream-200 hover:bg-cream-200'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <button
           type="button"
           onClick={onCancel}
@@ -188,18 +237,36 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   }
 
   // ── Step 2: 태그별 폼 ─────────────────────────────────────────────
+  // formDate를 Korean 포맷으로 표시 (overlay 패턴으로 native date picker 연결)
+  const displayDate = formDate
+    ? format(parseISO(formDate), 'M월 d일 (eee)', { locale: ko })
+    : ''
+
   return (
     <form onSubmit={handleSubmit}>
-      {/* 태그 배지 + 날짜 + 변경 */}
-      <div className="flex items-center justify-between mb-4">
+      {/* 태그 배지 + 날짜(클릭 가능) + 변경 버튼 */}
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${style.bg} ${style.border} ${style.text}`}>
             <TagIcon tag={form.tag} className="w-3.5 h-3.5" />
             {form.tag}
           </span>
-          <p className="text-xs text-warm-light">
-            {format(date, 'M월 d일 (eee)', { locale: ko })}
-          </p>
+          {/* 날짜: 텍스트 표시 + invisible date input 오버레이 */}
+          <div className="relative">
+            <span className="text-xs text-warm-light pointer-events-none flex items-center gap-0.5">
+              {displayDate}
+              <svg className="w-2.5 h-2.5 text-cream-400 ml-0.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </span>
+            <input
+              type="date"
+              value={formDate}
+              onChange={e => setFormDate(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full"
+              aria-label="날짜 변경"
+            />
+          </div>
         </div>
         <button
           type="button"
@@ -210,29 +277,59 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
         </button>
       </div>
 
+      {/* 끼니 선택 (compact) */}
+      <div className="flex gap-2 mb-4">
+        {MEAL_TIMES.map(t => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => set('mealTime', form.mealTime === t ? '' : t)}
+            className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-colors active:scale-95 ${
+              form.mealTime === t
+                ? 'bg-warm-brown text-white border-warm-brown'
+                : 'bg-cream-100 text-warm-light border-cream-200 hover:bg-cream-200'
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-4">
-        {/* 사진 */}
+        {/* 사진 — 최대 5장 */}
         <div>
-          {form.photo ? (
-            <div className="relative rounded-2xl overflow-hidden">
-              <img src={form.photo} alt="식사 사진" className="w-full object-cover" style={{ maxHeight: '240px' }} />
-              <button
-                type="button"
-                onClick={() => set('photo', '')}
-                className="absolute top-3 right-3 bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center text-base hover:bg-black/70 transition-colors"
-              >×</button>
-              <button
-                type="button"
-                onClick={() => fileRef.current.click()}
-                className="absolute bottom-3 right-3 bg-black/50 text-white rounded-full px-3 py-1 text-xs hover:bg-black/70 transition-colors"
-              >바꾸기</button>
+          {form.photos.length > 0 ? (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {form.photos.map((p, i) => (
+                <div key={i} className="relative shrink-0 w-[100px] h-[100px] rounded-2xl overflow-hidden">
+                  <img src={p} alt={`사진 ${i + 1}`} className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(i)}
+                    className="absolute top-1.5 right-1.5 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-black/70 transition-colors"
+                  >×</button>
+                </div>
+              ))}
+              {form.photos.length < 5 && (
+                <button
+                  type="button"
+                  onClick={() => fileRef.current.click()}
+                  className="shrink-0 w-[100px] h-[100px] rounded-2xl border-2 border-dashed border-cream-300 flex flex-col items-center justify-center text-cream-400 hover:border-cream-400 hover:bg-cream-100 transition-colors"
+                >
+                  <svg className="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span className="text-[10px]">사진 추가</span>
+                  <span className="text-[10px] opacity-60">{form.photos.length}/5</span>
+                </button>
+              )}
             </div>
           ) : (
             <button
               type="button"
               onClick={() => fileRef.current.click()}
               className="w-full border-2 border-dashed border-cream-300 rounded-2xl flex flex-col items-center justify-center text-cream-400 hover:border-cream-400 hover:bg-cream-100 transition-colors"
-              style={{ height: '160px' }}
+              style={{ height: '140px' }}
             >
               <svg className="w-7 h-7 mb-1.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -240,10 +337,10 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
               <span className="text-sm font-medium">사진 추가</span>
-              <span className="text-xs mt-0.5 opacity-70">선택사항이에요</span>
+              <span className="text-xs mt-0.5 opacity-70">최대 5장</span>
             </button>
           )}
-          <input type="file" ref={fileRef} accept="image/*" className="hidden" onChange={handlePhoto} />
+          <input type="file" ref={fileRef} accept="image/*" multiple className="hidden" onChange={handlePhotos} />
         </div>
 
         {/* 제목 — 모든 태그 공통 */}

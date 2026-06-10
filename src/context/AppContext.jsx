@@ -7,12 +7,16 @@ const SPACE_KEY = 'mealapp_current_space'
 
 // DB row → 앱 내부 meal 객체
 function rowToMeal(row) {
+  const photos = Array.isArray(row.photos) && row.photos.length > 0
+    ? row.photos
+    : (row.photo ? [row.photo] : [])
   return {
     id: row.id,
     date: row.date,
     createdAt: row.created_at,
     title: row.title || '',
-    photo: row.photo || '',
+    photo: photos[0] || '',
+    photos,
     restaurantName: row.restaurant_name || '',
     location: row.location || '',
     lat: row.lat ?? null,
@@ -21,11 +25,13 @@ function rowToMeal(row) {
     review: row.review || '',
     memo: row.memo || '',
     tag: row.tag || '',
+    mealTime: row.meal_time || '',
   }
 }
 
 // 앱 내부 meal 객체 → DB insert/update 용
 function mealToRow(data) {
+  const photos = data.photos ?? (data.photo ? [data.photo] : [])
   return {
     date: data.date,
     title: data.title ?? '',
@@ -37,7 +43,9 @@ function mealToRow(data) {
     review: data.review ?? '',
     memo: data.memo ?? '',
     tag: data.tag ?? '',
-    photo: data.photo ?? '',
+    photo: photos[0] ?? '',
+    photos,
+    meal_time: data.mealTime ?? '',
   }
 }
 

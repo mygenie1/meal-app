@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addDays, isSameMonth, isSameDay, isToday, addMonths, subMonths,
@@ -9,6 +9,7 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
 export default function CalendarGrid({ meals = [], onDayClick }) {
   const [current, setCurrent] = useState(new Date())
+  const touchStartX = useRef(null)
 
   const monthStart = startOfMonth(current)
   const monthEnd = endOfMonth(current)
@@ -26,8 +27,25 @@ export default function CalendarGrid({ meals = [], onDayClick }) {
     return meals.filter(m => isSameDay(new Date(m.date), date))
   }
 
+  function handleTouchStart(e) {
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  function handleTouchEnd(e) {
+    if (touchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    if (Math.abs(dx) < 50) return
+    if (dx < 0) setCurrent(prev => addMonths(prev, 1))
+    else setCurrent(prev => subMonths(prev, 1))
+    touchStartX.current = null
+  }
+
   return (
-    <div className="px-4">
+    <div
+      className="px-4 select-none"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* 월 네비게이션 */}
       <div className="flex items-center justify-between mb-5">
         <button
@@ -66,7 +84,7 @@ export default function CalendarGrid({ meals = [], onDayClick }) {
         {days.map((day, idx) => {
           const dayMeals = getMealsForDay(day)
           const hasMeals = dayMeals.length > 0
-          const thumbPhoto = dayMeals.find(m => m.photo)?.photo
+          const thumbPhoto = dayMeals.find(m => m.photos?.[0])?.photos?.[0]
           const inMonth = isSameMonth(day, current)
           const today = isToday(day)
           const dayOfWeek = idx % 7
@@ -86,16 +104,12 @@ export default function CalendarGrid({ meals = [], onDayClick }) {
               {/* 사진 썸네일 배경 */}
               {thumbPhoto && (
                 <div className="absolute inset-0">
-                  <img
-                    src={thumbPhoto}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={thumbPhoto} alt="" className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/25" />
                 </div>
               )}
 
-              {/* 사진 없이 기록만 있는 날 — 베이지 배경 */}
+              {/* 사진 없이 기록만 있는 날 */}
               {hasMeals && !thumbPhoto && (
                 <div className="absolute inset-0 bg-cream-200" />
               )}

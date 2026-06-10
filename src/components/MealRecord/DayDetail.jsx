@@ -5,13 +5,16 @@ import { useApp } from '../../context/AppContext'
 import MealCard from './MealCard'
 import MealForm from './MealForm'
 
+const MEAL_TIME_ORDER = { 아침: 0, 점심: 1, 저녁: 2 }
+
 export default function DayDetail({ date, onClose }) {
   const { currentSpace, addMeal, updateMeal, deleteMeal } = useApp()
 
   const dateStr = format(date, 'yyyy-MM-dd')
-  const dayMeals = currentSpace?.meals.filter(m => m.date === dateStr) || []
+  const dayMeals = (currentSpace?.meals.filter(m => m.date === dateStr) || [])
+    .slice()
+    .sort((a, b) => (MEAL_TIME_ORDER[a.mealTime] ?? 1) - (MEAL_TIME_ORDER[b.mealTime] ?? 1))
 
-  // 기록이 없으면 바로 폼, 있으면 목록
   const [mode, setMode] = useState(dayMeals.length === 0 ? 'form' : 'list')
   const [editing, setEditing] = useState(null)
 

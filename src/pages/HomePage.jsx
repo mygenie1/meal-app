@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import MealDetailModal from '../components/MealRecord/MealDetailModal'
 import Modal from '../components/common/Modal'
 import DayDetail from '../components/MealRecord/DayDetail'
+import PhotoGallery from '../components/common/PhotoGallery'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700',
@@ -35,30 +36,33 @@ function PhotoPlaceholder() {
 function FeedCard({ meal, onClick }) {
   const dateObj = parseISO(meal.date)
   const title = meal.title || meal.restaurantName || '식사 기록'
+  const photos = meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : [])
 
   return (
     <button
       onClick={onClick}
       className="w-full text-left bg-white rounded-2xl border border-cream-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
     >
-      {meal.photo ? (
-        <img
-          src={meal.photo}
-          alt="식사 사진"
-          className="w-full object-cover"
-          style={{ height: '200px' }}
-        />
+      {photos.length > 0 ? (
+        <PhotoGallery photos={photos} maxHeight={200} />
       ) : (
         <PhotoPlaceholder />
       )}
       <div className="px-4 py-3">
         <div className="flex items-start justify-between gap-2 mb-1">
           <p className="font-semibold text-warm-dark text-base leading-snug">{title}</p>
-          {meal.tag && (
-            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 ${TAG_STYLES[meal.tag] || 'bg-cream-100 text-warm-light'}`}>
-              {meal.tag}
-            </span>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {meal.mealTime && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cream-200 text-warm-light font-medium">
+                {meal.mealTime}
+              </span>
+            )}
+            {meal.tag && (
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${TAG_STYLES[meal.tag] || 'bg-cream-100 text-warm-light'}`}>
+                {meal.tag}
+              </span>
+            )}
+          </div>
         </div>
         {meal.title && meal.restaurantName && (
           <p className="text-xs text-warm-light mb-1 truncate">{meal.restaurantName}</p>
@@ -115,8 +119,13 @@ export default function HomePage() {
     return { totalCount, thisMonthCount, topRestaurants, topTagEntry, fiveStarCount }
   }, [meals])
 
+  const MEAL_TIME_ORDER = { 아침: 0, 점심: 1, 저녁: 2 }
   const sortedMeals = useMemo(
-    () => [...meals].sort((a, b) => new Date(b.date) - new Date(a.date)),
+    () => [...meals].sort((a, b) => {
+      const dateDiff = new Date(b.date) - new Date(a.date)
+      if (dateDiff !== 0) return dateDiff
+      return (MEAL_TIME_ORDER[a.mealTime] ?? 1) - (MEAL_TIME_ORDER[b.mealTime] ?? 1)
+    }),
     [meals]
   )
 

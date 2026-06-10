@@ -4,6 +4,7 @@ import { ko } from 'date-fns/locale'
 import { useApp } from '../../context/AppContext'
 import Modal from '../common/Modal'
 import MealForm from './MealForm'
+import PhotoGallery from '../common/PhotoGallery'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700 border-green-200',
@@ -19,6 +20,7 @@ export default function MealDetailModal({ meal, onClose }) {
   if (!meal) return null
 
   const dateObj = parseISO(meal.date)
+  const photos = meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : [])
 
   function handleEdit(data) {
     updateMeal(meal.id, data)
@@ -54,15 +56,10 @@ export default function MealDetailModal({ meal, onClose }) {
 
   return (
     <Modal isOpen onClose={onClose}>
-      {/* 사진 — 상단 full-bleed */}
-      {meal.photo && (
+      {/* 사진 갤러리 — 상단 full-bleed */}
+      {photos.length > 0 && (
         <div className="-mx-5 -mt-4 mb-5">
-          <img
-            src={meal.photo}
-            alt="식사 사진"
-            className="w-full object-cover"
-            style={{ maxHeight: '300px' }}
-          />
+          <PhotoGallery photos={photos} maxHeight={300} />
         </div>
       )}
 
@@ -89,10 +86,17 @@ export default function MealDetailModal({ meal, onClose }) {
         </p>
       )}
 
-      {/* 날짜 */}
-      <p className="text-xs text-cream-400 mb-3">
-        {format(dateObj, 'yyyy년 M월 d일 (eee)', { locale: ko })}
-      </p>
+      {/* 날짜 + 끼니 */}
+      <div className="flex items-center gap-2 mb-3">
+        <p className="text-xs text-cream-400">
+          {format(dateObj, 'yyyy년 M월 d일 (eee)', { locale: ko })}
+        </p>
+        {meal.mealTime && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cream-200 text-warm-light font-medium">
+            {meal.mealTime}
+          </span>
+        )}
+      </div>
 
       {/* 별점 */}
       {meal.rating > 0 && (
