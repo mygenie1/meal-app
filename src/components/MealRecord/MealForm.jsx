@@ -1,16 +1,14 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import StarRating from '../common/StarRating'
 import { useApp } from '../../context/AppContext'
 
+// ─── Nominatim geocoding ───────────────────────────────────────────────────
 async function geocodeKr(query) {
   const params = new URLSearchParams({
-    q: query,
-    format: 'json',
-    limit: '1',
-    countrycodes: 'kr',
-    'accept-language': 'ko',
+    q: query, format: 'json', limit: '1',
+    countrycodes: 'kr', 'accept-language': 'ko',
   })
   const res = await fetch(
     `https://nominatim.openstreetmap.org/search?${params}`,
@@ -21,13 +19,53 @@ async function geocodeKr(query) {
   return null
 }
 
-const TAG_STYLE = {
-  집밥: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', badge: 'bg-green-50 text-green-700' },
-  외식: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', badge: 'bg-amber-50 text-amber-700' },
-  카페: { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-700', badge: 'bg-pink-50 text-pink-700' },
-  배달: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', badge: 'bg-blue-50 text-blue-700' },
+// ─── Kakao Local API ──────────────────────────────────────────────────────
+const KAKAO_KEY = import.meta.env.VITE_KAKAO_API_KEY
+
+async function searchKakaoPlaces(query) {
+  if (!KAKAO_KEY || !query.trim()) return []
+  try {
+    const params = new URLSearchParams({ query, size: '5' })
+    const res = await fetch(
+      `https://dapi.kakao.com/v2/local/search/keyword.json?${params}`,
+      { headers: { Authorization: `KakaoAK ${KAKAO_KEY}` } }
+    )
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.documents || []
+  } catch {
+    return []
+  }
 }
 
+// ─── 현재 시간 → 끼니 자동 감지 ─────────────────────────────────────────
+export function getAutoMealTime() {
+  const h = new Date().getHours()
+  if (h >= 5 && h < 11) return '아침'
+  if (h >= 11 && h < 15) return '점심'
+  return '저녁'
+}
+
+// ─── 상수 ─────────────────────────────────────────────────────────────────
+const TAG_STYLE = {
+  집밥: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700' },
+  외식: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700' },
+  카페: { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-700' },
+  배달: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
+}
+
+const TAGS = [
+  { key: '집밥', desc: '직접 요리한 홈 쿠킹' },
+  { key: '외식', desc: '식당, 맛집에서 외식' },
+  { key: '카페', desc: '카페, 디저트 가게' },
+  { key: '배달', desc: '배달 음식 주문' },
+]
+
+const MEAL_TIMES = ['아침', '점심', '저녁']
+const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
+const LABEL_CLS = 'text-xs text-warm-light mb-1.5 block font-medium'
+
+// ─── TagIcon ──────────────────────────────────────────────────────────────
 function TagIcon({ tag, className = 'w-7 h-7' }) {
   if (tag === '집밥') return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
@@ -53,18 +91,135 @@ function TagIcon({ tag, className = 'w-7 h-7' }) {
   return null
 }
 
-const TAGS = [
-  { key: '집밥', desc: '직접 요리한 홈 쿠킹' },
-  { key: '외식', desc: '식당, 맛집에서 외식' },
-  { key: '카페', desc: '카페, 디저트 가게' },
-  { key: '배달', desc: '배달 음식 주문' },
-]
+// ─── 식당 자동완성 필드 ───────────────────────────────────────────────────
+function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }) {
+  const [suggestions, setSuggestions] = useState([])
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const timerRef = useRef(null)
+  const wrapperRef = useRef(null)
 
-const MEAL_TIMES = ['아침', '점심', '저녁']
+  useEffect(() => {
+    function handleOutside(e) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    document.addEventListener('touchstart', handleOutside, { passive: true })
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('touchstart', handleOutside)
+    }
+  }, [])
 
-const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
-const LABEL_CLS = 'text-xs text-warm-light mb-1.5 block font-medium'
+  function handleChange(e) {
+    const q = e.target.value
+    onChange(q)
+    clearTimeout(timerRef.current)
+    if (!KAKAO_KEY || !q.trim()) {
+      setSuggestions([])
+      setShowDropdown(false)
+      return
+    }
+    timerRef.current = setTimeout(async () => {
+      setSearching(true)
+      const results = await searchKakaoPlaces(q)
+      setSuggestions(results)
+      setShowDropdown(results.length > 0)
+      setSearching(false)
+    }, 350)
+  }
 
+  function handleSelect(place) {
+    onSelect(place)
+    setSuggestions([])
+    setShowDropdown(false)
+  }
+
+  return (
+    <div ref={wrapperRef}>
+      <label className={LABEL_CLS}>{label}</label>
+      <div className="relative">
+        <input
+          type="text"
+          value={value}
+          onChange={handleChange}
+          onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+          onKeyDown={e => e.key === 'Escape' && setShowDropdown(false)}
+          placeholder={placeholder}
+          className={INPUT_CLS}
+        />
+        {searching && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-cream-300 border-t-warm-light rounded-full animate-spin" />
+        )}
+      </div>
+
+      {/* 인라인 드롭다운 — overflow-y-auto 클리핑 방지 */}
+      {showDropdown && suggestions.length > 0 && (
+        <div className="mt-1 rounded-2xl border border-cream-200 bg-white shadow-sm overflow-hidden">
+          {suggestions.map((place, i) => (
+            <button
+              key={i}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); handleSelect(place) }}
+              onTouchEnd={e => { e.preventDefault(); handleSelect(place) }}
+              className="w-full text-left px-4 py-3 hover:bg-cream-50 active:bg-cream-100 transition-colors border-b border-cream-100 last:border-0"
+            >
+              <p className="text-sm font-medium text-warm-dark truncate">{place.place_name}</p>
+              {(place.road_address_name || place.address_name) && (
+                <p className="text-[11px] text-warm-light mt-0.5 truncate">
+                  {place.road_address_name || place.address_name}
+                </p>
+              )}
+              {place.category_name && (
+                <p className="text-[10px] text-cream-400 mt-0.5 truncate">{place.category_name}</p>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!KAKAO_KEY && (
+        <p className="text-[10px] text-cream-400 mt-1 ml-1">자동완성: VITE_KAKAO_API_KEY 설정 시 활성화</p>
+      )}
+    </div>
+  )
+}
+
+// ─── 위치 필드 ────────────────────────────────────────────────────────────
+function LocationField({ form, geoStatus, onLocationChange, onLocationBlur }) {
+  return (
+    <div>
+      <label className={LABEL_CLS}>위치</label>
+      <input
+        type="text"
+        value={form.location}
+        onChange={onLocationChange}
+        onBlur={onLocationBlur}
+        placeholder="예: 서울 마포구 연남동"
+        className={INPUT_CLS}
+      />
+      {geoStatus === 'idle' && !form.location && (
+        <p className="text-[11px] text-cream-400 mt-1 ml-1">입력하면 지도에 핀으로 표시돼요</p>
+      )}
+      {geoStatus === 'idle' && form.location && (
+        <p className="text-[11px] text-cream-400 mt-1 ml-1">입력 완료 후 잠시 기다려주세요</p>
+      )}
+      {geoStatus === 'loading' && (
+        <p className="text-[11px] text-warm-light mt-1 ml-1">주소 검색 중...</p>
+      )}
+      {geoStatus === 'found' && (
+        <p className="text-[11px] text-green-600 mt-1 ml-1">지도에 핀으로 표시됩니다</p>
+      )}
+      {geoStatus === 'notfound' && (
+        <p className="text-[11px] text-amber-500 mt-1 ml-1">주소를 찾을 수 없어요. 더 자세히 입력해보세요</p>
+      )}
+    </div>
+  )
+}
+
+// ─── MealForm 메인 컴포넌트 ───────────────────────────────────────────────
 export default function MealForm({ date, onSubmit, onCancel, initial }) {
   const { currentSpace, deleteIngredient } = useApp()
 
@@ -74,7 +229,8 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   )
   const [form, setForm] = useState(() => ({
     title: '', restaurantName: '', location: '', lat: null, lng: null,
-    rating: 0, review: '', memo: '', tag: '', mealTime: '',
+    rating: 0, review: '', memo: '', tag: '',
+    mealTime: getAutoMealTime(),  // 현재 시간 자동 감지
     ...initial,
     photos: initial?.photos?.length > 0
       ? initial.photos
@@ -131,6 +287,18 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     }
   }
 
+  // 카카오 장소 선택 → 이름 + 위치 + 좌표 자동 입력
+  function handlePlaceSelect(place) {
+    setForm(prev => ({
+      ...prev,
+      restaurantName: place.place_name,
+      location: place.road_address_name || place.address_name || prev.location,
+      lat: parseFloat(place.y),
+      lng: parseFloat(place.x),
+    }))
+    setGeoStatus('found')
+  }
+
   const needsGeo = form.tag === '외식' || form.tag === '카페'
 
   async function handleSubmit(e) {
@@ -164,11 +332,10 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   const remainingIngredients = currentSpace?.ingredients?.remaining || []
   const style = TAG_STYLE[form.tag] || {}
 
-  // ── Step 1: 날짜 + 태그 선택 + 끼니 ────────────────────────────────
+  // ── Step 1: 날짜 + 태그 + 끼니 ───────────────────────────────────────
   if (step === 'tag') {
     return (
       <div>
-        {/* 날짜 선택 */}
         <div className="mb-4">
           <label className={LABEL_CLS}>날짜</label>
           <input
@@ -181,7 +348,6 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
 
         <p className="text-lg font-semibold text-warm-dark mb-5">어떤 식사였나요?</p>
 
-        {/* 태그 그리드 — 클릭 시 Step 2로 이동 */}
         <div className="grid grid-cols-2 gap-3 mb-5">
           {TAGS.map(({ key, desc }) => {
             const s = TAG_STYLE[key]
@@ -192,9 +358,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
                 onClick={() => selectTag(key)}
                 className={`flex flex-col items-center justify-center gap-2.5 py-6 rounded-2xl border-2 ${s.bg} ${s.border} hover:opacity-80 transition-all active:scale-95`}
               >
-                <span className={s.text}>
-                  <TagIcon tag={key} className="w-8 h-8" />
-                </span>
+                <span className={s.text}><TagIcon tag={key} className="w-8 h-8" /></span>
                 <div className="text-center">
                   <p className={`text-sm font-semibold ${s.text}`}>{key}</p>
                   <p className="text-[11px] text-warm-light mt-0.5 leading-snug px-1">{desc}</p>
@@ -204,7 +368,6 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           })}
         </div>
 
-        {/* 끼니 선택 */}
         <div className="mb-6">
           <label className={LABEL_CLS}>끼니</label>
           <div className="flex gap-2">
@@ -236,22 +399,20 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     )
   }
 
-  // ── Step 2: 태그별 폼 ─────────────────────────────────────────────
-  // formDate를 Korean 포맷으로 표시 (overlay 패턴으로 native date picker 연결)
+  // ── Step 2: 태그별 폼 ────────────────────────────────────────────────
   const displayDate = formDate
     ? format(parseISO(formDate), 'M월 d일 (eee)', { locale: ko })
     : ''
 
   return (
     <form onSubmit={handleSubmit}>
-      {/* 태그 배지 + 날짜(클릭 가능) + 변경 버튼 */}
+      {/* 헤더: 태그 + 날짜(클릭 → 날짜 피커) + 변경 */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${style.bg} ${style.border} ${style.text}`}>
             <TagIcon tag={form.tag} className="w-3.5 h-3.5" />
             {form.tag}
           </span>
-          {/* 날짜: 텍스트 표시 + invisible date input 오버레이 */}
           <div className="relative">
             <span className="text-xs text-warm-light pointer-events-none flex items-center gap-0.5">
               {displayDate}
@@ -277,7 +438,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
         </button>
       </div>
 
-      {/* 끼니 선택 (compact) */}
+      {/* 끼니 */}
       <div className="flex gap-2 mb-4">
         {MEAL_TIMES.map(t => (
           <button
@@ -343,7 +504,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           <input type="file" ref={fileRef} accept="image/*" multiple className="hidden" onChange={handlePhotos} />
         </div>
 
-        {/* 제목 — 모든 태그 공통 */}
+        {/* 제목 */}
         <div>
           <label className={LABEL_CLS}>제목</label>
           <input
@@ -359,34 +520,53 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           />
         </div>
 
-        {/* 외식: 식당 이름 + 위치 */}
+        {/* 외식: 식당 자동완성 + 위치 */}
         {form.tag === '외식' && (
           <>
-            <div>
-              <label className={LABEL_CLS}>식당 이름</label>
-              <input type="text" value={form.restaurantName} onChange={e => set('restaurantName', e.target.value)} placeholder="어디서 드셨나요?" className={INPUT_CLS} />
-            </div>
-            <LocationField form={form} geoStatus={geoStatus} onLocationChange={handleLocationChange} onLocationBlur={handleLocationBlur} />
+            <RestaurantSearchField
+              label="식당 이름"
+              value={form.restaurantName}
+              placeholder="어디서 드셨나요?"
+              onChange={v => set('restaurantName', v)}
+              onSelect={handlePlaceSelect}
+            />
+            <LocationField
+              form={form}
+              geoStatus={geoStatus}
+              onLocationChange={handleLocationChange}
+              onLocationBlur={handleLocationBlur}
+            />
           </>
         )}
 
-        {/* 카페: 카페 이름 + 위치 */}
+        {/* 카페: 카페 자동완성 + 위치 */}
         {form.tag === '카페' && (
           <>
-            <div>
-              <label className={LABEL_CLS}>카페 이름</label>
-              <input type="text" value={form.restaurantName} onChange={e => set('restaurantName', e.target.value)} placeholder="어느 카페였나요?" className={INPUT_CLS} />
-            </div>
-            <LocationField form={form} geoStatus={geoStatus} onLocationChange={handleLocationChange} onLocationBlur={handleLocationBlur} />
+            <RestaurantSearchField
+              label="카페 이름"
+              value={form.restaurantName}
+              placeholder="어느 카페였나요?"
+              onChange={v => set('restaurantName', v)}
+              onSelect={handlePlaceSelect}
+            />
+            <LocationField
+              form={form}
+              geoStatus={geoStatus}
+              onLocationChange={handleLocationChange}
+              onLocationBlur={handleLocationBlur}
+            />
           </>
         )}
 
-        {/* 배달: 가게 이름 */}
+        {/* 배달: 가게 자동완성 (위치 없음) */}
         {form.tag === '배달' && (
-          <div>
-            <label className={LABEL_CLS}>가게 이름</label>
-            <input type="text" value={form.restaurantName} onChange={e => set('restaurantName', e.target.value)} placeholder="어느 가게에서 시켰나요?" className={INPUT_CLS} />
-          </div>
+          <RestaurantSearchField
+            label="가게 이름"
+            value={form.restaurantName}
+            placeholder="어느 가게에서 시켰나요?"
+            onChange={v => set('restaurantName', v)}
+            onSelect={place => set('restaurantName', place.place_name)}
+          />
         )}
 
         {/* 별점 — 외식/카페/배달 */}
@@ -411,7 +591,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           </div>
         )}
 
-        {/* 메모 — 집밥/외식/배달 (카페 제외) */}
+        {/* 메모 — 집밥/외식/배달 */}
         {form.tag !== '카페' && (
           <div>
             <label className={LABEL_CLS}>메모</label>
@@ -425,7 +605,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           </div>
         )}
 
-        {/* 집밥 전용: 재료 사용하기 */}
+        {/* 집밥: 재료 사용하기 */}
         {form.tag === '집밥' && remainingIngredients.length > 0 && (
           <div className="rounded-2xl border border-cream-200 overflow-hidden">
             <button
@@ -461,9 +641,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
                           : 'border-cream-300 group-hover:border-warm-light'
                       }`}
                       onClick={() => setUsedIngredientIds(prev =>
-                        prev.includes(item.id)
-                          ? prev.filter(id => id !== item.id)
-                          : [...prev, item.id]
+                        prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]
                       )}
                     >
                       {usedIngredientIds.includes(item.id) && (
@@ -473,9 +651,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
                       )}
                     </button>
                     <span className={`text-sm transition-colors ${
-                      usedIngredientIds.includes(item.id)
-                        ? 'text-cream-400 line-through'
-                        : 'text-warm-dark'
+                      usedIngredientIds.includes(item.id) ? 'text-cream-400 line-through' : 'text-warm-dark'
                     }`}>
                       {item.text}
                     </span>
@@ -510,36 +686,5 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
         </div>
       </div>
     </form>
-  )
-}
-
-function LocationField({ form, geoStatus, onLocationChange, onLocationBlur }) {
-  return (
-    <div>
-      <label className={LABEL_CLS}>위치</label>
-      <input
-        type="text"
-        value={form.location}
-        onChange={onLocationChange}
-        onBlur={onLocationBlur}
-        placeholder="예: 서울 마포구 연남동"
-        className={INPUT_CLS}
-      />
-      {geoStatus === 'idle' && !form.location && (
-        <p className="text-[11px] text-cream-400 mt-1 ml-1">입력하면 지도에 핀으로 표시돼요</p>
-      )}
-      {geoStatus === 'idle' && form.location && (
-        <p className="text-[11px] text-cream-400 mt-1 ml-1">입력 완료 후 잠시 기다려주세요</p>
-      )}
-      {geoStatus === 'loading' && (
-        <p className="text-[11px] text-warm-light mt-1 ml-1">주소 검색 중...</p>
-      )}
-      {geoStatus === 'found' && (
-        <p className="text-[11px] text-green-600 mt-1 ml-1">지도에 핀으로 표시됩니다</p>
-      )}
-      {geoStatus === 'notfound' && (
-        <p className="text-[11px] text-amber-500 mt-1 ml-1">주소를 찾을 수 없어요. 더 자세히 입력해보세요</p>
-      )}
-    </div>
   )
 }

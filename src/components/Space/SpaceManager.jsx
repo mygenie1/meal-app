@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
+import Modal from '../common/Modal'
+import BulkPhotoUpload from './BulkPhotoUpload'
 
 const EMOJIS = ['🍽️', '🍜', '🍕', '🍱', '🍰', '☕', '🥗', '🍣', '🌮', '🥘']
 
@@ -7,6 +9,7 @@ export default function SpaceManager() {
   const { spaces, currentSpace, createSpace, switchSpace, deleteSpace, joinByCode } = useApp()
   const [showCreate, setShowCreate] = useState(false)
   const [showJoin, setShowJoin] = useState(false)
+  const [showBulkUpload, setShowBulkUpload] = useState(false)
   const [name, setName] = useState('')
   const [emoji, setEmoji] = useState('🍽️')
   const [code, setCode] = useState('')
@@ -136,6 +139,19 @@ export default function SpaceManager() {
         </button>
       </div>
 
+      {/* 사진 일괄 등록 버튼 — 스페이스가 있을 때만 */}
+      {currentSpace && (
+        <button
+          onClick={() => setShowBulkUpload(true)}
+          className="w-full py-2.5 rounded-xl border border-cream-200 text-warm-light text-sm font-medium hover:bg-cream-100 transition-colors flex items-center justify-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          사진 일괄 등록
+        </button>
+      )}
+
       {/* 스페이스 생성 폼 */}
       {showCreate && (
         <form onSubmit={handleCreate} className="bg-cream-100 rounded-2xl p-4 space-y-3">
@@ -219,6 +235,11 @@ export default function SpaceManager() {
           <p className="text-sm">스페이스를 만들어 함께 기록을 시작해보세요</p>
         </div>
       )}
+
+      {/* 사진 일괄 등록 모달 */}
+      <Modal isOpen={showBulkUpload} onClose={() => setShowBulkUpload(false)} title="사진 일괄 등록">
+        <BulkPhotoUpload onClose={() => setShowBulkUpload(false)} />
+      </Modal>
     </div>
   )
 }
