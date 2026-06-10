@@ -11,6 +11,7 @@ function rowToMeal(row) {
     id: row.id,
     date: row.date,
     createdAt: row.created_at,
+    title: row.title || '',
     photo: row.photo || '',
     restaurantName: row.restaurant_name || '',
     location: row.location || '',
@@ -27,6 +28,7 @@ function rowToMeal(row) {
 function mealToRow(data) {
   return {
     date: data.date,
+    title: data.title ?? '',
     restaurant_name: data.restaurantName ?? '',
     location: data.location ?? '',
     lat: data.lat ?? null,

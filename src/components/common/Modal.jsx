@@ -3,11 +3,24 @@ import { useEffect } from 'react'
 export default function Modal({ isOpen, onClose, title, children }) {
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden'
+      const scrollY = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
     } else {
-      document.body.style.overflow = ''
+      const scrollY = document.body.style.top
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      if (scrollY) window.scrollTo(0, parseInt(scrollY) * -1)
     }
-    return () => { document.body.style.overflow = '' }
+    return () => {
+      const scrollY = document.body.style.top
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      if (scrollY) window.scrollTo(0, parseInt(scrollY) * -1)
+    }
   }, [isOpen])
 
   if (!isOpen) return null
@@ -19,7 +32,8 @@ export default function Modal({ isOpen, onClose, title, children }) {
     >
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       <div
-        className="relative z-10 w-full max-w-lg bg-cream-50 rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto"
+        className="relative z-10 w-full max-w-lg bg-cream-50 rounded-t-2xl sm:rounded-2xl shadow-xl overflow-y-auto"
+        style={{ maxHeight: '90dvh', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
         onClick={e => e.stopPropagation()}
       >
         {title && (

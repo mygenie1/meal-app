@@ -8,7 +8,7 @@ const TAG_STYLES = {
 }
 
 export default function MealCard({ meal, onEdit, onDelete }) {
-  const hasContent = meal.restaurantName || meal.location || meal.rating > 0 || meal.review || meal.memo
+  const hasContent = meal.title || meal.restaurantName || meal.location || meal.rating > 0 || meal.review || meal.memo
 
   return (
     <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden">
@@ -23,10 +23,13 @@ export default function MealCard({ meal, onEdit, onDelete }) {
 
       {hasContent && (
         <div className="px-4 pt-3 pb-2 space-y-2">
+          {meal.title && (
+            <p className="text-base font-bold text-warm-dark leading-snug">{meal.title}</p>
+          )}
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               {meal.restaurantName && (
-                <h3 className="font-semibold text-warm-dark text-base leading-snug">
+                <h3 className={`font-semibold text-warm-dark leading-snug ${meal.title ? 'text-sm' : 'text-base'}`}>
                   {meal.restaurantName}
                 </h3>
               )}

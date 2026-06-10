@@ -6,6 +6,7 @@ import StarRating from '../common/StarRating'
 const TAGS = ['집밥', '외식', '카페', '배달']
 
 const emptyForm = {
+  title: '',
   restaurantName: '',
   location: '',
   lat: null,
@@ -163,6 +164,18 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       </div>
 
       <div className="space-y-4">
+        {/* 제목 */}
+        <div>
+          <label className="text-xs text-warm-light mb-1.5 block font-medium">제목</label>
+          <input
+            type="text"
+            value={form.title}
+            onChange={e => set('title', e.target.value)}
+            placeholder="오늘 식사를 한 줄로 표현하면?"
+            className="w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors"
+          />
+        </div>
+
         {/* 식당 이름 */}
         <div>
           <label className="text-xs text-warm-light mb-1.5 block font-medium">식당 이름</label>
@@ -256,22 +269,24 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
         </div>
       </div>
 
-      {/* 버튼 */}
-      <div className="flex gap-3 mt-7">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 py-3 rounded-2xl border border-cream-300 text-warm-brown text-sm font-medium hover:bg-cream-100 transition-colors"
-        >
-          취소
-        </button>
-        <button
-          type="submit"
-          disabled={isGeocoding}
-          className="flex-1 py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {isGeocoding ? '주소 확인 중...' : '저장하기'}
-        </button>
+      {/* 버튼 - 항상 화면 하단에 노출 */}
+      <div className="sticky bottom-0 bg-cream-50 pt-4 pb-2 mt-6 -mx-5 px-5 border-t border-cream-100">
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 py-3 rounded-2xl border border-cream-300 text-warm-brown text-sm font-medium hover:bg-cream-100 transition-colors"
+          >
+            취소
+          </button>
+          <button
+            type="submit"
+            disabled={isGeocoding}
+            className="flex-1 py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isGeocoding ? '주소 확인 중...' : '저장하기'}
+          </button>
+        </div>
       </div>
     </form>
   )

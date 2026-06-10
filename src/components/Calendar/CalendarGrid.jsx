@@ -126,7 +126,7 @@ export default function CalendarGrid({ meals = [], onDayClick }) {
                       ${thumbPhoto ? 'bg-white/30 text-white' : 'bg-warm-brown/20 text-warm-brown'}
                     `}
                   >
-                    {dayMeals.length > 1 ? `+${dayMeals.length}` : dayMeals[0].restaurantName || '식사'}
+                    {dayMeals.length > 1 ? `+${dayMeals.length}` : dayMeals[0].title || dayMeals[0].restaurantName || '식사'}
                   </span>
                 </div>
               )}
