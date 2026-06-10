@@ -4,6 +4,8 @@ import { ko } from 'date-fns/locale'
 import { useApp } from '../context/AppContext'
 import { useNavigate } from 'react-router-dom'
 import MealDetailModal from '../components/MealRecord/MealDetailModal'
+import Modal from '../components/common/Modal'
+import DayDetail from '../components/MealRecord/DayDetail'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700',
@@ -82,6 +84,8 @@ export default function HomePage() {
   const { currentSpace, spaces } = useApp()
   const navigate = useNavigate()
   const [selectedMeal, setSelectedMeal] = useState(null)
+  const [todayFormOpen, setTodayFormOpen] = useState(false)
+  const today = useMemo(() => new Date(), [])
 
   const meals = currentSpace?.meals || []
 
@@ -158,6 +162,27 @@ export default function HomePage() {
       </header>
 
       <div className="pb-28 pt-5">
+        {/* ── 오늘 식사 기록 버튼 ── */}
+        <div className="px-4 mb-5">
+          <button
+            onClick={() => setTodayFormOpen(true)}
+            className="w-full flex items-center gap-3 bg-white border border-cream-200 rounded-2xl px-4 py-3 hover:bg-cream-50 transition-colors active:scale-[0.99] text-left shadow-sm"
+          >
+            <div className="w-9 h-9 bg-warm-brown/10 rounded-xl flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-warm-dark">오늘 식사 기록하기</p>
+              <p className="text-xs text-warm-light">{format(today, 'M월 d일 (eee)', { locale: ko })}</p>
+            </div>
+            <svg className="w-4 h-4 text-cream-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+
         {/* ── 통계 카드 (가로 스크롤) ── */}
         <div className="flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-hide">
           {/* 함께한 식사 */}
@@ -284,6 +309,10 @@ export default function HomePage() {
           onClose={() => setSelectedMeal(null)}
         />
       )}
+
+      <Modal isOpen={todayFormOpen} onClose={() => setTodayFormOpen(false)}>
+        <DayDetail date={today} onClose={() => setTodayFormOpen(false)} />
+      </Modal>
     </>
   )
 }

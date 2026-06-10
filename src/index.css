@@ -75,3 +75,16 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* ── iOS Safe Area ─────────────────────────── */
+/* 노치 / 다이나믹 아일랜드 대응: 모든 sticky 헤더에 자동 적용 */
+header.sticky {
+  padding-top: calc(0.75rem + env(safe-area-inset-top));
+  padding-bottom: 0.75rem;
+}
+
+/* 하단 홈 인디케이터 대응 (BottomNav에서 사용) */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+/* ─────────────────────────────────────────── */

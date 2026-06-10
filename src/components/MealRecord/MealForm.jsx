@@ -270,7 +270,10 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       </div>
 
       {/* 버튼 - 항상 화면 하단에 노출 */}
-      <div className="sticky bottom-0 bg-cream-50 pt-4 pb-2 mt-6 -mx-5 px-5 border-t border-cream-100">
+      <div
+        className="sticky bottom-0 bg-cream-50 pt-4 mt-6 -mx-5 px-5 border-t border-cream-100"
+        style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
+      >
         <div className="flex gap-3">
           <button
             type="button"
