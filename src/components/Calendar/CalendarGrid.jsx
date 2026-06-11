@@ -234,7 +234,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange }) 
                 <div className="relative z-10 px-1.5 pb-1.5">
                   <span
                     className={`
-                      text-[9px] font-medium px-1 py-0.5 rounded-lg block w-full text-center
+                      text-[9px] font-medium px-1 py-0.5 rounded-lg w-full
                       ${thumbPhoto ? 'bg-white/30 text-white' : 'bg-warm-brown/20 text-warm-brown'}
                     `}
                     style={{
@@ -242,6 +242,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange }) 
                       WebkitLineClamp: 2,
                       WebkitBoxOrient: 'vertical',
                       overflow: 'hidden',
+                      wordBreak: 'break-all',
                     }}
                   >
                     {dayMeals.length > 1 ? `+${dayMeals.length}` : dayMeals[0].title || dayMeals[0].restaurantName || '식사'}
