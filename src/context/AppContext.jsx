@@ -337,19 +337,23 @@ export function AppProvider({ children }) {
   async function addMeal(mealData) {
     if (!currentSpaceId) return null
 
+    const rowData = mealToRow(mealData)
+    // .select('id, created_at')만 받아옴: photos를 DB에서 다시 내려받으면
+    // 대용량 base64 왕복 전송이 15초 타임아웃을 초과해 사진이 사라질 수 있음
     const { data, error } = await supabase
       .from('meals')
-      .insert({ space_id: currentSpaceId, ...mealToRow(mealData) })
-      .select()
+      .insert({ space_id: currentSpaceId, ...rowData })
+      .select('id, created_at')
       .single()
 
     if (error) { console.error(error); return null }
 
-    const newMeal = rowToMeal(data)
+    // DB 응답(id, created_at)과 로컬 rowData(photos 포함)를 합쳐 meal 구성
+    const newMeal = rowToMeal({ ...rowData, id: data.id, created_at: data.created_at })
     setSpaces(prev => prev.map(s => {
       if (s.id !== currentSpaceId) return s
       // Realtime INSERT가 먼저 도착해 photos 없이 추가됐을 수 있으므로
-      // 같은 id의 항목을 제거한 뒤 API 응답의 완전한 데이터로 추가
+      // 같은 id의 항목을 제거한 뒤 완전한 데이터로 추가
       return { ...s, meals: [...s.meals.filter(m => m.id !== newMeal.id), newMeal] }
     }))
     return newMeal
