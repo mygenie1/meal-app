@@ -609,13 +609,11 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           />
         )}
 
-        {/* 별점 — 외식/카페/배달 */}
-        {form.tag !== '집밥' && (
-          <div>
-            <label className={LABEL_CLS}>별점</label>
-            <StarRating value={form.rating} onChange={val => set('rating', val)} />
-          </div>
-        )}
+        {/* 별점 — 전체 태그 */}
+        <div>
+          <label className={LABEL_CLS}>별점</label>
+          <StarRating value={form.rating} onChange={val => set('rating', val)} />
+        </div>
 
         {/* 한줄평 — 외식/카페/배달 */}
         {form.tag !== '집밥' && (

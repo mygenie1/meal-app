@@ -7,18 +7,10 @@ import CalendarGrid from '../components/Calendar/CalendarGrid'
 import DayDetail from '../components/MealRecord/DayDetail'
 import { useNavigate } from 'react-router-dom'
 
-function getMonthlyStat(meals) {
-  const now = new Date()
-  const count = meals.filter(m => {
-    const d = new Date(m.date)
-    return isSameMonth(d, now)
-  }).length
-  return count
-}
-
-function StatBanner({ space }) {
-  const count = getMonthlyStat(space.meals || [])
-  const month = format(new Date(), 'M', { locale: ko })
+function StatBanner({ space, displayMonth }) {
+  const base = displayMonth || new Date()
+  const count = (space.meals || []).filter(m => isSameMonth(new Date(m.date), base)).length
+  const month = format(base, 'M', { locale: ko })
 
   const messages = [
     count === 0 ? `${month}월의 첫 번째 식사를 기록해봐요` : null,
@@ -44,6 +36,7 @@ function StatBanner({ space }) {
 export default function CalendarPage() {
   const { currentSpace, spaces } = useApp()
   const [selectedDay, setSelectedDay] = useState(null)
+  const [displayMonth, setDisplayMonth] = useState(new Date())
   const navigate = useNavigate()
 
   const meals = currentSpace?.meals || []
@@ -92,9 +85,9 @@ export default function CalendarPage() {
 
       <div className="pb-28 pt-4">
         {/* 월간 통계 배너 */}
-        {currentSpace && <StatBanner space={currentSpace} />}
+        {currentSpace && <StatBanner space={currentSpace} displayMonth={displayMonth} />}
 
-        <CalendarGrid meals={meals} onDayClick={setSelectedDay} />
+        <CalendarGrid meals={meals} onDayClick={setSelectedDay} onMonthChange={setDisplayMonth} />
       </div>
 
       <Modal

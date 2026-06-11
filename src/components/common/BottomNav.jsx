@@ -2,15 +2,6 @@ import { NavLink } from 'react-router-dom'
 
 const tabs = [
   {
-    to: '/',
-    label: '홈',
-    icon: (
-      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" />
-      </svg>
-    ),
-  },
-  {
     to: '/calendar',
     label: '달력',
     icon: (
@@ -28,6 +19,15 @@ const tabs = [
       <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
         <circle cx="12" cy="8" r="2" />
+      </svg>
+    ),
+  },
+  {
+    to: '/',
+    label: '홈',
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" />
       </svg>
     ),
   },
@@ -65,6 +65,7 @@ export default function BottomNav() {
           <NavLink
             key={tab.to}
             to={tab.to}
+            replace
             end={tab.to === '/'}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center py-3 gap-1 transition-colors ${

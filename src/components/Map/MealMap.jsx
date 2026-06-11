@@ -50,7 +50,7 @@ async function geocode(locationStr) {
   return null
 }
 
-const FILTER_TAGS = ['전체', '집밥', '외식', '카페', '배달']
+const FILTER_TAGS = ['전체', '외식', '카페']
 
 export default function MealMap() {
   const { spaces, cacheGeocoords } = useApp()

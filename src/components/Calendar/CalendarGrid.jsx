@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import LazyImage from '../common/LazyImage'
 import { getThumbUrl } from '../../lib/uploadPhoto'
 import {
@@ -75,10 +75,14 @@ function MonthPicker({ current, onSelect, onClose }) {
 }
 
 // ─── CalendarGrid ─────────────────────────────────────────────────────────
-export default function CalendarGrid({ meals = [], onDayClick }) {
+export default function CalendarGrid({ meals = [], onDayClick, onMonthChange }) {
   const [current, setCurrent] = useState(new Date())
   const [showPicker, setShowPicker] = useState(false)
   const touchStartX = useRef(null)
+
+  useEffect(() => {
+    onMonthChange?.(current)
+  }, [current])
 
   const monthStart = startOfMonth(current)
   const monthEnd = endOfMonth(current)
