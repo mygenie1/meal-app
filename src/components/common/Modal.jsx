@@ -1,6 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 export default function Modal({ isOpen, onClose, title, children }) {
+  // onClose ref — popstate 핸들러가 stale closure를 참조하지 않도록
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
+
+  // iOS body scroll lock
   useEffect(() => {
     if (isOpen) {
       const scrollY = window.scrollY
@@ -20,6 +25,28 @@ export default function Modal({ isOpen, onClose, title, children }) {
       document.body.style.top = ''
       document.body.style.width = ''
       if (scrollY) window.scrollTo(0, parseInt(scrollY) * -1)
+    }
+  }, [isOpen])
+
+  // 휴대폰 뒤로가기 버튼으로 모달 닫기
+  useEffect(() => {
+    if (!isOpen) return
+
+    // 모달 열릴 때 히스토리 엔트리 추가 (URL 변경 없음)
+    window.history.pushState({ modal: true }, '')
+
+    function handlePopState() {
+      onCloseRef.current()
+    }
+
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+      // 뒤로가기가 아닌 정상 닫기의 경우: 쌓인 히스토리 엔트리 제거
+      if (window.history.state?.modal) {
+        window.history.back()
+      }
     }
   }, [isOpen])
 
