@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useApp } from '../../context/AppContext'
+import { getThumbUrl } from '../../lib/uploadPhoto'
 
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -53,10 +54,11 @@ async function geocode(locationStr) {
 const FILTER_TAGS = ['전체', '외식', '카페']
 
 export default function MealMap() {
-  const { spaces, cacheGeocoords } = useApp()
+  const { spaces, cacheGeocoords, loadMealPhotos } = useApp()
   const [pins, setPins] = useState([])
   const [loading, setLoading] = useState(false)
   const [activeTag, setActiveTag] = useState('')
+  const requestedPhotosRef = useRef(new Set())
 
   // 모든 스페이스의 위치 있는 식사 + 소속 spaceId 함께 수집
   const mealsWithLocation = useMemo(() =>
@@ -84,15 +86,15 @@ export default function MealMap() {
       setLoading(true)
       const results = await Promise.all(
         mealsWithLocation.map(async ({ meal, spaceId }) => {
-          if (meal.lat && meal.lng) return { meal, coords: [meal.lat, meal.lng] }
+          if (meal.lat && meal.lng) return { meal, coords: [meal.lat, meal.lng], spaceId }
           try {
             const coords = await geocode(meal.location)
             if (coords) {
               cacheGeocoords(spaceId, meal.id, coords[0], coords[1])
             }
-            return { meal, coords }
+            return { meal, coords, spaceId }
           } catch {
-            return { meal, coords: null }
+            return { meal, coords: null, spaceId }
           }
         })
       )
@@ -103,6 +105,16 @@ export default function MealMap() {
     loadPins()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mealsWithLocation.length, uncachedKey])
+
+  // 위치 있는 meal 사진 로드 (팝업 표시용)
+  useEffect(() => {
+    mealsWithLocation.forEach(({ meal }) => {
+      if (!meal.photosLoaded && !requestedPhotosRef.current.has(meal.id)) {
+        requestedPhotosRef.current.add(meal.id)
+        loadMealPhotos(meal.id)
+      }
+    })
+  }, [mealsWithLocation.length])
 
   const filteredPins = activeTag === ''
     ? pins
@@ -159,7 +171,10 @@ export default function MealMap() {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           />
-          {filteredPins.map(({ meal, coords }) => (
+          {filteredPins.map(({ meal, coords, spaceId }) => {
+            const liveMeal = spaces.find(s => s.id === spaceId)?.meals.find(m => m.id === meal.id) ?? meal
+            const thumbUrl = getThumbUrl(liveMeal.photos?.[0] || liveMeal.photo || '')
+            return (
             <Marker
               key={meal.id}
               position={coords}
@@ -167,9 +182,9 @@ export default function MealMap() {
             >
               <Popup maxWidth={240} className="meal-popup">
                 <div style={{ fontFamily: 'Noto Sans KR, sans-serif' }}>
-                  {meal.photo && (
+                  {thumbUrl && (
                     <img
-                      src={meal.photo}
+                      src={thumbUrl}
                       alt=""
                       style={{
                         width: '100%',
@@ -208,7 +223,8 @@ export default function MealMap() {
                 </div>
               </Popup>
             </Marker>
-          ))}
+            )
+          })}
         </MapContainer>
       </div>
 
