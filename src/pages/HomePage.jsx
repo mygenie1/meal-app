@@ -23,14 +23,23 @@ const TAG_BG = {
   '배달': '#93c5fd',
 }
 
+const PAGE_SIZE = 20
+
+const RATING_FILTERS = [
+  { key: '', label: '전체' },
+  { key: '3+', label: '★3점+' },
+  { key: '4+', label: '★4점+' },
+  { key: '5',  label: '★5점' },
+]
+
+const TAG_FILTERS = ['전체', '집밥', '외식', '카페', '배달']
+
 function FeedCard({ meal, onClick }) {
   const dateObj = parseISO(meal.date)
   const title = meal.title || meal.restaurantName || '식사 기록'
   const photos = (meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : []))
     .map(p => getThumbUrl(p))
     .filter(Boolean)
-  // photosLoaded: true이고 photos가 있을 때만 갤러리 표시
-  // photosLoaded: false(로딩 중)이거나 photos가 없으면 사진 영역 숨김
   const showPhotos = meal.photosLoaded && photos.length > 0
 
   return (
@@ -79,23 +88,15 @@ export default function HomePage() {
   const { currentSpace, spaces, loadMealPhotos } = useApp()
   const navigate = useNavigate()
   const [selectedMeal, setSelectedMeal] = useState(null)
+  const [todayFormOpen, setTodayFormOpen] = useState(false)
+  const [ratingFilter, setRatingFilter] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const sentinelRef = useRef(null)
+  const requestedPhotosRef = useRef(new Set())
+  const today = useMemo(() => new Date(), [])
 
   const meals = currentSpace?.meals || []
-
-  // 피드에 표시된 meal 중 photos가 아직 로드되지 않은 것만 자동 로드
-  // requestedRef로 중복 요청 방지 (loadMealPhotos 완료 후 meals가 바뀌어 effect 재실행돼도 스킵)
-  const requestedPhotosRef = useRef(new Set())
-  useEffect(() => {
-    meals.forEach(m => {
-      if (!m.photosLoaded && !requestedPhotosRef.current.has(m.id)) {
-        requestedPhotosRef.current.add(m.id)
-        loadMealPhotos(m.id)
-      }
-    })
-  }, [meals])
-
-  const [todayFormOpen, setTodayFormOpen] = useState(false)
-  const today = useMemo(() => new Date(), [])
 
   const stats = useMemo(() => {
     const now = new Date()
@@ -132,6 +133,46 @@ export default function HomePage() {
     }),
     [meals]
   )
+
+  const filteredMeals = useMemo(() => {
+    return sortedMeals.filter(m => {
+      const r = m.rating || 0
+      if (ratingFilter === '3+' && r < 3) return false
+      if (ratingFilter === '4+' && r < 4) return false
+      if (ratingFilter === '5'  && r !== 5) return false
+      if (tagFilter && m.tag !== tagFilter) return false
+      return true
+    })
+  }, [sortedMeals, ratingFilter, tagFilter])
+
+  const visibleMeals = filteredMeals.slice(0, visibleCount)
+  const hasMore = visibleCount < filteredMeals.length
+
+  // 필터 변경 시 페이지 리셋
+  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [ratingFilter, tagFilter])
+
+  // 보이는 카드만 사진 로드
+  useEffect(() => {
+    visibleMeals.forEach(m => {
+      if (!m.photosLoaded && !requestedPhotosRef.current.has(m.id)) {
+        requestedPhotosRef.current.add(m.id)
+        loadMealPhotos(m.id)
+      }
+    })
+  }, [visibleMeals])
+
+  // 무한 스크롤
+  useEffect(() => {
+    if (!hasMore) return
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisibleCount(c => c + PAGE_SIZE) },
+      { rootMargin: '200px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore, filteredMeals.length])
 
   if (spaces.length === 0) {
     return (
@@ -175,7 +216,7 @@ export default function HomePage() {
       </header>
 
       <div className="pb-28 pt-5">
-        {/* ── 오늘 식사 기록 버튼 ── */}
+        {/* 오늘 식사 기록 버튼 */}
         <div className="px-4 mb-5">
           <button
             onClick={() => setTodayFormOpen(true)}
@@ -196,27 +237,20 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* ── 통계 카드 (가로 스크롤) ── */}
+        {/* 통계 카드 */}
         <div className="flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-hide">
-          {/* 함께한 식사 */}
           <div className="shrink-0 w-32 bg-white rounded-2xl border border-cream-200 px-4 py-4">
             <p className="text-[11px] text-warm-light mb-1">함께한 식사</p>
             <p className="text-3xl font-bold text-warm-dark leading-none">
-              {stats.totalCount}
-              <span className="text-sm font-normal text-warm-light ml-0.5">번</span>
+              {stats.totalCount}<span className="text-sm font-normal text-warm-light ml-0.5">번</span>
             </p>
           </div>
-
-          {/* 이번 달 */}
           <div className="shrink-0 w-32 bg-white rounded-2xl border border-cream-200 px-4 py-4">
             <p className="text-[11px] text-warm-light mb-1">이번 달</p>
             <p className="text-3xl font-bold text-warm-dark leading-none">
-              {stats.thisMonthCount}
-              <span className="text-sm font-normal text-warm-light ml-0.5">번</span>
+              {stats.thisMonthCount}<span className="text-sm font-normal text-warm-light ml-0.5">번</span>
             </p>
           </div>
-
-          {/* 자주 찾은 곳 */}
           <div className="shrink-0 w-44 bg-white rounded-2xl border border-cream-200 px-4 py-4">
             <p className="text-[11px] text-warm-light mb-2">자주 찾은 곳</p>
             {stats.topRestaurants.length > 0 ? (
@@ -234,8 +268,6 @@ export default function HomePage() {
               <p className="text-xs text-cream-400">아직 없어요</p>
             )}
           </div>
-
-          {/* 즐겨 먹는 것 */}
           <div className="shrink-0 w-36 bg-white rounded-2xl border border-cream-200 px-4 py-4">
             <p className="text-[11px] text-warm-light mb-2">즐겨 먹는 것</p>
             {stats.topTagEntry ? (
@@ -252,20 +284,15 @@ export default function HomePage() {
               <p className="text-xs text-cream-400">아직 없어요</p>
             )}
           </div>
-
-          {/* 최애 맛집 (별점 5점) */}
           <div className="shrink-0 w-36 bg-white rounded-2xl border border-cream-200 px-4 py-4">
             <p className="text-[11px] text-warm-light mb-1">최애 맛집</p>
             {stats.fiveStarCount > 0 ? (
               <>
                 <p className="text-3xl font-bold text-warm-dark leading-none">
-                  {stats.fiveStarCount}
-                  <span className="text-sm font-normal text-warm-light ml-0.5">곳</span>
+                  {stats.fiveStarCount}<span className="text-sm font-normal text-warm-light ml-0.5">곳</span>
                 </p>
                 <div className="flex gap-0.5 mt-1.5">
-                  {[1,2,3,4,5].map(i => (
-                    <span key={i} className="text-xs star-filled">★</span>
-                  ))}
+                  {[1,2,3,4,5].map(i => <span key={i} className="text-xs star-filled">★</span>)}
                 </div>
               </>
             ) : (
@@ -274,7 +301,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ── 최근 기록 피드 ── */}
+        {/* 최근 기록 헤더 */}
         <div className="flex items-center justify-between px-4 mt-7 mb-3">
           <h2 className="text-sm font-semibold text-warm-dark">최근 기록</h2>
           {sortedMeals.length > 0 && (
@@ -287,15 +314,73 @@ export default function HomePage() {
           )}
         </div>
 
-        {sortedMeals.length > 0 ? (
-          <div className="px-4 space-y-3">
-            {sortedMeals.map(meal => (
-              <FeedCard
-                key={meal.id}
-                meal={meal}
-                onClick={() => setSelectedMeal(meal)}
-              />
-            ))}
+        {/* 필터 */}
+        {sortedMeals.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {/* 별점 필터 */}
+            <div className="flex gap-2 overflow-x-auto px-4 pb-0.5 scrollbar-hide">
+              {RATING_FILTERS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setRatingFilter(key)}
+                  className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors active:scale-95 border ${
+                    ratingFilter === key
+                      ? 'bg-warm-brown text-white border-warm-brown shadow-sm'
+                      : 'bg-cream-100 text-warm-brown border-cream-200 hover:bg-cream-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* 분류 필터 */}
+            <div className="flex gap-2 overflow-x-auto px-4 pb-0.5 scrollbar-hide">
+              {TAG_FILTERS.map(t => (
+                <button
+                  key={t}
+                  onClick={() => setTagFilter(t === '전체' ? '' : t)}
+                  className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors active:scale-95 border ${
+                    (t === '전체' ? tagFilter === '' : tagFilter === t)
+                      ? 'bg-warm-brown text-white border-warm-brown shadow-sm'
+                      : 'bg-cream-100 text-warm-brown border-cream-200 hover:bg-cream-200'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 피드 */}
+        {filteredMeals.length > 0 ? (
+          <>
+            <div className="px-4 space-y-3">
+              {visibleMeals.map(meal => (
+                <FeedCard
+                  key={meal.id}
+                  meal={meal}
+                  onClick={() => setSelectedMeal(meal)}
+                />
+              ))}
+            </div>
+            {hasMore && (
+              <div ref={sentinelRef} className="py-5 flex justify-center">
+                <div className="w-5 h-5 border-2 border-cream-300 border-t-warm-brown rounded-full animate-spin" />
+              </div>
+            )}
+          </>
+        ) : sortedMeals.length > 0 ? (
+          <div className="flex flex-col items-center text-center px-8 py-12">
+            <p className="text-sm font-medium text-warm-dark mb-1">조건에 맞는 기록이 없어요</p>
+            <p className="text-xs text-warm-light mb-4">필터를 변경해보세요</p>
+            <button
+              onClick={() => { setRatingFilter(''); setTagFilter('') }}
+              className="text-xs text-warm-brown underline"
+            >
+              필터 초기화
+            </button>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center text-center px-8 py-12">

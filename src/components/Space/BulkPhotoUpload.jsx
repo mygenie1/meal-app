@@ -40,22 +40,27 @@ function compressImage(file) {
 
 const TAGS = ['집밥', '외식', '카페', '배달']
 const MEAL_TIMES = ['아침', '점심', '저녁']
+
 const TAG_STYLE = {
-  집밥: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', sel: 'bg-green-100 border-green-400' },
-  외식: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', sel: 'bg-amber-100 border-amber-400' },
-  카페: { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-700', sel: 'bg-pink-100 border-pink-400' },
-  배달: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', sel: 'bg-blue-100 border-blue-400' },
+  집밥: { active: 'bg-green-100 text-green-700 border-green-400', idle: 'bg-white text-green-600 border-green-200' },
+  외식: { active: 'bg-amber-100 text-amber-700 border-amber-400', idle: 'bg-white text-amber-600 border-amber-200' },
+  카페: { active: 'bg-pink-100 text-pink-700 border-pink-400', idle: 'bg-white text-pink-600 border-pink-200' },
+  배달: { active: 'bg-blue-100 text-blue-700 border-blue-400', idle: 'bg-white text-blue-600 border-blue-200' },
 }
+
+const INPUT_CLS = 'w-full px-3 py-2 rounded-xl bg-white border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
 
 export default function BulkPhotoUpload({ onClose }) {
   const { currentSpace, addMeal } = useApp()
   const [phase, setPhase] = useState('idle')
   const [groups, setGroups] = useState([])
-  const [tag, setTag] = useState('외식')
-  const [mealTime, setMealTime] = useState('')
   const [progress, setProgress] = useState(0)
   const [savedCount, setSavedCount] = useState(0)
   const fileRef = useRef()
+
+  function updateGroup(date, key, val) {
+    setGroups(prev => prev.map(g => g.date === date ? { ...g, [key]: val } : g))
+  }
 
   async function handleFiles(e) {
     const files = Array.from(e.target.files)
@@ -81,7 +86,6 @@ export default function BulkPhotoUpload({ onClose }) {
       setProgress(Math.round(((i + 1) / files.length) * 100))
     }
 
-    // 날짜별로 묶기
     const grouped = {}
     results.forEach(({ date, photo }) => {
       if (!grouped[date]) grouped[date] = []
@@ -89,7 +93,7 @@ export default function BulkPhotoUpload({ onClose }) {
     })
 
     const groupList = Object.entries(grouped)
-      .map(([date, photos]) => ({ date, photos }))
+      .map(([date, photos]) => ({ date, photos, title: '', tag: '외식', mealTime: '' }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
     setGroups(groupList)
@@ -103,14 +107,17 @@ export default function BulkPhotoUpload({ onClose }) {
     const spaceId = currentSpace?.id
     for (let i = 0; i < groups.length; i++) {
       const g = groups[i]
-      // 사진을 Storage에 업로드 → URL 배열로 교체
       const uploadedPhotos = await Promise.all(
         g.photos.map(p => uploadPhotoWithThumbnail(p, spaceId))
       )
       await addMeal({
-        date: g.date, tag, mealTime,
-        photos: uploadedPhotos, photo: uploadedPhotos[0] || '',
-        title: '', restaurantName: '', location: '',
+        date: g.date,
+        tag: g.tag,
+        mealTime: g.mealTime,
+        title: g.title,
+        photos: uploadedPhotos,
+        photo: uploadedPhotos[0] || '',
+        restaurantName: '', location: '',
         lat: null, lng: null, rating: 0, review: '', memo: '',
       })
       setSavedCount(i + 1)
@@ -179,63 +186,22 @@ export default function BulkPhotoUpload({ onClose }) {
 
     return (
       <div>
-        <p className="text-sm text-warm-light mb-3">
+        <p className="text-sm text-warm-light mb-4">
           사진 {totalPhotos}장 → {groups.length}개 날짜로 묶었어요
         </p>
 
-        {/* 태그 선택 */}
-        <div className="mb-4">
-          <p className="text-xs text-warm-light mb-2 font-medium">태그 (모든 기록에 적용)</p>
-          <div className="flex gap-2">
-            {TAGS.map(t => {
-              const s = TAG_STYLE[t]
-              const active = tag === t
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTag(t)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors active:scale-95 ${
-                    active ? `${s.sel} ${s.text}` : `${s.bg} ${s.border} ${s.text} opacity-60`
-                  }`}
-                >
-                  {t}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* 끼니 선택 */}
-        <div className="mb-5">
-          <p className="text-xs text-warm-light mb-2 font-medium">끼니 (모든 기록에 적용)</p>
-          <div className="flex gap-2">
-            {MEAL_TIMES.map(t => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setMealTime(prev => prev === t ? '' : t)}
-                className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors active:scale-95 ${
-                  mealTime === t
-                    ? 'bg-warm-brown text-white border-warm-brown'
-                    : 'bg-cream-100 text-warm-light border-cream-200 hover:bg-cream-200'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 날짜별 그룹 미리보기 */}
-        <div className="space-y-3 mb-5 max-h-64 overflow-y-auto">
+        {/* 날짜별 그룹 — 세부 정보 입력 */}
+        <div className="space-y-4 mb-5">
           {groups.map(g => (
             <div key={g.date} className="bg-cream-100 rounded-2xl p-3">
+              {/* 날짜 헤더 */}
               <p className="text-xs font-semibold text-warm-dark mb-2">
                 {format(parseISO(g.date), 'yyyy년 M월 d일 (eee)', { locale: ko })}
                 <span className="ml-1.5 text-warm-light font-normal">{g.photos.length}장</span>
               </p>
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+
+              {/* 사진 썸네일 */}
+              <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3">
                 {g.photos.map((p, i) => (
                   <img
                     key={i}
@@ -243,6 +209,52 @@ export default function BulkPhotoUpload({ onClose }) {
                     alt={`사진 ${i + 1}`}
                     className="shrink-0 w-14 h-14 object-cover rounded-xl"
                   />
+                ))}
+              </div>
+
+              {/* 제목 */}
+              <input
+                type="text"
+                value={g.title}
+                onChange={e => updateGroup(g.date, 'title', e.target.value)}
+                placeholder="제목 (선택사항)"
+                className={`${INPUT_CLS} mb-2`}
+              />
+
+              {/* 태그 */}
+              <div className="flex gap-1 mb-1.5">
+                {TAGS.map(t => {
+                  const s = TAG_STYLE[t]
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => updateGroup(g.date, 'tag', t)}
+                      className={`flex-1 py-1.5 rounded-xl text-[11px] font-medium border transition-colors active:scale-95 ${
+                        g.tag === t ? s.active : s.idle
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* 끼니 */}
+              <div className="flex gap-1">
+                {MEAL_TIMES.map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => updateGroup(g.date, 'mealTime', g.mealTime === t ? '' : t)}
+                    className={`flex-1 py-1.5 rounded-xl text-[11px] font-medium border transition-colors active:scale-95 ${
+                      g.mealTime === t
+                        ? 'bg-warm-brown text-white border-warm-brown'
+                        : 'bg-white text-warm-light border-cream-200 hover:bg-cream-50'
+                    }`}
+                  >
+                    {t}
+                  </button>
                 ))}
               </div>
             </div>

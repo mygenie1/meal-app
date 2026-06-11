@@ -34,6 +34,23 @@ export default function MealDetailModal({ meal, onClose }) {
     .map(p => getOriginalUrl(p))
     .filter(Boolean)
 
+  async function handleDownload(url) {
+    try {
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = `식탁일기_${liveMeal.date}.jpg`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+    } catch {
+      window.open(url, '_blank')
+    }
+  }
+
   function handleEdit(data) {
     updateMeal(liveMeal.id, data)
     setEditing(false)
@@ -75,7 +92,7 @@ export default function MealDetailModal({ meal, onClose }) {
         </div>
       ) : photos.length > 0 ? (
         <div className="-mx-5 -mt-4 mb-5">
-          <PhotoGallery photos={photos} maxHeight={300} />
+          <PhotoGallery photos={photos} maxHeight={300} onDownload={handleDownload} />
         </div>
       ) : null}
 

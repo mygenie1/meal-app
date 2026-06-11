@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import LazyImage from './LazyImage'
 
-export default function PhotoGallery({ photos, maxHeight = 240, className = '' }) {
+export default function PhotoGallery({ photos, maxHeight = 240, className = '', onDownload }) {
   const [idx, setIdx] = useState(0)
   const touchStartX = useRef(null)
 
@@ -34,6 +34,17 @@ export default function PhotoGallery({ photos, maxHeight = 240, className = '' }
         style={{ height: maxHeight }}
         className="w-full"
       />
+      {onDownload && (
+        <button
+          onClick={e => { e.stopPropagation(); onDownload(photos[idx]) }}
+          className="absolute bottom-2 right-2 bg-black/45 text-white rounded-full p-2 hover:bg-black/65 active:scale-90 transition-all"
+          title="사진 저장"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </button>
+      )}
       {count > 1 && (
         <>
           <div className="absolute top-2 right-2 bg-black/40 text-white text-[10px] px-1.5 py-0.5 rounded-full font-medium">
