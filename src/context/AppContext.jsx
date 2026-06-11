@@ -338,23 +338,39 @@ export function AppProvider({ children }) {
     if (!currentSpaceId) return null
 
     const rowData = mealToRow(mealData)
-    // .select('id, created_at')만 받아옴: photos를 DB에서 다시 내려받으면
-    // 대용량 base64 왕복 전송이 15초 타임아웃을 초과해 사진이 사라질 수 있음
+
+    // Optimistic update: INSERT 완료 전에 즉시 목록에 표시
+    const tempId = 'temp_' + Date.now()
+    const tempMeal = rowToMeal({ ...rowData, id: tempId, created_at: new Date().toISOString() })
+    setSpaces(prev => prev.map(s => {
+      if (s.id !== currentSpaceId) return s
+      return { ...s, meals: [...s.meals.filter(m => m.id !== tempId), tempMeal] }
+    }))
+
+    // photos는 로컬 rowData에 이미 있으므로 id/created_at만 받아옴
+    // (전체 row 재다운로드 시 대용량 base64가 15초 타임아웃을 초과할 수 있음)
     const { data, error } = await supabase
       .from('meals')
       .insert({ space_id: currentSpaceId, ...rowData })
       .select('id, created_at')
       .single()
 
-    if (error) { console.error(error); return null }
+    if (error) {
+      console.error(error)
+      // 저장 실패 시 임시 항목 롤백
+      setSpaces(prev => prev.map(s => {
+        if (s.id !== currentSpaceId) return s
+        return { ...s, meals: s.meals.filter(m => m.id !== tempId) }
+      }))
+      return null
+    }
 
-    // DB 응답(id, created_at)과 로컬 rowData(photos 포함)를 합쳐 meal 구성
+    // 임시 항목을 DB 실제 ID로 교체
+    // Realtime INSERT가 먼저 도착했을 수 있으므로 실제 ID도 같이 제거 후 추가
     const newMeal = rowToMeal({ ...rowData, id: data.id, created_at: data.created_at })
     setSpaces(prev => prev.map(s => {
       if (s.id !== currentSpaceId) return s
-      // Realtime INSERT가 먼저 도착해 photos 없이 추가됐을 수 있으므로
-      // 같은 id의 항목을 제거한 뒤 완전한 데이터로 추가
-      return { ...s, meals: [...s.meals.filter(m => m.id !== newMeal.id), newMeal] }
+      return { ...s, meals: [...s.meals.filter(m => m.id !== tempId && m.id !== newMeal.id), newMeal] }
     }))
     return newMeal
   }

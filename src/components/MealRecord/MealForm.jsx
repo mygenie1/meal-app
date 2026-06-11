@@ -4,6 +4,30 @@ import { ko } from 'date-fns/locale'
 import StarRating from '../common/StarRating'
 import { useApp } from '../../context/AppContext'
 
+// ─── 이미지 압축 (Canvas, max 1200px, JPEG 0.82) ─────────────────────────
+function compressImage(file) {
+  return new Promise(resolve => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const MAX = 1200
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round((height * MAX) / width); width = MAX }
+        else { width = Math.round((width * MAX) / height); height = MAX }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+      resolve(canvas.toDataURL('image/jpeg', 0.82))
+      URL.revokeObjectURL(url)
+    }
+    img.onerror = () => { resolve(null); URL.revokeObjectURL(url) }
+    img.src = url
+  })
+}
+
 // ─── Nominatim geocoding ───────────────────────────────────────────────────
 async function geocodeKr(query) {
   const params = new URLSearchParams({
@@ -247,17 +271,19 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     setForm(prev => ({ ...prev, [key]: val }))
   }
 
-  function handlePhotos(e) {
+  async function handlePhotos(e) {
     const files = Array.from(e.target.files)
     const canAdd = 5 - form.photos.length
-    files.slice(0, canAdd).forEach(file => {
-      const reader = new FileReader()
-      reader.onload = ev => setForm(prev => ({
-        ...prev,
-        photos: prev.photos.length < 5 ? [...prev.photos, ev.target.result] : prev.photos,
-      }))
-      reader.readAsDataURL(file)
-    })
+    for (const file of files.slice(0, canAdd)) {
+      // Canvas 압축으로 용량을 줄여 Supabase INSERT 타임아웃 방지
+      const compressed = await compressImage(file)
+      if (compressed) {
+        setForm(prev => ({
+          ...prev,
+          photos: prev.photos.length < 5 ? [...prev.photos, compressed] : prev.photos,
+        }))
+      }
+    }
     e.target.value = ''
   }
 
