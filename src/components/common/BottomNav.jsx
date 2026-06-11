@@ -2,13 +2,11 @@ import { NavLink } from 'react-router-dom'
 
 const tabs = [
   {
-    to: '/calendar',
-    label: '달력',
+    to: '/',
+    label: '홈',
     icon: (
       <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-        <rect x="3" y="4" width="18" height="18" rx="3" />
-        <path strokeLinecap="round" d="M3 9h18M8 2v4M16 2v4" />
-        <path strokeLinecap="round" d="M7 13h2M11 13h2M15 13h2M7 17h2M11 17h2" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" />
       </svg>
     ),
   },
@@ -23,11 +21,13 @@ const tabs = [
     ),
   },
   {
-    to: '/',
-    label: '홈',
+    to: '/calendar',
+    label: '달력',
     icon: (
       <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9" />
+        <rect x="3" y="4" width="18" height="18" rx="3" />
+        <path strokeLinecap="round" d="M3 9h18M8 2v4M16 2v4" />
+        <path strokeLinecap="round" d="M7 13h2M11 13h2M15 13h2M7 17h2M11 17h2" />
       </svg>
     ),
   },
