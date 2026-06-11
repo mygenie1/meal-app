@@ -121,7 +121,38 @@ export function AppProvider({ children }) {
         } else if (eventType === 'UPDATE') {
           setSpaces(prev => prev.map(s => {
             if (s.id !== newRow.space_id) return s
-            return { ...s, meals: s.meals.map(m => m.id === newRow.id ? rowToMeal(newRow) : m) }
+            return {
+              ...s,
+              meals: s.meals.map(m => {
+                if (m.id !== newRow.id) return m
+                // Supabase Realtime UPDATE는 변경된 컬럼만 포함할 수 있음
+                // (DEFAULT REPLICA IDENTITY) 또는 photos[] 같은 대용량 base64 컬럼이
+                // payload 크기 제한(1MB)으로 누락될 수 있음.
+                // null/undefined 필드는 기존 값을 유지하고, 실제 값이 있는 필드만 적용.
+                return {
+                  ...m,
+                  ...(newRow.date != null            && { date: newRow.date }),
+                  ...(newRow.title != null           && { title: newRow.title }),
+                  ...(newRow.restaurant_name != null && { restaurantName: newRow.restaurant_name }),
+                  ...(newRow.location != null        && { location: newRow.location }),
+                  ...(newRow.lat != null             && { lat: newRow.lat }),
+                  ...(newRow.lng != null             && { lng: newRow.lng }),
+                  ...(newRow.rating != null          && { rating: newRow.rating }),
+                  ...(newRow.review != null          && { review: newRow.review }),
+                  ...(newRow.memo != null            && { memo: newRow.memo }),
+                  ...(newRow.tag != null             && { tag: newRow.tag }),
+                  ...(newRow.meal_time != null       && { mealTime: newRow.meal_time }),
+                  ...(Array.isArray(newRow.photos)   && {
+                    photos: newRow.photos,
+                    photo: newRow.photos[0] ?? '',
+                  }),
+                  ...(newRow.photo != null && !Array.isArray(newRow.photos) && {
+                    photos: [newRow.photo],
+                    photo: newRow.photo,
+                  }),
+                }
+              }),
+            }
           }))
         } else if (eventType === 'DELETE') {
           // DELETE 이벤트의 old는 id만 포함 → 전체 스페이스에서 제거
@@ -322,11 +353,12 @@ export function AppProvider({ children }) {
     if (error) { console.error(error); return null }
 
     const newMeal = rowToMeal(data)
-    setSpaces(prev => prev.map(s =>
-      s.id === currentSpaceId
-        ? { ...s, meals: [...s.meals, newMeal] }
-        : s
-    ))
+    setSpaces(prev => prev.map(s => {
+      if (s.id !== currentSpaceId) return s
+      // Realtime INSERT가 먼저 도착해 photos 없이 추가됐을 수 있으므로
+      // 같은 id의 항목을 제거한 뒤 API 응답의 완전한 데이터로 추가
+      return { ...s, meals: [...s.meals.filter(m => m.id !== newMeal.id), newMeal] }
+    }))
     return newMeal
   }
 
