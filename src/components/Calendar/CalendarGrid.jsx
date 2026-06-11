@@ -201,7 +201,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange }) 
               className={`
                 relative rounded-2xl overflow-hidden transition-all active:scale-95
                 ${inMonth ? '' : 'opacity-25'}
-                ${hasMeals ? 'h-[84px]' : 'h-[56px]'}
+                ${hasMeals ? 'h-[96px]' : 'h-[56px]'}
                 ${today && !hasMeals ? 'ring-1 ring-warm-brown/40 bg-warm-brown/5' : ''}
                 ${!hasMeals ? 'hover:bg-cream-100' : ''}
               `}
@@ -239,7 +239,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange }) 
                     `}
                     style={{
                       display: '-webkit-box',
-                      WebkitLineClamp: 2,
+                      WebkitLineClamp: 3,
                       WebkitBoxOrient: 'vertical',
                       overflow: 'hidden',
                       wordBreak: 'break-all',
