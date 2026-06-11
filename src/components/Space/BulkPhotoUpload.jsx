@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useApp } from '../../context/AppContext'
+import { uploadPhotoToStorage } from '../../lib/uploadPhoto'
 
 // ─── EXIF 날짜 추출 (바이너리 스캔) ─────────────────────────────────────
 function extractExifDate(buffer) {
@@ -99,11 +100,16 @@ export default function BulkPhotoUpload({ onClose }) {
   async function handleSave() {
     setPhase('saving')
     setSavedCount(0)
+    const spaceId = currentSpace?.id
     for (let i = 0; i < groups.length; i++) {
       const g = groups[i]
+      // 사진을 Storage에 업로드 → URL 배열로 교체
+      const uploadedPhotos = await Promise.all(
+        g.photos.map(p => uploadPhotoToStorage(p, spaceId))
+      )
       await addMeal({
         date: g.date, tag, mealTime,
-        photos: g.photos, photo: g.photos[0],
+        photos: uploadedPhotos, photo: uploadedPhotos[0] || '',
         title: '', restaurantName: '', location: '',
         lat: null, lng: null, rating: 0, review: '', memo: '',
       })

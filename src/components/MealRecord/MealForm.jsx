@@ -3,8 +3,10 @@ import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import StarRating from '../common/StarRating'
 import { useApp } from '../../context/AppContext'
+import { uploadPhotoToStorage } from '../../lib/uploadPhoto'
 
 // ─── 이미지 압축 (Canvas, max 1200px, JPEG 0.82) ─────────────────────────
+// 결과물은 base64 — 로컬 미리보기용. 실제 저장 시 Storage에 업로드 후 URL로 교체
 function compressImage(file) {
   return new Promise(resolve => {
     const img = new Image()
@@ -248,6 +250,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   const { currentSpace, deleteIngredient } = useApp()
 
   const [step, setStep] = useState(() => initial?.tag ? 'form' : 'tag')
+  const [uploading, setUploading] = useState(false)
   const [formDate, setFormDate] = useState(
     () => initial?.date ?? format(date, 'yyyy-MM-dd')
   )
@@ -346,7 +349,17 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       await Promise.all(usedIngredientIds.map(id => deleteIngredient('remaining', id)))
     }
 
-    onSubmit({ ...form, date: formDate, lat, lng })
+    // 사진 Storage 업로드 — base64는 URL로 교체, 이미 URL이면 그대로
+    setUploading(true)
+    try {
+      const spaceId = currentSpace?.id
+      const uploadedPhotos = await Promise.all(
+        form.photos.map(p => uploadPhotoToStorage(p, spaceId))
+      )
+      onSubmit({ ...form, date: formDate, lat, lng, photos: uploadedPhotos, photo: uploadedPhotos[0] || '' })
+    } finally {
+      setUploading(false)
+    }
   }
 
   function selectTag(tag) {
@@ -355,6 +368,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   }
 
   const isGeocoding = geoStatus === 'loading'
+  const isBusy = isGeocoding || uploading
   const remainingIngredients = currentSpace?.ingredients?.remaining || []
   const style = TAG_STYLE[form.tag] || {}
 
@@ -704,10 +718,10 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           </button>
           <button
             type="submit"
-            disabled={isGeocoding}
+            disabled={isBusy}
             className="flex-1 py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isGeocoding ? '주소 확인 중...' : '저장하기'}
+            {uploading ? '사진 업로드 중...' : isGeocoding ? '주소 확인 중...' : '저장하기'}
           </button>
         </div>
       </div>
