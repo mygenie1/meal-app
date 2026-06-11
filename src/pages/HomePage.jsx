@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { format, isSameMonth, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useApp } from '../context/AppContext'
@@ -22,32 +22,20 @@ const TAG_BG = {
   '배달': '#93c5fd',
 }
 
-function PhotoPlaceholder() {
-  return (
-    <div className="w-full bg-cream-100 flex items-center justify-center" style={{ height: '180px' }}>
-      <svg className="w-10 h-10 text-cream-300" fill="none" stroke="currentColor" strokeWidth="1.2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    </div>
-  )
-}
-
 function FeedCard({ meal, onClick }) {
   const dateObj = parseISO(meal.date)
   const title = meal.title || meal.restaurantName || '식사 기록'
   const photos = meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : [])
+  // photosLoaded: true이고 photos가 있을 때만 갤러리 표시
+  // photosLoaded: false(로딩 중)이거나 photos가 없으면 사진 영역 숨김
+  const showPhotos = meal.photosLoaded && photos.length > 0
 
   return (
     <button
       onClick={onClick}
       className="w-full text-left bg-white rounded-2xl border border-cream-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
     >
-      {photos.length > 0 ? (
-        <PhotoGallery photos={photos} maxHeight={200} />
-      ) : (
-        <PhotoPlaceholder />
-      )}
+      {showPhotos && <PhotoGallery photos={photos} maxHeight={200} />}
       <div className="px-4 py-3">
         <div className="flex items-start justify-between gap-2 mb-1">
           <p className="font-semibold text-warm-dark text-base leading-snug">{title}</p>
@@ -85,13 +73,26 @@ function FeedCard({ meal, onClick }) {
 }
 
 export default function HomePage() {
-  const { currentSpace, spaces } = useApp()
+  const { currentSpace, spaces, loadMealPhotos } = useApp()
   const navigate = useNavigate()
   const [selectedMeal, setSelectedMeal] = useState(null)
-  const [todayFormOpen, setTodayFormOpen] = useState(false)
-  const today = useMemo(() => new Date(), [])
 
   const meals = currentSpace?.meals || []
+
+  // 피드에 표시된 meal 중 photos가 아직 로드되지 않은 것만 자동 로드
+  // requestedRef로 중복 요청 방지 (loadMealPhotos 완료 후 meals가 바뀌어 effect 재실행돼도 스킵)
+  const requestedPhotosRef = useRef(new Set())
+  useEffect(() => {
+    meals.forEach(m => {
+      if (!m.photosLoaded && !requestedPhotosRef.current.has(m.id)) {
+        requestedPhotosRef.current.add(m.id)
+        loadMealPhotos(m.id)
+      }
+    })
+  }, [meals])
+
+  const [todayFormOpen, setTodayFormOpen] = useState(false)
+  const today = useMemo(() => new Date(), [])
 
   const stats = useMemo(() => {
     const now = new Date()
