@@ -119,41 +119,26 @@ export function AppProvider({ children }) {
             return { ...s, meals: [...s.meals, rowToMeal(newRow)] }
           }))
         } else if (eventType === 'UPDATE') {
-          setSpaces(prev => prev.map(s => {
-            if (s.id !== newRow.space_id) return s
-            return {
-              ...s,
-              meals: s.meals.map(m => {
-                if (m.id !== newRow.id) return m
-                // Supabase Realtime UPDATE는 변경된 컬럼만 포함할 수 있음
-                // (DEFAULT REPLICA IDENTITY) 또는 photos[] 같은 대용량 base64 컬럼이
-                // payload 크기 제한(1MB)으로 누락될 수 있음.
-                // null/undefined 필드는 기존 값을 유지하고, 실제 값이 있는 필드만 적용.
+          // Realtime UPDATE payload는 photos[] 같은 대용량 base64 컬럼이 누락되거나
+          // cacheGeocoords처럼 lat/lng만 변경하는 부분 UPDATE에서 다른 컬럼이 없을 수 있음.
+          // payload를 직접 신뢰하지 않고 DB에서 전체 row를 재조회해 완전한 데이터를 사용.
+          const mealId = newRow.id
+          if (!mealId) return
+          supabase
+            .from('meals')
+            .select('*')
+            .eq('id', mealId)
+            .single()
+            .then(({ data, error }) => {
+              if (error || !data) return
+              setSpaces(prev => prev.map(s => {
+                if (s.id !== data.space_id) return s
                 return {
-                  ...m,
-                  ...(newRow.date != null            && { date: newRow.date }),
-                  ...(newRow.title != null           && { title: newRow.title }),
-                  ...(newRow.restaurant_name != null && { restaurantName: newRow.restaurant_name }),
-                  ...(newRow.location != null        && { location: newRow.location }),
-                  ...(newRow.lat != null             && { lat: newRow.lat }),
-                  ...(newRow.lng != null             && { lng: newRow.lng }),
-                  ...(newRow.rating != null          && { rating: newRow.rating }),
-                  ...(newRow.review != null          && { review: newRow.review }),
-                  ...(newRow.memo != null            && { memo: newRow.memo }),
-                  ...(newRow.tag != null             && { tag: newRow.tag }),
-                  ...(newRow.meal_time != null       && { mealTime: newRow.meal_time }),
-                  ...(Array.isArray(newRow.photos)   && {
-                    photos: newRow.photos,
-                    photo: newRow.photos[0] ?? '',
-                  }),
-                  ...(newRow.photo != null && !Array.isArray(newRow.photos) && {
-                    photos: [newRow.photo],
-                    photo: newRow.photo,
-                  }),
+                  ...s,
+                  meals: s.meals.map(m => m.id === data.id ? rowToMeal(data) : m),
                 }
-              }),
-            }
-          }))
+              }))
+            })
         } else if (eventType === 'DELETE') {
           // DELETE 이벤트의 old는 id만 포함 → 전체 스페이스에서 제거
           setSpaces(prev => prev.map(s => ({
@@ -284,13 +269,21 @@ export function AppProvider({ children }) {
         if (e1) throw new Error(e1.message)
         if (e2) throw new Error(e2.message)
 
-        setSpaces(prev => prev.map(s => s.id !== space.id ? s : {
-          ...s,
-          meals: (mealsData || []).map(rowToMeal),
-          ingredients: {
-            toBuy: (ingredientsData || []).filter(i => i.type === 'toBuy').map(rowToIngredient),
-            remaining: (ingredientsData || []).filter(i => i.type === 'remaining').map(rowToIngredient),
-          },
+        setSpaces(prev => prev.map(s => {
+          if (s.id !== space.id) return s
+          const dbMeals = (mealsData || []).map(rowToMeal)
+          const dbMealIds = new Set(dbMeals.map(m => m.id))
+          // 백그라운드 로딩 중 addMeal로 추가된 meal이 이 DB 쿼리보다 늦게 DB에 반영됐을 수 있음.
+          // DB 결과에 없는 로컬 meal을 보존해 race condition으로 인한 신규 기록 손실 방지.
+          const localOnlyMeals = s.meals.filter(m => !dbMealIds.has(m.id))
+          return {
+            ...s,
+            meals: [...dbMeals, ...localOnlyMeals],
+            ingredients: {
+              toBuy: (ingredientsData || []).filter(i => i.type === 'toBuy').map(rowToIngredient),
+              remaining: (ingredientsData || []).filter(i => i.type === 'remaining').map(rowToIngredient),
+            },
+          }
         }))
       } catch (err) {
         console.warn(`Space ${space.id} 데이터 로드 실패:`, err)
