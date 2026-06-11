@@ -6,7 +6,8 @@ const AppContext = createContext(null)
 const SPACE_KEY = 'mealapp_current_space'
 
 // DB row → 앱 내부 meal 객체
-function rowToMeal(row) {
+// photosLoaded: false → 목록 조회 시 photos 컬럼 미포함, 상세 클릭 시 별도 로드
+function rowToMeal(row, { photosLoaded = true } = {}) {
   const photos = Array.isArray(row.photos) && row.photos.length > 0
     ? row.photos
     : (row.photo ? [row.photo] : [])
@@ -17,6 +18,7 @@ function rowToMeal(row) {
     title: row.title || '',
     photo: photos[0] || '',
     photos,
+    photosLoaded,
     restaurantName: row.restaurant_name || '',
     location: row.location || '',
     lat: row.lat ?? null,
@@ -28,6 +30,9 @@ function rowToMeal(row) {
     mealTime: row.meal_time || '',
   }
 }
+
+// 목록 조회 시 photos(base64 대용량) 제외 → 타임아웃 방지
+const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, lat, lng, rating, review, memo, tag, meal_time, created_at'
 
 // 앱 내부 meal 객체 → DB insert/update 용
 function mealToRow(data) {
@@ -126,7 +131,8 @@ export function AppProvider({ children }) {
             const alreadyExists = s.meals.find(m => m.id === newRow.id)
             console.log(`[Realtime:meals INSERT] 이미 로컬에 있음=${!!alreadyExists}, 현재 meals수=${s.meals.length}`)
             if (alreadyExists) return s
-            return { ...s, meals: [...s.meals, rowToMeal(newRow)] }
+            // Realtime 페이로드는 대용량 photos 컬럼이 잘릴 수 있으므로 photosLoaded: false
+            return { ...s, meals: [...s.meals, rowToMeal(newRow, { photosLoaded: false })] }
           }))
         } else if (eventType === 'UPDATE') {
           // Realtime UPDATE payload는 photos[] 같은 대용량 base64 컬럼이 누락되거나
@@ -290,7 +296,7 @@ export function AppProvider({ children }) {
           { data: mealsData, error: e1 },
           { data: ingredientsData, error: e2 },
         ] = await Promise.all([
-          supabase.from('meals').select('*').eq('space_id', space.id).order('created_at'),
+          supabase.from('meals').select(MEAL_LIST_SELECT).eq('space_id', space.id).order('created_at'),
           supabase.from('ingredients').select('*').eq('space_id', space.id).order('created_at'),
         ])
 
@@ -300,7 +306,7 @@ export function AppProvider({ children }) {
         console.log(`[loadAllSpaceData] space=${space.id} DB 조회 완료, meals수=${mealsData?.length}`)
         setSpaces(prev => prev.map(s => {
           if (s.id !== space.id) return s
-          const dbMeals = (mealsData || []).map(rowToMeal)
+          const dbMeals = (mealsData || []).map(row => rowToMeal(row, { photosLoaded: false }))
           const dbMealIds = new Set(dbMeals.map(m => m.id))
           // 백그라운드 로딩 중 addMeal로 추가된 meal이 이 DB 쿼리보다 늦게 DB에 반영됐을 수 있음.
           // DB 결과에 없는 로컬 meal을 보존해 race condition으로 인한 신규 기록 손실 방지.
@@ -323,6 +329,41 @@ export function AppProvider({ children }) {
       }
     }
     console.log('[loadAllSpaceData] 완료')
+  }
+
+  // 개별 meal의 photos 컬럼만 별도 조회 (목록 조회 시 photos 제외로 인한 lazy load)
+  async function loadMealPhotos(mealId) {
+    const { data, error } = await supabase
+      .from('meals')
+      .select('id, space_id, photo, photos')
+      .eq('id', mealId)
+      .single()
+
+    if (error || !data) {
+      console.error('[loadMealPhotos] 실패', error)
+      // 실패해도 photosLoaded: true로 표시해서 로딩 스피너가 무한 돌지 않도록
+      setSpaces(prev => prev.map(s => ({
+        ...s,
+        meals: s.meals.map(m => m.id === mealId ? { ...m, photosLoaded: true } : m),
+      })))
+      return
+    }
+
+    const photos = Array.isArray(data.photos) && data.photos.length > 0
+      ? data.photos
+      : (data.photo ? [data.photo] : [])
+
+    setSpaces(prev => prev.map(s => {
+      if (s.id !== data.space_id) return s
+      return {
+        ...s,
+        meals: s.meals.map(m =>
+          m.id === mealId
+            ? { ...m, photo: photos[0] || '', photos, photosLoaded: true }
+            : m
+        ),
+      }
+    }))
   }
 
   // 스페이스 생성
@@ -432,7 +473,7 @@ export function AppProvider({ children }) {
 
     setSpaces(prev => prev.map(s =>
       s.id === currentSpaceId
-        ? { ...s, meals: s.meals.map(m => m.id === mealId ? { ...m, ...updates } : m) }
+        ? { ...s, meals: s.meals.map(m => m.id === mealId ? { ...m, ...updates, photosLoaded: true } : m) }
         : s
     ))
   }
@@ -549,7 +590,7 @@ export function AppProvider({ children }) {
 
     // 없으면 해당 스페이스의 meals + ingredients 로드
     const [{ data: mealsData }, { data: ingredientsData }] = await Promise.all([
-      supabase.from('meals').select('*').eq('space_id', spaceRow.id).order('created_at'),
+      supabase.from('meals').select(MEAL_LIST_SELECT).eq('space_id', spaceRow.id).order('created_at'),
       supabase.from('ingredients').select('*').eq('space_id', spaceRow.id).order('created_at'),
     ])
 
@@ -559,7 +600,7 @@ export function AppProvider({ children }) {
       emoji: spaceRow.emoji,
       code: spaceRow.code,
       createdAt: spaceRow.created_at,
-      meals: (mealsData || []).map(rowToMeal),
+      meals: (mealsData || []).map(row => rowToMeal(row, { photosLoaded: false })),
       ingredients: {
         toBuy: (ingredientsData || []).filter(i => i.type === 'toBuy').map(rowToIngredient),
         remaining: (ingredientsData || []).filter(i => i.type === 'remaining').map(rowToIngredient),
@@ -586,6 +627,7 @@ export function AppProvider({ children }) {
         addMeal,
         updateMeal,
         deleteMeal,
+        loadMealPhotos,
         cacheGeocoords,
         addIngredient,
         toggleIngredient,

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useApp } from '../../context/AppContext'
@@ -14,16 +14,25 @@ const TAG_STYLES = {
 }
 
 export default function MealDetailModal({ meal, onClose }) {
-  const { updateMeal, deleteMeal } = useApp()
+  const { updateMeal, deleteMeal, loadMealPhotos, currentSpace } = useApp()
   const [editing, setEditing] = useState(false)
+
+  // context에서 실시간 meal 조회 — loadMealPhotos 완료 후 photos가 갱신되면 여기도 반영됨
+  const liveMeal = currentSpace?.meals.find(m => m.id === meal?.id) ?? meal
+
+  useEffect(() => {
+    if (meal?.id && !meal.photosLoaded) {
+      loadMealPhotos(meal.id)
+    }
+  }, [meal?.id])
 
   if (!meal) return null
 
-  const dateObj = parseISO(meal.date)
-  const photos = meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : [])
+  const dateObj = parseISO(liveMeal.date)
+  const photos = liveMeal.photos?.length > 0 ? liveMeal.photos : (liveMeal.photo ? [liveMeal.photo] : [])
 
   function handleEdit(data) {
-    updateMeal(meal.id, data)
+    updateMeal(liveMeal.id, data)
     setEditing(false)
     onClose()
   }
@@ -46,7 +55,7 @@ export default function MealDetailModal({ meal, onClose }) {
         </button>
         <MealForm
           date={dateObj}
-          initial={meal}
+          initial={liveMeal}
           onSubmit={handleEdit}
           onCancel={() => setEditing(false)}
         />
@@ -57,32 +66,36 @@ export default function MealDetailModal({ meal, onClose }) {
   return (
     <Modal isOpen onClose={onClose}>
       {/* 사진 갤러리 — 상단 full-bleed */}
-      {photos.length > 0 && (
+      {!liveMeal.photosLoaded ? (
+        <div className="-mx-5 -mt-4 mb-5 h-36 bg-cream-100 flex items-center justify-center">
+          <p className="text-sm text-cream-400">사진 불러오는 중...</p>
+        </div>
+      ) : photos.length > 0 ? (
         <div className="-mx-5 -mt-4 mb-5">
           <PhotoGallery photos={photos} maxHeight={300} />
         </div>
-      )}
+      ) : null}
 
       {/* 제목 */}
-      {meal.title && (
-        <h2 className="text-lg font-bold text-warm-dark mb-1 leading-snug">{meal.title}</h2>
+      {liveMeal.title && (
+        <h2 className="text-lg font-bold text-warm-dark mb-1 leading-snug">{liveMeal.title}</h2>
       )}
 
       {/* 식당명 */}
-      {meal.restaurantName && (
-        <p className={`font-semibold text-warm-dark leading-snug ${meal.title ? 'text-sm mb-0.5' : 'text-base mb-0.5'}`}>
-          {meal.restaurantName}
+      {liveMeal.restaurantName && (
+        <p className={`font-semibold text-warm-dark leading-snug ${liveMeal.title ? 'text-sm mb-0.5' : 'text-base mb-0.5'}`}>
+          {liveMeal.restaurantName}
         </p>
       )}
 
       {/* 위치 */}
-      {meal.location && (
+      {liveMeal.location && (
         <p className="text-xs text-warm-light flex items-center gap-1 mb-2">
           <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
             <circle cx="12" cy="8" r="2" />
           </svg>
-          {meal.location}
+          {liveMeal.location}
         </p>
       )}
 
@@ -91,37 +104,37 @@ export default function MealDetailModal({ meal, onClose }) {
         <p className="text-xs text-cream-400">
           {format(dateObj, 'yyyy년 M월 d일 (eee)', { locale: ko })}
         </p>
-        {meal.mealTime && (
+        {liveMeal.mealTime && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cream-200 text-warm-light font-medium">
-            {meal.mealTime}
+            {liveMeal.mealTime}
           </span>
         )}
       </div>
 
       {/* 별점 */}
-      {meal.rating > 0 && (
+      {liveMeal.rating > 0 && (
         <div className="flex gap-0.5 mb-3">
           {[1, 2, 3, 4, 5].map(i => (
-            <span key={i} className={`text-xl ${i <= meal.rating ? 'star-filled' : 'star-empty'}`}>★</span>
+            <span key={i} className={`text-xl ${i <= liveMeal.rating ? 'star-filled' : 'star-empty'}`}>★</span>
           ))}
         </div>
       )}
 
       {/* 한줄평 */}
-      {meal.review && (
-        <p className="text-sm text-warm-dark mb-2 leading-relaxed">{meal.review}</p>
+      {liveMeal.review && (
+        <p className="text-sm text-warm-dark mb-2 leading-relaxed">{liveMeal.review}</p>
       )}
 
       {/* 메모 */}
-      {meal.memo && (
-        <p className="text-xs text-warm-light leading-relaxed whitespace-pre-line mb-3">{meal.memo}</p>
+      {liveMeal.memo && (
+        <p className="text-xs text-warm-light leading-relaxed whitespace-pre-line mb-3">{liveMeal.memo}</p>
       )}
 
       {/* 태그 */}
-      {meal.tag && (
+      {liveMeal.tag && (
         <div className="mb-5">
-          <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium border ${TAG_STYLES[meal.tag] || 'bg-cream-100 text-warm-light border-cream-200'}`}>
-            {meal.tag}
+          <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium border ${TAG_STYLES[liveMeal.tag] || 'bg-cream-100 text-warm-light border-cream-200'}`}>
+            {liveMeal.tag}
           </span>
         </div>
       )}

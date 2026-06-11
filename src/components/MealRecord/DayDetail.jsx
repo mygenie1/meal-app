@@ -8,7 +8,7 @@ import MealForm from './MealForm'
 const MEAL_TIME_ORDER = { 아침: 0, 점심: 1, 저녁: 2 }
 
 export default function DayDetail({ date, onClose }) {
-  const { currentSpace, addMeal, updateMeal, deleteMeal } = useApp()
+  const { currentSpace, addMeal, updateMeal, deleteMeal, loadMealPhotos } = useApp()
 
   const dateStr = format(date, 'yyyy-MM-dd')
   const dayMeals = (currentSpace?.meals.filter(m => m.date === dateStr) || [])
@@ -16,7 +16,9 @@ export default function DayDetail({ date, onClose }) {
     .sort((a, b) => (MEAL_TIME_ORDER[a.mealTime] ?? 1) - (MEAL_TIME_ORDER[b.mealTime] ?? 1))
 
   const [mode, setMode] = useState(dayMeals.length === 0 ? 'form' : 'list')
-  const [editing, setEditing] = useState(null)
+  // editingId: 수정 중인 meal의 ID (편집 중 context 갱신을 반영하기 위해 ID만 보관)
+  const [editingId, setEditingId] = useState(null)
+  const editing = editingId ? dayMeals.find(m => m.id === editingId) ?? null : null
 
   const dateLabel = format(date, 'M월 d일 (eee)', { locale: ko })
 
@@ -26,8 +28,8 @@ export default function DayDetail({ date, onClose }) {
   }
 
   function handleEdit(data) {
-    updateMeal(editing.id, data)
-    setEditing(null)
+    updateMeal(editingId, data)
+    setEditingId(null)
   }
 
   function handleDelete(id) {
@@ -37,12 +39,32 @@ export default function DayDetail({ date, onClose }) {
     }
   }
 
+  function handleEditClick(meal) {
+    // photos가 아직 로드되지 않은 경우 먼저 로드 — 저장 시 photos: [] 로 덮어쓰는 것 방지
+    if (!meal.photosLoaded) loadMealPhotos(meal.id)
+    setEditingId(meal.id)
+  }
+
   // 수정 모드
-  if (editing) {
+  if (editingId) {
+    // photos 로딩 완료 전: 잠깐 대기 (로드 후 MealForm 초기화해야 사진 보존)
+    if (!editing?.photosLoaded) {
+      return (
+        <div>
+          <button
+            onClick={() => setEditingId(null)}
+            className="flex items-center gap-1 text-sm text-warm-light mb-5 hover:text-warm-brown transition-colors"
+          >
+            ← {dateLabel}
+          </button>
+          <div className="py-10 text-center text-sm text-cream-400">불러오는 중...</div>
+        </div>
+      )
+    }
     return (
       <div>
         <button
-          onClick={() => setEditing(null)}
+          onClick={() => setEditingId(null)}
           className="flex items-center gap-1 text-sm text-warm-light mb-5 hover:text-warm-brown transition-colors"
         >
           ← {dateLabel}
@@ -51,7 +73,7 @@ export default function DayDetail({ date, onClose }) {
           date={date}
           initial={editing}
           onSubmit={handleEdit}
-          onCancel={() => setEditing(null)}
+          onCancel={() => setEditingId(null)}
         />
       </div>
     )
@@ -95,7 +117,7 @@ export default function DayDetail({ date, onClose }) {
           <MealCard
             key={meal.id}
             meal={meal}
-            onEdit={() => setEditing(meal)}
+            onEdit={() => handleEditClick(meal)}
             onDelete={() => handleDelete(meal.id)}
           />
         ))}
