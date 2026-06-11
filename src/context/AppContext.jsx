@@ -112,10 +112,20 @@ export function AppProvider({ children }) {
     const mealsChannel = supabase
       .channel('realtime:meals')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meals' }, ({ eventType, new: newRow, old: oldRow }) => {
+        console.log(`[Realtime:meals] 이벤트=${eventType}`, {
+          id: newRow?.id || oldRow?.id,
+          space_id: newRow?.space_id,
+          title: newRow?.title,
+          tag: newRow?.tag,
+          photos_count: Array.isArray(newRow?.photos) ? newRow.photos.length : 'null/undefined',
+          raw_new: newRow,
+        })
         if (eventType === 'INSERT') {
           setSpaces(prev => prev.map(s => {
             if (s.id !== newRow.space_id) return s
-            if (s.meals.find(m => m.id === newRow.id)) return s // 이미 로컬에 추가됨
+            const alreadyExists = s.meals.find(m => m.id === newRow.id)
+            console.log(`[Realtime:meals INSERT] 이미 로컬에 있음=${!!alreadyExists}, 현재 meals수=${s.meals.length}`)
+            if (alreadyExists) return s
             return { ...s, meals: [...s.meals, rowToMeal(newRow)] }
           }))
         } else if (eventType === 'UPDATE') {
@@ -124,13 +134,18 @@ export function AppProvider({ children }) {
           // payload를 직접 신뢰하지 않고 DB에서 전체 row를 재조회해 완전한 데이터를 사용.
           const mealId = newRow.id
           if (!mealId) return
+          console.log(`[Realtime:meals UPDATE] DB 재조회 시작, mealId=${mealId}`)
           supabase
             .from('meals')
             .select('*')
             .eq('id', mealId)
             .single()
             .then(({ data, error }) => {
-              if (error || !data) return
+              if (error || !data) {
+                console.error('[Realtime:meals UPDATE] DB 재조회 실패', error)
+                return
+              }
+              console.log(`[Realtime:meals UPDATE] DB 재조회 성공, photos수=${Array.isArray(data.photos) ? data.photos.length : 0}`)
               setSpaces(prev => prev.map(s => {
                 if (s.id !== data.space_id) return s
                 return {
@@ -141,6 +156,7 @@ export function AppProvider({ children }) {
             })
         } else if (eventType === 'DELETE') {
           // DELETE 이벤트의 old는 id만 포함 → 전체 스페이스에서 제거
+          console.log(`[Realtime:meals DELETE] id=${oldRow?.id}`)
           setSpaces(prev => prev.map(s => ({
             ...s,
             meals: s.meals.filter(m => m.id !== oldRow.id),
@@ -266,8 +282,10 @@ export function AppProvider({ children }) {
 
   // Phase 2: 각 space의 meals + ingredients를 순차 로드 (DB 부하 분산)
   async function loadAllSpaceData(spaceList) {
+    console.log(`[loadAllSpaceData] 시작, spaces수=${spaceList.length}`, spaceList.map(s => s.id))
     for (const space of spaceList) {
       try {
+        console.log(`[loadAllSpaceData] space=${space.id} DB 조회 시작`)
         const [
           { data: mealsData, error: e1 },
           { data: ingredientsData, error: e2 },
@@ -279,6 +297,7 @@ export function AppProvider({ children }) {
         if (e1) throw new Error(e1.message)
         if (e2) throw new Error(e2.message)
 
+        console.log(`[loadAllSpaceData] space=${space.id} DB 조회 완료, meals수=${mealsData?.length}`)
         setSpaces(prev => prev.map(s => {
           if (s.id !== space.id) return s
           const dbMeals = (mealsData || []).map(rowToMeal)
@@ -286,6 +305,10 @@ export function AppProvider({ children }) {
           // 백그라운드 로딩 중 addMeal로 추가된 meal이 이 DB 쿼리보다 늦게 DB에 반영됐을 수 있음.
           // DB 결과에 없는 로컬 meal을 보존해 race condition으로 인한 신규 기록 손실 방지.
           const localOnlyMeals = s.meals.filter(m => !dbMealIds.has(m.id))
+          console.log(`[loadAllSpaceData] setSpaces: dbMeals=${dbMeals.length}, localOnly=${localOnlyMeals.length}, 현재state meals=${s.meals.length}`)
+          if (localOnlyMeals.length > 0) {
+            console.log('[loadAllSpaceData] 보존된 localOnly meal ids:', localOnlyMeals.map(m => m.id))
+          }
           return {
             ...s,
             meals: [...dbMeals, ...localOnlyMeals],
@@ -296,9 +319,10 @@ export function AppProvider({ children }) {
           }
         }))
       } catch (err) {
-        console.warn(`Space ${space.id} 데이터 로드 실패:`, err)
+        console.warn(`[loadAllSpaceData] Space ${space.id} 데이터 로드 실패:`, err)
       }
     }
+    console.log('[loadAllSpaceData] 완료')
   }
 
   // 스페이스 생성
@@ -345,7 +369,11 @@ export function AppProvider({ children }) {
 
   // 식사 기록 추가
   async function addMeal(mealData) {
-    if (!currentSpaceId) return null
+    console.log('[addMeal] 시작, currentSpaceId=', currentSpaceId, '| date=', mealData.date, '| tag=', mealData.tag)
+    if (!currentSpaceId) {
+      console.error('[addMeal] currentSpaceId 없음 → 저장 불가')
+      return null
+    }
 
     const rowData = mealToRow(mealData)
 
@@ -354,11 +382,13 @@ export function AppProvider({ children }) {
     const tempMeal = rowToMeal({ ...rowData, id: tempId, created_at: new Date().toISOString() })
     setSpaces(prev => prev.map(s => {
       if (s.id !== currentSpaceId) return s
+      console.log(`[addMeal] optimistic 추가, 기존 meals수=${s.meals.length}`)
       return { ...s, meals: [...s.meals.filter(m => m.id !== tempId), tempMeal] }
     }))
 
     // photos는 로컬 rowData에 이미 있으므로 id/created_at만 받아옴
     // (전체 row 재다운로드 시 대용량 base64가 15초 타임아웃을 초과할 수 있음)
+    console.log('[addMeal] Supabase INSERT 요청 시작')
     const { data, error } = await supabase
       .from('meals')
       .insert({ space_id: currentSpaceId, ...rowData })
@@ -366,21 +396,27 @@ export function AppProvider({ children }) {
       .single()
 
     if (error) {
-      console.error(error)
+      console.error('[addMeal] INSERT 실패 →', error.message, error)
       // 저장 실패 시 임시 항목 롤백
       setSpaces(prev => prev.map(s => {
         if (s.id !== currentSpaceId) return s
+        console.log('[addMeal] 실패 → optimistic 롤백')
         return { ...s, meals: s.meals.filter(m => m.id !== tempId) }
       }))
       return null
     }
+
+    console.log('[addMeal] INSERT 성공, DB id=', data.id, '| created_at=', data.created_at)
 
     // 임시 항목을 DB 실제 ID로 교체
     // Realtime INSERT가 먼저 도착했을 수 있으므로 실제 ID도 같이 제거 후 추가
     const newMeal = rowToMeal({ ...rowData, id: data.id, created_at: data.created_at })
     setSpaces(prev => prev.map(s => {
       if (s.id !== currentSpaceId) return s
-      return { ...s, meals: [...s.meals.filter(m => m.id !== tempId && m.id !== newMeal.id), newMeal] }
+      const before = s.meals.length
+      const next = [...s.meals.filter(m => m.id !== tempId && m.id !== newMeal.id), newMeal]
+      console.log(`[addMeal] state 교체: 이전=${before} → 이후=${next.length} (tempId 제거 후 realId 추가)`)
+      return { ...s, meals: next }
     }))
     return newMeal
   }
