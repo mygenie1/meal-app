@@ -226,7 +226,17 @@ export function AppProvider({ children }) {
         ingredients: { toBuy: [], remaining: [] },
       }))
 
-      setSpaces(spaceList)
+      // React 18 StrictMode에서 useEffect가 두 번 실행되므로
+      // setSpaces(spaceList)로 단순 교체하면 기존 meals가 초기화됨.
+      // functional update로 기존 meals/ingredients를 보존하고 space 메타데이터만 갱신.
+      setSpaces(prev => {
+        const prevMap = Object.fromEntries(prev.map(s => [s.id, s]))
+        return spaceList.map(s => ({
+          ...s,
+          meals: prevMap[s.id]?.meals ?? [],
+          ingredients: prevMap[s.id]?.ingredients ?? { toBuy: [], remaining: [] },
+        }))
+      })
       setCurrentSpaceId(prev => {
         if (prev && spaceList.find(s => s.id === prev)) return prev
         return spaceList[0]?.id || null
