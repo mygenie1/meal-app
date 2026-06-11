@@ -201,7 +201,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange }) 
               className={`
                 relative rounded-2xl overflow-hidden transition-all active:scale-95
                 ${inMonth ? '' : 'opacity-25'}
-                ${hasMeals ? 'h-[72px]' : 'h-[56px]'}
+                ${hasMeals ? 'h-[84px]' : 'h-[56px]'}
                 ${today && !hasMeals ? 'ring-1 ring-warm-brown/40 bg-warm-brown/5' : ''}
                 ${!hasMeals ? 'hover:bg-cream-100' : ''}
               `}
@@ -231,13 +231,18 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange }) 
                 </span>
               </div>
               {hasMeals && (
-                <div className="relative z-10 pb-1.5 flex justify-center">
+                <div className="relative z-10 px-1.5 pb-1.5">
                   <span
                     className={`
-                      text-[9px] font-medium px-1.5 py-0.5 rounded-full
-                      max-w-full truncate block
+                      text-[9px] font-medium px-1 py-0.5 rounded-lg block w-full text-center
                       ${thumbPhoto ? 'bg-white/30 text-white' : 'bg-warm-brown/20 text-warm-brown'}
                     `}
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
                   >
                     {dayMeals.length > 1 ? `+${dayMeals.length}` : dayMeals[0].title || dayMeals[0].restaurantName || '식사'}
                   </span>
