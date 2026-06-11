@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext'
 import Modal from '../common/Modal'
 import MealForm from './MealForm'
 import PhotoGallery from '../common/PhotoGallery'
+import { getOriginalUrl } from '../../lib/uploadPhoto'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700 border-green-200',
@@ -29,7 +30,9 @@ export default function MealDetailModal({ meal, onClose }) {
   if (!meal) return null
 
   const dateObj = parseISO(liveMeal.date)
-  const photos = liveMeal.photos?.length > 0 ? liveMeal.photos : (liveMeal.photo ? [liveMeal.photo] : [])
+  const photos = (liveMeal.photos?.length > 0 ? liveMeal.photos : (liveMeal.photo ? [liveMeal.photo] : []))
+    .map(p => getOriginalUrl(p))
+    .filter(Boolean)
 
   function handleEdit(data) {
     updateMeal(liveMeal.id, data)

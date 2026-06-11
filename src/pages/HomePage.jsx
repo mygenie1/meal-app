@@ -7,6 +7,7 @@ import MealDetailModal from '../components/MealRecord/MealDetailModal'
 import Modal from '../components/common/Modal'
 import DayDetail from '../components/MealRecord/DayDetail'
 import PhotoGallery from '../components/common/PhotoGallery'
+import { getThumbUrl } from '../lib/uploadPhoto'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700',
@@ -25,7 +26,9 @@ const TAG_BG = {
 function FeedCard({ meal, onClick }) {
   const dateObj = parseISO(meal.date)
   const title = meal.title || meal.restaurantName || '식사 기록'
-  const photos = meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : [])
+  const photos = (meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : []))
+    .map(p => getThumbUrl(p))
+    .filter(Boolean)
   // photosLoaded: true이고 photos가 있을 때만 갤러리 표시
   // photosLoaded: false(로딩 중)이거나 photos가 없으면 사진 영역 숨김
   const showPhotos = meal.photosLoaded && photos.length > 0

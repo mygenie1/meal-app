@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react'
+import LazyImage from '../common/LazyImage'
+import { getThumbUrl } from '../../lib/uploadPhoto'
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addDays, isSameMonth, isSameDay, isToday, addMonths, subMonths,
@@ -183,7 +185,7 @@ export default function CalendarGrid({ meals = [], onDayClick }) {
         {days.map((day, idx) => {
           const dayMeals = getMealsForDay(day)
           const hasMeals = dayMeals.length > 0
-          const thumbPhoto = dayMeals.find(m => m.photos?.[0])?.photos?.[0]
+          const thumbPhoto = getThumbUrl(dayMeals.find(m => m.photos?.[0])?.photos?.[0] || '')
           const inMonth = isSameMonth(day, current)
           const today = isToday(day)
           const dayOfWeek = idx % 7
@@ -202,7 +204,7 @@ export default function CalendarGrid({ meals = [], onDayClick }) {
             >
               {thumbPhoto && (
                 <div className="absolute inset-0">
-                  <img src={thumbPhoto} alt="" className="w-full h-full object-cover" />
+                  <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
                   <div className="absolute inset-0 bg-black/25" />
                 </div>
               )}

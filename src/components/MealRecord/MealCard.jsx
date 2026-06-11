@@ -1,4 +1,6 @@
 import StarRating from '../common/StarRating'
+import LazyImage from '../common/LazyImage'
+import { getThumbUrl } from '../../lib/uploadPhoto'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700 border-green-200',
@@ -10,17 +12,17 @@ const TAG_STYLES = {
 const MEAL_TIME_STYLE = 'text-[10px] px-1.5 py-0.5 rounded-full bg-cream-200 text-warm-light font-medium'
 
 export default function MealCard({ meal, onEdit, onDelete }) {
-  const thumbPhoto = meal.photos?.[0] || meal.photo || ''
+  const thumbPhoto = getThumbUrl(meal.photos?.[0] || meal.photo || '')
   const hasContent = meal.title || meal.restaurantName || meal.location || meal.rating > 0 || meal.review || meal.memo
 
   return (
     <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden">
       {thumbPhoto && (
-        <img
+        <LazyImage
           src={thumbPhoto}
           alt="식사 사진"
-          className="w-full object-cover"
-          style={{ maxHeight: '220px' }}
+          className="w-full overflow-hidden"
+          style={{ height: '220px' }}
         />
       )}
 

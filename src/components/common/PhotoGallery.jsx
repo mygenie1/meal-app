@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import LazyImage from './LazyImage'
 
 export default function PhotoGallery({ photos, maxHeight = 240, className = '' }) {
   const [idx, setIdx] = useState(0)
@@ -27,12 +28,11 @@ export default function PhotoGallery({ photos, maxHeight = 240, className = '' }
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <img
+      <LazyImage
         src={photos[idx]}
         alt={`사진 ${idx + 1}`}
-        className="w-full object-cover"
-        style={{ maxHeight }}
-        draggable={false}
+        style={{ height: maxHeight }}
+        className="w-full"
       />
       {count > 1 && (
         <>

@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import StarRating from '../common/StarRating'
 import { useApp } from '../../context/AppContext'
-import { uploadPhotoToStorage } from '../../lib/uploadPhoto'
+import { uploadPhotoWithThumbnail } from '../../lib/uploadPhoto'
 
 // ─── 이미지 압축 (Canvas, max 1200px, JPEG 0.82) ─────────────────────────
 // 결과물은 base64 — 로컬 미리보기용. 실제 저장 시 Storage에 업로드 후 URL로 교체
@@ -354,7 +354,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     try {
       const spaceId = currentSpace?.id
       const uploadedPhotos = await Promise.all(
-        form.photos.map(p => uploadPhotoToStorage(p, spaceId))
+        form.photos.map(p => uploadPhotoWithThumbnail(p, spaceId))
       )
       onSubmit({ ...form, date: formDate, lat, lng, photos: uploadedPhotos, photo: uploadedPhotos[0] || '' })
     } finally {
