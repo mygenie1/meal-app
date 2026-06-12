@@ -7,6 +7,7 @@ import CalendarPage from './pages/CalendarPage'
 import MapPage from './pages/MapPage'
 import IngredientsPage from './pages/IngredientsPage'
 import SpacesPage from './pages/SpacesPage'
+import LoginPage from './pages/LoginPage'
 
 function OfflineBanner() {
   return (
@@ -58,7 +59,7 @@ function ConnectErrorBanner({ message, onRetry, onDismiss }) {
 }
 
 function AppContent() {
-  const { loading, loadError, retryAttempt, reload } = useApp()
+  const { user, authLoading, loading, loadError, retryAttempt, reload } = useApp()
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
   const [errorDismissed, setErrorDismissed] = useState(false)
 
@@ -80,31 +81,35 @@ function AppContent() {
 
   if (isOffline) return <OfflineBanner />
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-svh flex flex-col items-center justify-center bg-cream-50 gap-4">
         <div className="w-10 h-10 rounded-full border-2 border-cream-300 border-t-warm-brown animate-spin" />
         <div className="text-center">
           <p className="text-sm font-medium text-warm-dark">
-            {retryAttempt === 0 ? '연결 중...' : `재시도 중... (${retryAttempt + 1}/3)`}
+            {authLoading ? '로그인 확인 중...' : retryAttempt === 0 ? '연결 중...' : `재시도 중... (${retryAttempt + 1}/3)`}
           </p>
-          {retryAttempt > 0 && (
+          {!authLoading && retryAttempt > 0 && (
             <p className="text-xs text-warm-light mt-1">Supabase 서버에 재연결하고 있어요</p>
           )}
         </div>
-        <div className="flex gap-1.5">
-          {[0, 1, 2].map(i => (
-            <div
-              key={i}
-              className={`w-2 h-2 rounded-full transition-colors duration-300 ${
-                i <= retryAttempt ? 'bg-warm-brown' : 'bg-cream-300'
-              }`}
-            />
-          ))}
-        </div>
+        {!authLoading && (
+          <div className="flex gap-1.5">
+            {[0, 1, 2].map(i => (
+              <div
+                key={i}
+                className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+                  i <= retryAttempt ? 'bg-warm-brown' : 'bg-cream-300'
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     )
   }
+
+  if (!user) return <LoginPage />
 
   return (
     <div className="min-h-svh max-w-lg mx-auto flex flex-col bg-cream-50">

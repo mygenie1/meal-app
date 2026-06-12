@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AppContext = createContext(null)
@@ -81,6 +81,10 @@ function rowToWishlist(row) {
 }
 
 export function AppProvider({ children }) {
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const hasBootedRef = useRef(false)
+
   const [spaces, setSpaces] = useState([])
   const [currentSpaceId, setCurrentSpaceId] = useState(
     () => localStorage.getItem(SPACE_KEY) || null
@@ -97,9 +101,29 @@ export function AppProvider({ children }) {
     else localStorage.removeItem(SPACE_KEY)
   }, [currentSpaceId])
 
-  // 앱 시작 시 spaces만 빠르게 로드 → 나머지는 백그라운드
+  // Auth 상태 감지 → 로그인 후 boot
   useEffect(() => {
-    boot(0)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const currentUser = session?.user ?? null
+      setUser(currentUser)
+      setAuthLoading(false)
+
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && currentUser) {
+        if (!hasBootedRef.current) {
+          hasBootedRef.current = true
+          boot(0)
+        }
+      } else if (event === 'INITIAL_SESSION' && !currentUser) {
+        setLoading(false)
+      } else if (event === 'SIGNED_OUT') {
+        hasBootedRef.current = false
+        setSpaces([])
+        setCurrentSpaceId(null)
+        setLoading(false)
+      }
+    })
+    return () => subscription.unsubscribe()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Supabase Realtime 구독 — 다른 기기/사용자의 변경사항 실시간 반영
@@ -115,6 +139,7 @@ export function AppProvider({ children }) {
               name: newRow.name,
               emoji: newRow.emoji,
               code: newRow.code,
+              ownerId: newRow.owner_id || null,
               createdAt: newRow.created_at,
               meals: [],
               ingredients: { toBuy: [], remaining: [] },
@@ -124,7 +149,7 @@ export function AppProvider({ children }) {
         } else if (eventType === 'UPDATE') {
           setSpaces(prev => prev.map(s =>
             s.id === newRow.id
-              ? { ...s, name: newRow.name, emoji: newRow.emoji, code: newRow.code }
+              ? { ...s, name: newRow.name, emoji: newRow.emoji, code: newRow.code, ownerId: newRow.owner_id || null }
               : s
           ))
         } else if (eventType === 'DELETE') {
@@ -266,6 +291,7 @@ export function AppProvider({ children }) {
         name: s.name,
         emoji: s.emoji,
         code: s.code,
+        ownerId: s.owner_id || null,
         createdAt: s.created_at,
         meals: [],
         ingredients: { toBuy: [], remaining: [] },
@@ -399,12 +425,30 @@ export function AppProvider({ children }) {
     }))
   }
 
+  // 카카오 로그인
+  async function signIn() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'kakao',
+      options: { redirectTo: window.location.origin },
+    })
+    if (error) console.error('카카오 로그인 오류:', error)
+  }
+
+  // 로그아웃
+  async function signOut() {
+    await supabase.auth.signOut()
+    // onAuthStateChange SIGNED_OUT 이벤트에서 상태 초기화
+  }
+
   // 스페이스 생성
   async function createSpace(name, emoji = '🍽️') {
     const code = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const insertData = { name, emoji, code }
+    if (user) insertData.owner_id = user.id
+
     const { data, error } = await supabase
       .from('spaces')
-      .insert({ name, emoji, code })
+      .insert(insertData)
       .select()
       .single()
 
@@ -415,6 +459,7 @@ export function AppProvider({ children }) {
       name: data.name,
       emoji: data.emoji,
       code: data.code,
+      ownerId: data.owner_id || null,
       createdAt: data.created_at,
       meals: [],
       ingredients: { toBuy: [], remaining: [] },
@@ -423,6 +468,18 @@ export function AppProvider({ children }) {
     setSpaces(prev => [...prev, newSpace])
     setCurrentSpaceId(data.id)
     return newSpace
+  }
+
+  // 기존 스페이스를 현재 로그인 사용자의 것으로 연동
+  async function claimSpace(spaceId) {
+    if (!user) return false
+    const { error } = await supabase
+      .from('spaces')
+      .update({ owner_id: user.id })
+      .eq('id', spaceId)
+    if (error) { console.error(error); return false }
+    setSpaces(prev => prev.map(s => s.id === spaceId ? { ...s, ownerId: user.id } : s))
+    return true
   }
 
   // 스페이스 전환
@@ -722,6 +779,10 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider
       value={{
+        user,
+        authLoading,
+        signIn,
+        signOut,
         spaces,
         currentSpace,
         loading,
@@ -729,6 +790,7 @@ export function AppProvider({ children }) {
         retryAttempt,
         reload: () => boot(0),
         createSpace,
+        claimSpace,
         switchSpace,
         deleteSpace,
         addMeal,

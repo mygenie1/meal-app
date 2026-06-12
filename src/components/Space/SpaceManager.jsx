@@ -6,7 +6,7 @@ import BulkPhotoUpload from './BulkPhotoUpload'
 const EMOJIS = ['🍽️', '🍜', '🍕', '🍱', '🍰', '☕', '🥗', '🍣', '🌮', '🥘']
 
 export default function SpaceManager() {
-  const { spaces, currentSpace, createSpace, switchSpace, deleteSpace, joinByCode } = useApp()
+  const { user, signOut, spaces, currentSpace, createSpace, switchSpace, deleteSpace, joinByCode, claimSpace } = useApp()
   const [showCreate, setShowCreate] = useState(false)
   const [showJoin, setShowJoin] = useState(false)
   const [showBulkUpload, setShowBulkUpload] = useState(false)
@@ -17,6 +17,7 @@ export default function SpaceManager() {
   const [joining, setJoining] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
+  const [claimingId, setClaimingId] = useState(null)
 
   async function handleCreate(e) {
     e.preventDefault()
@@ -54,8 +55,47 @@ export default function SpaceManager() {
     })
   }
 
+  async function handleClaim(spaceId) {
+    setClaimingId(spaceId)
+    await claimSpace(spaceId)
+    setClaimingId(null)
+  }
+
+  function handleSignOut() {
+    if (confirm('로그아웃 할까요?')) signOut()
+  }
+
+  const displayName = user?.user_metadata?.name
+    || user?.user_metadata?.full_name
+    || user?.email
+    || '카카오 사용자'
+
   return (
     <div className="space-y-4">
+      {/* 로그인 정보 */}
+      {user && (
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            {user.user_metadata?.avatar_url ? (
+              <img src={user.user_metadata.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+            ) : (
+              <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: '#FEE500' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#3C1E1E">
+                  <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.79 1.63 5.24 4.1 6.73l-1.05 3.85a.25.25 0 0 0 .38.27L9.7 19.2a11.2 11.2 0 0 0 2.3.24C17.523 19.44 22 15.963 22 11.64 22 7.317 17.523 3 12 3z"/>
+                </svg>
+              </div>
+            )}
+            <p className="text-xs text-warm-light truncate max-w-[160px]">{displayName}</p>
+          </div>
+          <button
+            onClick={handleSignOut}
+            className="text-xs text-warm-light hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-50"
+          >
+            로그아웃
+          </button>
+        </div>
+      )}
+
       {/* 현재 스페이스 */}
       {currentSpace && (
         <div className="bg-warm-brown/10 border border-warm-brown/20 rounded-2xl p-4">
@@ -105,18 +145,33 @@ export default function SpaceManager() {
                     <p className="text-xs text-warm-light">{space.meals?.length || 0}개 기록</p>
                   </div>
                 </button>
-                {space.id !== currentSpace?.id && (
-                  <button
-                    onClick={() => {
-                      if (confirm(`"${space.name}" 스페이스를 삭제할까요?`)) {
-                        deleteSpace(space.id)
-                      }
-                    }}
-                    className="text-xs text-warm-light hover:text-red-400 p-1"
-                  >
-                    삭제
-                  </button>
-                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  {user && !space.ownerId && (
+                    <button
+                      onClick={() => handleClaim(space.id)}
+                      disabled={claimingId === space.id}
+                      title="이 스페이스를 내 계정과 연동"
+                      className="text-[10px] px-2 py-1 rounded-lg border border-warm-brown/30 text-warm-brown hover:bg-warm-brown/10 transition-colors disabled:opacity-50"
+                    >
+                      {claimingId === space.id ? '연동 중...' : '내 것으로'}
+                    </button>
+                  )}
+                  {user && space.ownerId === user.id && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-warm-brown/10 text-warm-brown font-medium">내 스페이스</span>
+                  )}
+                  {space.id !== currentSpace?.id && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`"${space.name}" 스페이스를 삭제할까요?`)) {
+                          deleteSpace(space.id)
+                        }
+                      }}
+                      className="text-xs text-warm-light hover:text-red-400 p-1"
+                    >
+                      삭제
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
