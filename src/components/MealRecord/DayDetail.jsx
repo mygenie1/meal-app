@@ -5,7 +5,7 @@ import { useApp } from '../../context/AppContext'
 import MealForm from './MealForm'
 import PhotoGallery from '../common/PhotoGallery'
 import StarRating from '../common/StarRating'
-import { getThumbUrl } from '../../lib/uploadPhoto'
+import { getThumbUrl, getOriginalUrl } from '../../lib/uploadPhoto'
 
 const MEAL_TIME_ORDER = { 아침: 0, 점심: 1, 저녁: 2 }
 const MEAL_TIMES = ['아침', '점심', '저녁']
@@ -18,10 +18,11 @@ const TAG_STYLES = {
 }
 
 function DayMealCard({ meal, isRep, showRepBtn, onSetRep, onView, onEdit, onDelete }) {
-  const photos = meal.photosLoaded
+  const rawPhotos = meal.photosLoaded
     ? (meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : []))
-        .map(p => getThumbUrl(p)).filter(Boolean)
     : []
+  const thumbPhotos = rawPhotos.map(p => getThumbUrl(p)).filter(Boolean)
+  const originalPhotos = rawPhotos.map(p => getOriginalUrl(p)).filter(Boolean)
 
   return (
     <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden">
@@ -30,8 +31,8 @@ function DayMealCard({ meal, isRep, showRepBtn, onSetRep, onView, onEdit, onDele
         <div className="h-14 bg-cream-100 flex items-center justify-center">
           <div className="w-4 h-4 border-2 border-cream-300 border-t-warm-light rounded-full animate-spin" />
         </div>
-      ) : photos.length > 0 ? (
-        <PhotoGallery photos={photos} maxHeight={180} />
+      ) : thumbPhotos.length > 0 ? (
+        <PhotoGallery photos={thumbPhotos} fullscreenPhotos={originalPhotos} maxHeight={180} />
       ) : null}
 
       {/* 내용 — 클릭하면 상세 모달 */}
