@@ -510,10 +510,16 @@ export function AppProvider({ children }) {
     setCurrentSpaceId(id)
   }
 
-  // 스페이스 삭제 (meals, ingredients는 CASCADE로 자동 삭제)
-  async function deleteSpace(id) {
-    const { error } = await supabase.from('spaces').delete().eq('id', id)
-    if (error) { console.error(error); return }
+  // 스페이스 나가기 — space_members에서 내 참가 기록만 제거 (Supabase 데이터 삭제 없음)
+  async function leaveSpace(id) {
+    if (user?.id) {
+      const { error } = await supabase
+        .from('space_members')
+        .delete()
+        .eq('space_id', id)
+        .eq('user_id', user.id)
+      if (error) { console.error(error); return }
+    }
 
     setSpaces(prev => {
       const next = prev.filter(s => s.id !== id)
@@ -830,7 +836,7 @@ export function AppProvider({ children }) {
         createSpace,
         claimSpace,
         switchSpace,
-        deleteSpace,
+        leaveSpace,
         addMeal,
         updateMeal,
         deleteMeal,

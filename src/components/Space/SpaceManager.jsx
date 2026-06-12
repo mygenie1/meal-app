@@ -6,7 +6,7 @@ import BulkPhotoUpload from './BulkPhotoUpload'
 const EMOJIS = ['🍽️', '🍜', '🍕', '🍱', '🍰', '☕', '🥗', '🍣', '🌮', '🥘']
 
 export default function SpaceManager() {
-  const { user, signOut, spaces, currentSpace, createSpace, switchSpace, deleteSpace, joinByCode, claimSpace } = useApp()
+  const { user, signOut, spaces, currentSpace, createSpace, switchSpace, leaveSpace, joinByCode, claimSpace } = useApp()
   const [showCreate, setShowCreate] = useState(false)
   const [showJoin, setShowJoin] = useState(false)
   const [showBulkUpload, setShowBulkUpload] = useState(false)
@@ -159,18 +159,18 @@ export default function SpaceManager() {
                   {user && space.ownerId === user.id && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-warm-brown/10 text-warm-brown font-medium">내 스페이스</span>
                   )}
-                  {space.id !== currentSpace?.id && (
-                    <button
-                      onClick={() => {
-                        if (confirm(`"${space.name}" 스페이스를 삭제할까요?`)) {
-                          deleteSpace(space.id)
-                        }
-                      }}
-                      className="text-xs text-warm-light hover:text-red-400 p-1"
-                    >
-                      삭제
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      const isOwner = user && space.ownerId === user.id
+                      const ownerWarning = isOwner ? '\n\n이 스페이스의 오너입니다. 나가도 데이터는 유지됩니다.' : ''
+                      if (confirm(`"${space.name}" 스페이스에서 나갈까요?${ownerWarning}`)) {
+                        leaveSpace(space.id)
+                      }
+                    }}
+                    className="text-xs text-warm-light hover:text-red-400 p-1 transition-colors"
+                  >
+                    나가기
+                  </button>
                 </div>
               </div>
             ))}
