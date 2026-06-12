@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { MapContainer, TileLayer, Marker } from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 import { useApp } from '../../context/AppContext'
 import Modal from '../common/Modal'
 import MealForm from './MealForm'
@@ -17,12 +14,65 @@ const TAG_STYLES = {
   배달: 'bg-blue-50 text-blue-700 border-blue-200',
 }
 
-const pinIcon = L.divIcon({
-  className: '',
-  html: `<div style="width:14px;height:14px;background:#6b4f3a;border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`,
-  iconSize: [14, 14],
-  iconAnchor: [7, 7],
-})
+// Leaflet은 지도가 있을 때만 동적 임포트 — 모달 안에서 배경 지도와 z-index 충돌 방지
+let MapContainer, TileLayer, Marker, L
+
+function SmallMap({ lat, lng }) {
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    if (ready) return
+    Promise.all([
+      import('react-leaflet'),
+      import('leaflet'),
+      import('leaflet/dist/leaflet.css'),
+    ]).then(([rl, leaflet]) => {
+      MapContainer = rl.MapContainer
+      TileLayer = rl.TileLayer
+      Marker = rl.Marker
+      L = leaflet.default
+      setReady(true)
+    })
+  }, [])
+
+  if (!ready || !MapContainer) {
+    return (
+      <div className="rounded-2xl bg-cream-100 flex items-center justify-center" style={{ height: 150 }}>
+        <div className="w-4 h-4 border-2 border-cream-300 border-t-warm-light rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  const pinIcon = L.divIcon({
+    className: '',
+    html: `<div style="width:14px;height:14px;background:#6b4f3a;border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  })
+
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ height: 150, isolation: 'isolate' }}>
+      <MapContainer
+        center={[lat, lng]}
+        zoom={15}
+        style={{ height: '100%', width: '100%' }}
+        zoomControl={false}
+        dragging={false}
+        scrollWheelZoom={false}
+        doubleClickZoom={false}
+        touchZoom={false}
+        boxZoom={false}
+        keyboard={false}
+      >
+        <TileLayer
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
+        />
+        <Marker position={[lat, lng]} icon={pinIcon} />
+      </MapContainer>
+    </div>
+  )
+}
 
 export default function MealDetailModal({ meal, onClose }) {
   const { updateMeal, deleteMeal, loadMealPhotos, currentSpace } = useApp()
@@ -92,11 +142,12 @@ export default function MealDetailModal({ meal, onClose }) {
     )
   }
 
-  const hasMap = liveMeal.lat && liveMeal.lng
+  const hasMap = !!(liveMeal.lat && liveMeal.lng)
 
   return (
     <Modal isOpen onClose={onClose}>
-      {/* 1. 사진 — full-bleed 상단 */}
+
+      {/* ① 사진 — full-bleed 최상단 */}
       {!liveMeal.photosLoaded ? (
         <div className="-mx-5 -mt-4 mb-5 h-48 bg-cream-100 flex items-center justify-center">
           <div className="w-5 h-5 border-2 border-cream-300 border-t-warm-light rounded-full animate-spin" />
@@ -107,11 +158,12 @@ export default function MealDetailModal({ meal, onClose }) {
         </div>
       ) : null}
 
-      {/* 2. 제목 + 날짜 + 태그 + 별점 */}
+      {/* ② 제목 */}
       {liveMeal.title && (
         <h2 className="text-lg font-bold text-warm-dark mb-1 leading-snug">{liveMeal.title}</h2>
       )}
 
+      {/* ② 날짜 + 끼니 + 태그 + 위시리스트 뱃지 */}
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <p className="text-xs text-cream-400">
           {format(dateObj, 'yyyy년 M월 d일 (eee)', { locale: ko })}
@@ -136,6 +188,7 @@ export default function MealDetailModal({ meal, onClose }) {
         )}
       </div>
 
+      {/* ② 별점 */}
       {liveMeal.rating > 0 && (
         <div className="flex gap-0.5 mb-3">
           {[1, 2, 3, 4, 5].map(i => (
@@ -144,59 +197,26 @@ export default function MealDetailModal({ meal, onClose }) {
         </div>
       )}
 
-      {/* 3. 식당명 + 한줄평 + 메모 */}
+      {/* ③ 식당명 */}
       {liveMeal.restaurantName && (
         <p className={`font-semibold text-warm-dark leading-snug mb-1 ${liveMeal.title ? 'text-sm' : 'text-base'}`}>
           {liveMeal.restaurantName}
         </p>
       )}
 
+      {/* ③ 한줄평 */}
       {liveMeal.review && (
         <p className="text-sm text-warm-dark mb-2 leading-relaxed">{liveMeal.review}</p>
       )}
 
+      {/* ③ 메모 */}
       {liveMeal.memo && (
         <p className="text-xs text-warm-light leading-relaxed whitespace-pre-line mb-3">{liveMeal.memo}</p>
       )}
 
-      {/* 4. 지도 — 위치 참고용 (150px) */}
-      {hasMap && (
-        <div className="mt-2 mb-1">
-          {liveMeal.location && (
-            <p className="text-xs text-warm-light flex items-center gap-1 mb-2">
-              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
-                <circle cx="12" cy="8" r="2" />
-              </svg>
-              {liveMeal.location}
-            </p>
-          )}
-          <div className="rounded-2xl overflow-hidden" style={{ height: 150 }}>
-            <MapContainer
-              center={[liveMeal.lat, liveMeal.lng]}
-              zoom={15}
-              style={{ height: '100%', width: '100%' }}
-              zoomControl={false}
-              dragging={false}
-              scrollWheelZoom={false}
-              doubleClickZoom={false}
-              touchZoom={false}
-              boxZoom={false}
-              keyboard={false}
-            >
-              <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
-              />
-              <Marker position={[liveMeal.lat, liveMeal.lng]} icon={pinIcon} />
-            </MapContainer>
-          </div>
-        </div>
-      )}
-
-      {/* 위치 텍스트만 있는 경우 (지도 없음) */}
-      {!hasMap && liveMeal.location && (
-        <p className="text-xs text-warm-light flex items-center gap-1 mb-3">
+      {/* ④ 위치 + 지도 (맨 아래, 딱 하나) */}
+      {liveMeal.location && (
+        <p className="text-xs text-warm-light flex items-center gap-1 mb-2 mt-1">
           <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
             <circle cx="12" cy="8" r="2" />
@@ -205,8 +225,10 @@ export default function MealDetailModal({ meal, onClose }) {
         </p>
       )}
 
-      {/* 수정 / 삭제 */}
-      <div className="flex gap-3 pt-4 mt-3 border-t border-cream-100">
+      {hasMap && <SmallMap lat={liveMeal.lat} lng={liveMeal.lng} />}
+
+      {/* ⑤ 수정 / 삭제 */}
+      <div className="flex gap-3 pt-4 mt-4 border-t border-cream-100">
         <button
           onClick={() => setEditing(true)}
           className="flex-1 py-2.5 rounded-2xl border border-cream-300 text-warm-brown text-sm font-medium hover:bg-cream-100 transition-colors"
@@ -220,6 +242,7 @@ export default function MealDetailModal({ meal, onClose }) {
           삭제
         </button>
       </div>
+
     </Modal>
   )
 }

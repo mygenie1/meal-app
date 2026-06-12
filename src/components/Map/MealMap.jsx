@@ -803,7 +803,7 @@ export default function MealMap() {
 
       {/* 지도 */}
       <div className="relative rounded-2xl shadow-sm" style={{ height: '50vh' }}>
-        <div className="absolute inset-0 rounded-2xl overflow-hidden">
+        <div className="absolute inset-0 rounded-2xl overflow-hidden" style={{ isolation: 'isolate' }}>
           <MapContainer
             center={center}
             zoom={hasContent ? 12 : 11}
