@@ -111,7 +111,7 @@ export function AppProvider({ children }) {
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && currentUser) {
         if (!hasBootedRef.current) {
           hasBootedRef.current = true
-          boot(0)
+          boot(0, currentUser)
         }
       } else if (event === 'INITIAL_SESSION' && !currentUser) {
         setLoading(false)
@@ -273,7 +273,7 @@ export function AppProvider({ children }) {
   const RETRY_DELAYS = [1500, 3000, 5000]
 
   // Phase 1: spaces만 빠르게 조회 — DB 웜업 후 앱 즉시 오픈
-  async function boot(attempt = 0) {
+  async function boot(attempt = 0, currentUser = null) {
     setLoading(true)
     setLoadError(null)
     setRetryAttempt(attempt)
@@ -286,7 +286,23 @@ export function AppProvider({ children }) {
 
       if (error) throw new Error(error.message || 'spaces 조회 오류')
 
-      const spaceList = (spacesData || []).map(s => ({
+      let spaceRows = spacesData || []
+
+      // RLS 마이그레이션 후 localStorage의 스페이스가 목록에 없으면:
+      // space_members에 추가 시도 → 성공하면 재로드 (NULL owner 기존 스페이스 복구)
+      const savedId = localStorage.getItem(SPACE_KEY)
+      const uid = currentUser?.id
+      if (savedId && uid && !spaceRows.find(s => s.id === savedId)) {
+        const { error: joinErr } = await supabase
+          .from('space_members')
+          .insert({ space_id: savedId, user_id: uid })
+        if (!joinErr) {
+          const { data: reloaded } = await supabase.from('spaces').select('*').order('created_at')
+          if (reloaded) spaceRows = reloaded
+        }
+      }
+
+      const spaceList = spaceRows.map(s => ({
         id: s.id,
         name: s.name,
         emoji: s.emoji,
@@ -325,7 +341,7 @@ export function AppProvider({ children }) {
 
       if (attempt < MAX_RETRIES - 1) {
         await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]))
-        return boot(attempt + 1)
+        return boot(attempt + 1, currentUser)
       }
 
       // 모든 재시도 소진 → 앱은 열되 에러 배너 표시
@@ -454,6 +470,11 @@ export function AppProvider({ children }) {
 
     if (error) { console.error(error); return null }
 
+    // 생성한 스페이스를 space_members에도 등록 (RLS: 내 스페이스만 보이게)
+    if (user?.id) {
+      await supabase.from('space_members').insert({ space_id: data.id, user_id: user.id })
+    }
+
     const newSpace = {
       id: data.id,
       name: data.name,
@@ -478,6 +499,8 @@ export function AppProvider({ children }) {
       .update({ owner_id: user.id })
       .eq('id', spaceId)
     if (error) { console.error(error); return false }
+    // space_members에도 등록 (이미 있으면 무시)
+    await supabase.from('space_members').insert({ space_id: spaceId, user_id: user.id })
     setSpaces(prev => prev.map(s => s.id === spaceId ? { ...s, ownerId: user.id } : s))
     return true
   }
@@ -728,14 +751,24 @@ export function AppProvider({ children }) {
     ))
   }
 
-  // 코드로 스페이스 참가 — owner_id 상관없이 code만 일치하면 참가
+  // 코드로 스페이스 참가
   async function joinByCode(code) {
-    // maybeSingle(): 0 rows여도 에러 대신 data: null 반환
-    const { data: spaceRow } = await supabase
-      .from('spaces')
-      .select('*')
-      .ilike('code', code.trim())
-      .maybeSingle()
+    // RPC (SECURITY DEFINER): RLS 우회하여 code로 스페이스 찾고 space_members에 등록
+    // RPC 미존재 시 직접 조회로 폴백 (SQL 마이그레이션 전 하위 호환)
+    let spaceRow = null
+    const { data: rpcData, error: rpcError } = await supabase
+      .rpc('join_space_by_code', { p_code: code.trim() })
+
+    if (!rpcError && rpcData) {
+      spaceRow = rpcData
+    } else {
+      const { data: directData } = await supabase
+        .from('spaces')
+        .select('*')
+        .ilike('code', code.trim())
+        .maybeSingle()
+      spaceRow = directData
+    }
 
     if (!spaceRow) return null
 
@@ -774,7 +807,6 @@ export function AppProvider({ children }) {
     }
 
     setSpaces(prev => {
-      // 중복 방지: 이미 있으면 교체, 없으면 추가
       if (prev.find(s => s.id === space.id)) return prev.map(s => s.id === space.id ? space : s)
       return [...prev, space]
     })
@@ -794,7 +826,7 @@ export function AppProvider({ children }) {
         loading,
         loadError,
         retryAttempt,
-        reload: () => boot(0),
+        reload: () => boot(0, user),
         createSpace,
         claimSpace,
         switchSpace,
