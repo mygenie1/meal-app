@@ -4,6 +4,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useApp } from '../../context/AppContext'
 import { getThumbUrl } from '../../lib/uploadPhoto'
+import MealDetailModal from '../MealRecord/MealDetailModal'
 
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -52,7 +53,7 @@ async function geocode(q) {
   return data[0] ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null
 }
 
-const FILTER_TAGS = ['전체', '외식', '카페', '집밥', '배달']
+const FILTER_TAGS = ['전체', '외식', '카페']
 const ROUND = 1e4
 const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
 
@@ -66,11 +67,15 @@ function CloseBtn({ onClick }) {
   )
 }
 
-function MealPinCard({ meal, liveMeal }) {
+function MealPinCard({ meal, liveMeal, onClick }) {
   const display = liveMeal || meal
   const thumb = getThumbUrl(display.photos?.[0] || display.photo || '')
   return (
-    <div className="shrink-0 w-52 rounded-2xl border border-cream-200 bg-white overflow-hidden" style={{ scrollSnapAlign: 'start' }}>
+    <div
+      className="shrink-0 w-52 rounded-2xl border border-cream-200 bg-white overflow-hidden active:scale-[0.98] transition-transform cursor-pointer"
+      style={{ scrollSnapAlign: 'start' }}
+      onClick={onClick}
+    >
       {thumb && <img src={thumb} alt="" className="w-full h-28 object-cover" />}
       <div className="p-3">
         <p className="text-sm font-semibold text-warm-dark leading-snug truncate">
@@ -104,6 +109,7 @@ export default function MealMap() {
   const [activeTag, setActiveTag] = useState('')
   const [showWishlist, setShowWishlist] = useState(true)
   const [bottomSheet, setBottomSheet] = useState(null) // { type: 'cluster'|'wish'|'addWish', ... }
+  const [viewingMeal, setViewingMeal] = useState(null)
   const [wishForm, setWishForm] = useState({ name: '', location: '', memo: '' })
   const [savingWish, setSavingWish] = useState(false)
   const requestedPhotosRef = useRef(new Set())
@@ -285,7 +291,7 @@ export default function MealMap() {
           <div className="flex gap-3 overflow-x-auto pb-4 px-4 scrollbar-hide" style={{ scrollSnapType: 'x mandatory' }}>
             {bottomSheet.cluster.meals.map(meal => {
               const liveMeal = currentSpace?.meals.find(m => m.id === meal.id) ?? meal
-              return <MealPinCard key={meal.id} meal={meal} liveMeal={liveMeal} />
+              return <MealPinCard key={meal.id} meal={meal} liveMeal={liveMeal} onClick={() => setViewingMeal(liveMeal)} />
             })}
           </div>
         </div>
@@ -403,6 +409,10 @@ export default function MealMap() {
             <p className="text-xs text-warm-light">다른 태그를 선택해보세요</p>
           </div>
         </div>
+      )}
+
+      {viewingMeal && (
+        <MealDetailModal meal={viewingMeal} onClose={() => setViewingMeal(null)} />
       )}
     </div>
   )
