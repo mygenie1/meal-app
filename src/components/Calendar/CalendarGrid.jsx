@@ -218,6 +218,10 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
                   {dayMeals.length}
                 </div>
               )}
+              {/* 위시리스트 방문 점 */}
+              {dayMeals.some(m => m.fromWishlist) && (
+                <div className="absolute top-1 left-1 w-2 h-2 rounded-full bg-rose-400 z-20 shadow-sm" />
+              )}
               {thumbPhoto && (
                 <div className="absolute inset-0">
                   <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />

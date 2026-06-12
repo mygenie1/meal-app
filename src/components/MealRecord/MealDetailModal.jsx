@@ -126,6 +126,14 @@ export default function MealDetailModal({ meal, onClose }) {
             {liveMeal.tag}
           </span>
         )}
+        {liveMeal.fromWishlist && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-400 font-medium border border-rose-100 flex items-center gap-1">
+            <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+            가고 싶었던 곳
+          </span>
+        )}
       </div>
 
       {liveMeal.rating > 0 && (

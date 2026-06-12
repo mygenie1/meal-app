@@ -28,11 +28,12 @@ function rowToMeal(row, { photosLoaded = true } = {}) {
     memo: row.memo || '',
     tag: row.tag || '',
     mealTime: row.meal_time || '',
+    fromWishlist: row.from_wishlist || false,
   }
 }
 
 // 목록 조회 시 photos(base64 대용량) 제외 → 타임아웃 방지
-const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, lat, lng, rating, review, memo, tag, meal_time, created_at'
+const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, lat, lng, rating, review, memo, tag, meal_time, from_wishlist, created_at'
 
 // 앱 내부 meal 객체 → DB insert/update 용
 function mealToRow(data) {
@@ -51,6 +52,7 @@ function mealToRow(data) {
     photo: photos[0] ?? '',
     photos,
     meal_time: data.mealTime ?? '',
+    from_wishlist: data.fromWishlist ?? false,
   }
 }
 
