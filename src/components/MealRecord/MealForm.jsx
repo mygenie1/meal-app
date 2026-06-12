@@ -124,6 +124,7 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
   const [searching, setSearching] = useState(false)
   const timerRef = useRef(null)
   const wrapperRef = useRef(null)
+  const dropdownRef = useRef(null)
 
   useEffect(() => {
     function handleOutside(e) {
@@ -138,6 +139,12 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
       document.removeEventListener('touchstart', handleOutside)
     }
   }, [])
+
+  useEffect(() => {
+    if (showDropdown && dropdownRef.current) {
+      setTimeout(() => dropdownRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80)
+    }
+  }, [showDropdown])
 
   function handleChange(e) {
     const q = e.target.value
@@ -183,7 +190,7 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
 
       {/* 인라인 드롭다운 — overflow-y-auto 클리핑 방지 */}
       {showDropdown && suggestions.length > 0 && (
-        <div className="mt-1 rounded-2xl border border-cream-200 bg-white shadow-sm overflow-hidden">
+        <div ref={dropdownRef} className="mt-1 rounded-2xl border border-cream-200 bg-white shadow-sm overflow-hidden">
           {suggestions.map((place, i) => (
             <button
               key={i}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useApp } from '../../context/AppContext'
@@ -121,6 +121,7 @@ function DayMealCard({ meal, isRep, showRepBtn, onSetRep, onView, onEdit, onDele
 
 export default function DayDetail({ date, onClose, onViewMeal, repMeals, onSetRepMeal }) {
   const { currentSpace, addMeal, updateMeal, deleteMeal, loadMealPhotos } = useApp()
+  const topRef = useRef()
 
   const dateStr = format(date, 'yyyy-MM-dd')
   const dayMeals = (currentSpace?.meals.filter(m => m.date === dateStr) || [])
@@ -137,6 +138,11 @@ export default function DayDetail({ date, onClose, onViewMeal, repMeals, onSetRe
   useEffect(() => {
     dayMeals.forEach(m => { if (!m.photosLoaded) loadMealPhotos(m.id) })
   }, [dateStr, dayMeals.length])
+
+  // 모드 전환 시 모달 컨테이너 맨 위로 스크롤
+  useEffect(() => {
+    setTimeout(() => topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }, [mode, editingId])
 
   // 끼니별 그룹화
   const groups = []
@@ -173,7 +179,7 @@ export default function DayDetail({ date, onClose, onViewMeal, repMeals, onSetRe
   if (editingId) {
     if (!editing?.photosLoaded) {
       return (
-        <div>
+        <div ref={topRef}>
           <button
             onClick={() => setEditingId(null)}
             className="flex items-center gap-1 text-sm text-warm-light mb-5 hover:text-warm-brown transition-colors"
@@ -185,7 +191,7 @@ export default function DayDetail({ date, onClose, onViewMeal, repMeals, onSetRe
       )
     }
     return (
-      <div>
+      <div ref={topRef}>
         <button
           onClick={() => setEditingId(null)}
           className="flex items-center gap-1 text-sm text-warm-light mb-5 hover:text-warm-brown transition-colors"
@@ -205,7 +211,7 @@ export default function DayDetail({ date, onClose, onViewMeal, repMeals, onSetRe
   // 입력 폼 모드
   if (mode === 'form') {
     return (
-      <div>
+      <div ref={topRef}>
         {dayMeals.length > 0 && (
           <button
             onClick={() => setMode('list')}
@@ -225,7 +231,7 @@ export default function DayDetail({ date, onClose, onViewMeal, repMeals, onSetRe
 
   // 목록 모드 — 끼니별 섹션
   return (
-    <div>
+    <div ref={topRef}>
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-xs text-warm-light mb-0.5">식사 기록</p>

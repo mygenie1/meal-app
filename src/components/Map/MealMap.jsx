@@ -335,6 +335,11 @@ export default function MealMap() {
 
   const requestedPhotosRef = useRef(new Set())
 
+  // 자동 스크롤 refs
+  const addFormRef = useRef()
+  const editFormRef = useRef()
+  const bottomSheetRef = useRef()
+
   const meals = useMemo(() =>
     (currentSpace?.meals || []).filter(m => m.location),
     [currentSpace?.meals]
@@ -400,6 +405,19 @@ export default function MealMap() {
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
     )
   }, [wishlist])
+
+  // 인라인 폼·바텀시트 열릴 때 자동 스크롤
+  useEffect(() => {
+    if (showAddWishForm) setTimeout(() => addFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+  }, [showAddWishForm])
+
+  useEffect(() => {
+    if (editingWish) setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+  }, [editingWish])
+
+  useEffect(() => {
+    if (bottomSheet) setTimeout(() => bottomSheetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+  }, [bottomSheet])
 
   // 필터 파생 상태
   const showWishlist = activeFilters.has('전체') || activeFilters.has('💕 가고 싶은 곳')
@@ -711,7 +729,7 @@ export default function MealMap() {
 
       {/* 인라인 가고싶은곳 추가 폼 */}
       {showAddWishForm && (
-        <div className="mb-3 bg-white rounded-2xl border border-cream-200 p-4">
+        <div ref={addFormRef} className="mb-3 bg-white rounded-2xl border border-cream-200 p-4">
           <p className="text-sm font-semibold text-warm-dark mb-4">가고 싶은 곳 추가</p>
           <form onSubmit={handleSaveWish} className="space-y-4">
             <WishFormFields
@@ -743,7 +761,7 @@ export default function MealMap() {
 
       {/* 인라인 가고싶은곳 수정 폼 */}
       {editingWish && (
-        <div className="mb-3 bg-white rounded-2xl border border-cream-200 p-4">
+        <div ref={editFormRef} className="mb-3 bg-white rounded-2xl border border-cream-200 p-4">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-semibold text-warm-dark">가고 싶은 곳 수정</p>
             <CloseBtn onClick={() => { setEditingWish(null); setEditWishForm(EMPTY_WISH_FORM); setEditWishPhotoPreview('') }} />
@@ -865,6 +883,9 @@ export default function MealMap() {
         </div>
       )}
 
+      {/* 바텀시트 */}
+      <div ref={bottomSheetRef}>
+
       {/* 바텀시트 — 식사 클러스터 */}
       {bottomSheet?.type === 'cluster' && (
         <div className="mt-3 bg-white rounded-2xl border border-cream-200 overflow-hidden">
@@ -971,6 +992,8 @@ export default function MealMap() {
           </div>
         )
       })()}
+
+      </div>{/* /바텀시트 */}
 
       {/* 빈 상태 */}
       {!hasContent && !loading && (

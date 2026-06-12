@@ -5,6 +5,13 @@ export default function Modal({ isOpen, onClose, title, children }) {
   const onCloseRef = useRef(onClose)
   useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
+  const contentRef = useRef()
+
+  // 모달 열릴 때 내부 스크롤 맨 위로
+  useEffect(() => {
+    if (isOpen && contentRef.current) contentRef.current.scrollTop = 0
+  }, [isOpen])
+
   // iOS body scroll lock
   useEffect(() => {
     if (isOpen) {
@@ -59,6 +66,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
     >
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       <div
+        ref={contentRef}
         className="relative z-10 w-full max-w-lg bg-cream-50 rounded-t-2xl sm:rounded-2xl shadow-xl overflow-y-auto"
         style={{ maxHeight: '90dvh', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
         onClick={e => e.stopPropagation()}
