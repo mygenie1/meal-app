@@ -272,6 +272,7 @@ export default function MealMap() {
 
   const [visitingWish, setVisitingWish] = useState(null)
   const requestedPhotosRef = useRef(new Set())
+  const [mapInitFailed, setMapInitFailed] = useState(false)
 
   const meals = useMemo(() => (currentSpace?.meals || []).filter(m => m.location), [currentSpace?.meals])
   const wishlist = currentSpace?.wishlist || []
@@ -300,30 +301,63 @@ export default function MealMap() {
     return `${Math.round(lat * ROUND)},${Math.round(lng * ROUND)}`
   }, [clusterSheet])
 
-  // ── Kakao 지도 초기화 ─────────────────────────────────────────
-  // autoload=false 환경: kakao.maps.load() 콜백 안에서 Map 생성
+  // ── 마운트 시 Kakao SDK 상태 로그 ──────────────────────────────
   useEffect(() => {
-    if (!mapContainer || !window.kakao?.maps) return
+    console.log('[MealMap] 컴포넌트 마운트 — Kakao SDK 상태:', {
+      kakao: !!window.kakao,
+      'kakao.maps': !!window.kakao?.maps,
+      'kakao.maps.load(fn)': typeof window.kakao?.maps?.load,
+      'kakao.maps.Map': typeof window.kakao?.maps?.Map,
+    })
+  }, [])
+
+  // ── Kakao 지도 초기화 ─────────────────────────────────────────
+  useEffect(() => {
+    console.log('[MealMap] init effect 실행 — mapContainer:', !!mapContainer,
+      '| 컨테이너 크기:', mapContainer ? `${mapContainer.offsetWidth}×${mapContainer.offsetHeight}` : 'N/A',
+      '| kakao.maps:', !!window.kakao?.maps)
+
+    if (!mapContainer || !window.kakao?.maps) {
+      if (!window.kakao?.maps) console.error('[MealMap] window.kakao.maps 없음 — SDK 미로드')
+      return
+    }
+
     let destroyed = false
+
+    // 8초 내 kakao.maps.load() 콜백이 없으면 도메인 미등록 / 키 오류로 판단
+    const failTimer = setTimeout(() => {
+      if (!destroyed && !kakaoMapRef.current) {
+        console.error('[MealMap] kakao.maps.load() 콜백 미실행 — 카카오 개발자 콘솔에서 도메인 등록 확인 필요')
+        setMapInitFailed(true)
+      }
+    }, 8000)
+
     window.kakao.maps.load(() => {
+      clearTimeout(failTimer)
+      console.log('[MealMap] kakao.maps.load() 콜백 실행 — destroyed:', destroyed)
       if (destroyed) return
       try {
         const center = new window.kakao.maps.LatLng(37.5665, 126.9780)
         const map = new window.kakao.maps.Map(mapContainer, { center, level: 7 })
         kakaoMapRef.current = map
         setMapReady(true)
+        console.log('[MealMap] 지도 초기화 성공 ✓ 컨테이너 크기:', `${mapContainer.offsetWidth}×${mapContainer.offsetHeight}`)
       } catch (err) {
         console.error('[MealMap] 카카오맵 초기화 실패:', err)
+        setMapInitFailed(true)
       }
     })
+
     return () => {
       destroyed = true
+      clearTimeout(failTimer)
       mealOverlaysRef.current.forEach(o => o.setMap(null))
       mealOverlaysRef.current = []
       if (userOverlayRef.current) { userOverlayRef.current.setMap(null); userOverlayRef.current = null }
       kakaoMapRef.current = null
       hasFittedBoundsRef.current = false
       setMapReady(false)
+      setMapInitFailed(false)
     }
   }, [mapContainer])
 
@@ -606,7 +640,32 @@ export default function MealMap() {
 
           {/* 지도 */}
           <div className="relative rounded-2xl shadow-sm overflow-hidden" style={{ height: '58vh', minHeight: 320 }}>
-            <div ref={setMapContainerRef} className="w-full h-full" />
+            {/* height: 100% 명시적 인라인 스타일 — Tailwind h-full 의존 제거 */}
+            <div ref={setMapContainerRef} style={{ width: '100%', height: '100%' }} />
+
+            {/* 지도 로딩 중 */}
+            {!mapReady && !mapInitFailed && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-cream-50/90 z-10 pointer-events-none">
+                <div className="w-5 h-5 border-2 border-cream-200 border-t-warm-brown rounded-full animate-spin mb-2" />
+                <p className="text-xs text-warm-light">지도 불러오는 중...</p>
+              </div>
+            )}
+
+            {/* 지도 초기화 실패 */}
+            {mapInitFailed && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-cream-50 z-10 px-6 text-center">
+                <svg className="w-8 h-8 text-cream-300 mb-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                <p className="text-sm font-medium text-warm-dark mb-1">지도를 불러올 수 없어요</p>
+                <p className="text-xs text-warm-light leading-relaxed">
+                  카카오 개발자 콘솔 →<br />
+                  앱 설정 → 플랫폼 → Web에<br />
+                  현재 도메인이 등록됐는지 확인해주세요<br />
+                  <span className="text-cream-400 mt-1 block">(콘솔에서 에러 메시지 확인)</span>
+                </p>
+              </div>
+            )}
 
             {/* 현재 위치 버튼 */}
             <button onClick={handleLocate} disabled={locating}
@@ -623,7 +682,7 @@ export default function MealMap() {
               )}
             </button>
 
-            {/* 로딩 오버레이 */}
+            {/* 위치 검색 로딩 오버레이 */}
             {loading && (
               <div className="absolute inset-0 flex items-center justify-center bg-cream-50/70 z-10">
                 <p className="text-sm text-warm-light">위치 찾는 중...</p>
