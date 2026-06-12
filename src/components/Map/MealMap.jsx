@@ -25,12 +25,8 @@ const WISH_CATEGORY_COLORS = {
   한식: '#fca5a5', 일식: '#93c5fd', 양식: '#86efac',
   중식: '#fcd34d', 카페: '#f9a8d4', 기타: '#d1b89a',
 }
-const MOOD_TAGS = ['데이트', '분위기 좋은 곳', '가성비', '특별한 날', '혼밥']
-const PRICE_RANGES = ['1만원 이하', '1~3만원', '3만원 이상']
-const EMPTY_WISH_FORM = {
-  name: '', location: '', memo: '', category: '',
-  moodTags: [], reason: '', hours: '', priceRange: '',
-}
+const MOOD_TAGS = ['🔥 핫플', '💕 로맨틱', '🌿 힐링', '📸 인생샷', '✨ 특별한 날']
+const EMPTY_WISH_FORM = { name: '', location: '', memo: '', moodTags: [] }
 
 // ── 아이콘 팩토리 ──────────────────────────────────────────────
 
@@ -354,12 +350,8 @@ export default function MealMap() {
       memo: wishForm.memo.trim(),
       location: wishForm.location.trim(),
       lat, lng,
-      category: wishForm.category,
       moodTags: wishForm.moodTags,
       photo: photoUrl,
-      reason: wishForm.reason.trim(),
-      hours: wishForm.hours.trim(),
-      priceRange: wishForm.priceRange,
     })
 
     setWishForm(EMPTY_WISH_FORM)
@@ -681,29 +673,6 @@ export default function MealMap() {
                 placeholder="어디에 가고 싶으신가요?" className={INPUT_CLS} />
             </div>
 
-            {/* 음식 종류 */}
-            <div>
-              <label className="text-xs text-warm-light mb-2 block font-medium">음식 종류</label>
-              <div className="grid grid-cols-3 gap-2">
-                {WISH_CATEGORIES.map(cat => {
-                  const isActive = wishForm.category === cat
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setWishForm(p => ({ ...p, category: isActive ? '' : cat }))}
-                      className="py-2 rounded-xl text-xs font-medium border transition-colors active:scale-95"
-                      style={isActive
-                        ? { background: WISH_CATEGORY_COLORS[cat], borderColor: 'transparent', color: '#3d2b1f' }
-                        : { background: '#fdfcf9', borderColor: '#ede0cc', color: '#a07850' }}
-                    >
-                      {cat}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
             {/* 주소 */}
             <div>
               <label className="text-xs text-warm-light mb-1.5 block font-medium">주소</label>
@@ -739,43 +708,6 @@ export default function MealMap() {
                   )
                 })}
               </div>
-            </div>
-
-            {/* 가격대 */}
-            <div>
-              <label className="text-xs text-warm-light mb-2 block font-medium">가격대</label>
-              <div className="flex gap-2">
-                {PRICE_RANGES.map(pr => (
-                  <button
-                    key={pr}
-                    type="button"
-                    onClick={() => setWishForm(p => ({ ...p, priceRange: p.priceRange === pr ? '' : pr }))}
-                    className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors active:scale-95 ${
-                      wishForm.priceRange === pr
-                        ? 'bg-warm-brown text-white border-transparent'
-                        : 'bg-cream-50 text-warm-light border-cream-200 hover:bg-cream-100'
-                    }`}
-                  >
-                    {pr}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 영업시간 */}
-            <div>
-              <label className="text-xs text-warm-light mb-1.5 block font-medium">영업시간</label>
-              <input type="text" value={wishForm.hours}
-                onChange={e => setWishForm(p => ({ ...p, hours: e.target.value }))}
-                placeholder="예: 11:00 - 22:00, 월요일 휴무" className={INPUT_CLS} />
-            </div>
-
-            {/* 가고 싶은 이유 */}
-            <div>
-              <label className="text-xs text-warm-light mb-1.5 block font-medium">가고 싶은 이유</label>
-              <input type="text" value={wishForm.reason}
-                onChange={e => setWishForm(p => ({ ...p, reason: e.target.value }))}
-                placeholder="왜 가고 싶으세요?" className={INPUT_CLS} />
             </div>
 
             {/* 사진 */}
