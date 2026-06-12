@@ -58,6 +58,18 @@ function rowToIngredient(row) {
   return { id: row.id, text: row.text, done: row.done }
 }
 
+function rowToWishlist(row) {
+  return {
+    id: row.id,
+    name: row.name || '',
+    memo: row.memo || '',
+    location: row.location || '',
+    lat: row.lat ?? null,
+    lng: row.lng ?? null,
+    createdAt: row.created_at,
+  }
+}
+
 export function AppProvider({ children }) {
   const [spaces, setSpaces] = useState([])
   const [currentSpaceId, setCurrentSpaceId] = useState(
@@ -96,6 +108,7 @@ export function AppProvider({ children }) {
               createdAt: newRow.created_at,
               meals: [],
               ingredients: { toBuy: [], remaining: [] },
+              wishlist: [],
             }]
           })
         } else if (eventType === 'UPDATE') {
@@ -246,6 +259,7 @@ export function AppProvider({ children }) {
         createdAt: s.created_at,
         meals: [],
         ingredients: { toBuy: [], remaining: [] },
+        wishlist: [],
       }))
 
       // React 18 StrictMode에서 useEffect가 두 번 실행되므로
@@ -257,6 +271,7 @@ export function AppProvider({ children }) {
           ...s,
           meals: prevMap[s.id]?.meals ?? [],
           ingredients: prevMap[s.id]?.ingredients ?? { toBuy: [], remaining: [] },
+          wishlist: prevMap[s.id]?.wishlist ?? [],
         }))
       })
       setCurrentSpaceId(prev => {
@@ -303,6 +318,13 @@ export function AppProvider({ children }) {
         if (e1) throw new Error(e1.message)
         if (e2) throw new Error(e2.message)
 
+        // wishlist는 선택적 — 테이블이 없으면 빈 배열
+        let wishlistData = []
+        try {
+          const { data: wData } = await supabase.from('wishlist').select('*').eq('space_id', space.id).order('created_at')
+          if (wData) wishlistData = wData
+        } catch {}
+
         console.log(`[loadAllSpaceData] space=${space.id} DB 조회 완료, meals수=${mealsData?.length}`)
         setSpaces(prev => prev.map(s => {
           if (s.id !== space.id) return s
@@ -322,6 +344,7 @@ export function AppProvider({ children }) {
               toBuy: (ingredientsData || []).filter(i => i.type === 'toBuy').map(rowToIngredient),
               remaining: (ingredientsData || []).filter(i => i.type === 'remaining').map(rowToIngredient),
             },
+            wishlist: wishlistData.map(rowToWishlist),
           }
         }))
       } catch (err) {
@@ -385,6 +408,7 @@ export function AppProvider({ children }) {
       createdAt: data.created_at,
       meals: [],
       ingredients: { toBuy: [], remaining: [] },
+      wishlist: [],
     }
     setSpaces(prev => [...prev, newSpace])
     setCurrentSpaceId(data.id)
@@ -571,6 +595,35 @@ export function AppProvider({ children }) {
     ))
   }
 
+  // 가고싶은곳 추가
+  async function addWishlistItem(data) {
+    if (!currentSpaceId) return null
+    const { data: row, error } = await supabase
+      .from('wishlist')
+      .insert({ space_id: currentSpaceId, ...data })
+      .select()
+      .single()
+    if (error) { console.error(error); return null }
+    const item = rowToWishlist(row)
+    setSpaces(prev => prev.map(s =>
+      s.id === currentSpaceId
+        ? { ...s, wishlist: [...(s.wishlist || []), item] }
+        : s
+    ))
+    return item
+  }
+
+  // 가고싶은곳 삭제
+  async function deleteWishlistItem(id) {
+    const { error } = await supabase.from('wishlist').delete().eq('id', id)
+    if (error) { console.error(error); return }
+    setSpaces(prev => prev.map(s =>
+      s.id === currentSpaceId
+        ? { ...s, wishlist: (s.wishlist || []).filter(w => w.id !== id) }
+        : s
+    ))
+  }
+
   // 코드로 스페이스 참가 — 이제 다른 기기에서 생성된 스페이스도 찾을 수 있음
   async function joinByCode(code) {
     const { data: spaceRow, error } = await supabase
@@ -588,11 +641,17 @@ export function AppProvider({ children }) {
       return existing
     }
 
-    // 없으면 해당 스페이스의 meals + ingredients 로드
+    // 없으면 해당 스페이스의 meals + ingredients + wishlist 로드
     const [{ data: mealsData }, { data: ingredientsData }] = await Promise.all([
       supabase.from('meals').select(MEAL_LIST_SELECT).eq('space_id', spaceRow.id).order('created_at'),
       supabase.from('ingredients').select('*').eq('space_id', spaceRow.id).order('created_at'),
     ])
+
+    let joinWishlistData = []
+    try {
+      const { data: wData } = await supabase.from('wishlist').select('*').eq('space_id', spaceRow.id).order('created_at')
+      if (wData) joinWishlistData = wData
+    } catch {}
 
     const space = {
       id: spaceRow.id,
@@ -605,6 +664,7 @@ export function AppProvider({ children }) {
         toBuy: (ingredientsData || []).filter(i => i.type === 'toBuy').map(rowToIngredient),
         remaining: (ingredientsData || []).filter(i => i.type === 'remaining').map(rowToIngredient),
       },
+      wishlist: joinWishlistData.map(rowToWishlist),
     }
 
     setSpaces(prev => [...prev, space])
@@ -632,6 +692,8 @@ export function AppProvider({ children }) {
         addIngredient,
         toggleIngredient,
         deleteIngredient,
+        addWishlistItem,
+        deleteWishlistItem,
         joinByCode,
       }}
     >
