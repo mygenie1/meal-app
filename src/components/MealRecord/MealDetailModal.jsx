@@ -19,17 +19,22 @@ function SmallMap({ lat, lng }) {
 
   useEffect(() => {
     if (!containerRef.current || !window.kakao?.maps) return
-    const center = new window.kakao.maps.LatLng(lat, lng)
-    const map = new window.kakao.maps.Map(containerRef.current, { center, level: 4 })
-    map.setDraggable(false)
-    map.setZoomable(false)
-    const pinEl = document.createElement('div')
-    pinEl.style.cssText = 'width:14px;height:14px;background:#6b4f3a;border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)'
-    const overlay = new window.kakao.maps.CustomOverlay({
-      position: center, content: pinEl, xAnchor: 0.5, yAnchor: 0.5,
+    let overlay = null
+    let destroyed = false
+    window.kakao.maps.load(() => {
+      if (destroyed || !containerRef.current) return
+      const center = new window.kakao.maps.LatLng(lat, lng)
+      const map = new window.kakao.maps.Map(containerRef.current, { center, level: 4 })
+      map.setDraggable(false)
+      map.setZoomable(false)
+      const pinEl = document.createElement('div')
+      pinEl.style.cssText = 'width:14px;height:14px;background:#6b4f3a;border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)'
+      overlay = new window.kakao.maps.CustomOverlay({
+        position: center, content: pinEl, xAnchor: 0.5, yAnchor: 0.5,
+      })
+      overlay.setMap(map)
     })
-    overlay.setMap(map)
-    return () => overlay.setMap(null)
+    return () => { destroyed = true; if (overlay) overlay.setMap(null) }
   }, [lat, lng])
 
   return <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ height: 150 }} />

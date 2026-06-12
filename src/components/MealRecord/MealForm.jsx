@@ -32,27 +32,31 @@ function compressImage(file) {
 
 // ─── Kakao SDK geocoding ──────────────────────────────────────────────────
 async function geocodeKakao(query) {
-  if (!window.kakao?.maps?.services || !query.trim()) return null
+  if (!window.kakao?.maps || !query.trim()) return null
   return new Promise(resolve => {
-    const geocoder = new window.kakao.maps.services.Geocoder()
-    geocoder.addressSearch(query, (result, status) => {
-      if (status === window.kakao.maps.services.Status.OK && result[0]) {
-        resolve([parseFloat(result[0].y), parseFloat(result[0].x)])
-      } else {
-        resolve(null)
-      }
+    window.kakao.maps.load(() => {
+      const geocoder = new window.kakao.maps.services.Geocoder()
+      geocoder.addressSearch(query, (result, status) => {
+        if (status === window.kakao.maps.services.Status.OK && result[0]) {
+          resolve([parseFloat(result[0].y), parseFloat(result[0].x)])
+        } else {
+          resolve(null)
+        }
+      })
     })
   })
 }
 
 // ─── Kakao SDK 장소 검색 ──────────────────────────────────────────────────
 async function searchKakaoPlaces(query) {
-  if (!window.kakao?.maps?.services || !query.trim()) return []
+  if (!window.kakao?.maps || !query.trim()) return []
   return new Promise(resolve => {
-    const ps = new window.kakao.maps.services.Places()
-    ps.keywordSearch(query, (result, status) => {
-      resolve(status === window.kakao.maps.services.Status.OK ? result.slice(0, 5) : [])
-    }, { size: 5 })
+    window.kakao.maps.load(() => {
+      const ps = new window.kakao.maps.services.Places()
+      ps.keywordSearch(query, (result, status) => {
+        resolve(status === window.kakao.maps.services.Status.OK ? result.slice(0, 5) : [])
+      }, { size: 5 })
+    })
   })
 }
 

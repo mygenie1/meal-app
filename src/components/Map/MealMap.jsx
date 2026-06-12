@@ -15,22 +15,25 @@ const MOOD_TAGS = ['🔥 핫플', '💕 로맨틱', '🌿 힐링', '📸 인생�
 const EMPTY_WISH_FORM = { name: '', location: '', memo: '', moodTags: [] }
 
 // ── Kakao 지오코딩 ─────────────────────────────────────────────
+// autoload=false 환경: kakao.maps.load() 안에서 services 사용
 async function geocodeKakao(query) {
-  if (!window.kakao?.maps?.services || !query.trim()) return null
+  if (!window.kakao?.maps || !query.trim()) return null
   return new Promise(resolve => {
-    const geocoder = new window.kakao.maps.services.Geocoder()
-    geocoder.addressSearch(query, (result, status) => {
-      if (status === window.kakao.maps.services.Status.OK && result[0]) {
-        resolve([parseFloat(result[0].y), parseFloat(result[0].x)])
-      } else {
-        new window.kakao.maps.services.Places().keywordSearch(query, (res2, st2) => {
-          if (st2 === window.kakao.maps.services.Status.OK && res2[0]) {
-            resolve([parseFloat(res2[0].y), parseFloat(res2[0].x)])
-          } else {
-            resolve(null)
-          }
-        }, { size: 1 })
-      }
+    window.kakao.maps.load(() => {
+      const geocoder = new window.kakao.maps.services.Geocoder()
+      geocoder.addressSearch(query, (result, status) => {
+        if (status === window.kakao.maps.services.Status.OK && result[0]) {
+          resolve([parseFloat(result[0].y), parseFloat(result[0].x)])
+        } else {
+          new window.kakao.maps.services.Places().keywordSearch(query, (res2, st2) => {
+            if (st2 === window.kakao.maps.services.Status.OK && res2[0]) {
+              resolve([parseFloat(res2[0].y), parseFloat(res2[0].x)])
+            } else {
+              resolve(null)
+            }
+          }, { size: 1 })
+        }
+      })
     })
   })
 }
@@ -298,13 +301,23 @@ export default function MealMap() {
   }, [clusterSheet])
 
   // ── Kakao 지도 초기화 ─────────────────────────────────────────
+  // autoload=false 환경: kakao.maps.load() 콜백 안에서 Map 생성
   useEffect(() => {
     if (!mapContainer || !window.kakao?.maps) return
-    const center = new window.kakao.maps.LatLng(37.5665, 126.9780)
-    const map = new window.kakao.maps.Map(mapContainer, { center, level: 7 })
-    kakaoMapRef.current = map
-    setMapReady(true)
+    let destroyed = false
+    window.kakao.maps.load(() => {
+      if (destroyed) return
+      try {
+        const center = new window.kakao.maps.LatLng(37.5665, 126.9780)
+        const map = new window.kakao.maps.Map(mapContainer, { center, level: 7 })
+        kakaoMapRef.current = map
+        setMapReady(true)
+      } catch (err) {
+        console.error('[MealMap] 카카오맵 초기화 실패:', err)
+      }
+    })
     return () => {
+      destroyed = true
       mealOverlaysRef.current.forEach(o => o.setMap(null))
       mealOverlaysRef.current = []
       if (userOverlayRef.current) { userOverlayRef.current.setMap(null); userOverlayRef.current = null }
