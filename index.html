@@ -19,7 +19,19 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png" />
 
     <title>식탁일기</title>
-    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=62773ab79ba5fe2e25198c666822e165&libraries=services,clusterer&autoload=false"></script>
+
+    <!-- 카카오맵 SDK: https 명시 (// 프로토콜 상대 URL은 Mixed Content 오류 유발) -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=62773ab79ba5fe2e25198c666822e165&libraries=services&autoload=false"></script>
+
+    <!-- 카카오 SDK 로드 확인 로그 -->
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        console.log('[Kakao] DOMContentLoaded — kakao:', typeof window.kakao, '| maps:', typeof window.kakao?.maps, '| load fn:', typeof window.kakao?.maps?.load)
+      })
+      window.addEventListener('load', function () {
+        console.log('[Kakao] window.load — kakao:', typeof window.kakao, '| maps:', typeof window.kakao?.maps, '| Map:', typeof window.kakao?.maps?.Map)
+      })
+    </script>
   </head>
   <body>
     <div id="root"></div>

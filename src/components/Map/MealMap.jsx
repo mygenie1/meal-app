@@ -317,8 +317,10 @@ export default function MealMap() {
       '| 컨테이너 크기:', mapContainer ? `${mapContainer.offsetWidth}×${mapContainer.offsetHeight}` : 'N/A',
       '| kakao.maps:', !!window.kakao?.maps)
 
-    if (!mapContainer || !window.kakao?.maps) {
-      if (!window.kakao?.maps) console.error('[MealMap] window.kakao.maps 없음 — SDK 미로드')
+    if (!mapContainer) return
+    if (!window.kakao?.maps) {
+      console.error('[MealMap] window.kakao.maps 없음 — SDK 스크립트 로드 실패 (Mixed Content 또는 네트워크 오류)')
+      setMapInitFailed(true)
       return
     }
 
