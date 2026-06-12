@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { MapContainer, TileLayer, Marker } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useApp } from '../../context/AppContext'
@@ -20,20 +20,23 @@ const TAG_COLORS = {
   배달: '#93c5fd',
 }
 
-function makeMealIcon(color, count = 1) {
-  const sz = count > 1 ? 22 : 16
+function makeMealIcon(color, count = 1, selected = false) {
+  const sz = selected ? (count > 1 ? 30 : 24) : (count > 1 ? 22 : 16)
   const pad = count > 1 ? 8 : 0
+  const total = sz + pad
+  const border = selected ? '3px solid white' : '2.5px solid white'
+  const shadow = selected ? '0 3px 14px rgba(0,0,0,.4)' : '0 2px 6px rgba(0,0,0,.25)'
   const badge = count > 1
     ? `<div style="position:absolute;top:-6px;right:-6px;background:#6b4f3a;color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center;font-weight:700;border:1.5px solid #fff">${count}</div>`
     : ''
   return L.divIcon({
     className: '',
-    html: `<div style="position:relative;width:${sz + pad}px;height:${sz + pad}px;display:flex;align-items:center;justify-content:center">
-      <div style="width:${sz}px;height:${sz}px;background:${color || '#a07850'};border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.25)"></div>
+    html: `<div style="position:relative;width:${total}px;height:${total}px;display:flex;align-items:center;justify-content:center">
+      <div style="width:${sz}px;height:${sz}px;background:${color || '#a07850'};border:${border};border-radius:50%;box-shadow:${shadow}"></div>
       ${badge}
     </div>`,
-    iconSize: [sz + pad, sz + pad],
-    iconAnchor: [(sz + pad) / 2, (sz + pad) / 2],
+    iconSize: [total, total],
+    iconAnchor: [total / 2, total / 2],
   })
 }
 
@@ -46,11 +49,29 @@ function makeWishIcon() {
   })
 }
 
+function makeUserIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:14px;height:14px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(59,130,246,0.25)"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  })
+}
+
 async function geocode(q) {
   const params = new URLSearchParams({ q, format: 'json', limit: '1', countrycodes: 'kr', 'accept-language': 'ko' })
   const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { 'Accept-Language': 'ko' } })
   const data = await res.json()
   return data[0] ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null
+}
+
+// MapContainer 내부에서 flyTo 제어
+function FlyTo({ coords }) {
+  const map = useMap()
+  useEffect(() => {
+    if (coords) map.flyTo(coords, 15, { duration: 1.2 })
+  }, [coords?.[0], coords?.[1]])
+  return null
 }
 
 const FILTER_TAGS = ['전체', '외식', '카페']
@@ -108,10 +129,13 @@ export default function MealMap() {
   const [loading, setLoading] = useState(false)
   const [activeTag, setActiveTag] = useState('')
   const [showWishlist, setShowWishlist] = useState(true)
-  const [bottomSheet, setBottomSheet] = useState(null) // { type: 'cluster'|'wish'|'addWish', ... }
+  const [bottomSheet, setBottomSheet] = useState(null)
   const [viewingMeal, setViewingMeal] = useState(null)
   const [wishForm, setWishForm] = useState({ name: '', location: '', memo: '' })
   const [savingWish, setSavingWish] = useState(false)
+  const [userLocation, setUserLocation] = useState(null)
+  const [flyTarget, setFlyTarget] = useState(null)
+  const [locating, setLocating] = useState(false)
   const requestedPhotosRef = useRef(new Set())
 
   const meals = useMemo(() =>
@@ -164,6 +188,13 @@ export default function MealMap() {
     return Object.values(map)
   }, [filteredPins])
 
+  // 선택된 클러스터 키 (핀 강조에 사용)
+  const selectedClusterKey = useMemo(() => {
+    if (bottomSheet?.type !== 'cluster') return null
+    const [lat, lng] = bottomSheet.cluster.coords
+    return `${Math.round(lat * ROUND)},${Math.round(lng * ROUND)}`
+  }, [bottomSheet])
+
   const wishWithCoords = wishlist.filter(w => w.lat && w.lng)
   const hasContent = clusters.length > 0 || (showWishlist && wishWithCoords.length > 0)
 
@@ -172,6 +203,21 @@ export default function MealMap() {
     : wishWithCoords.length > 0
       ? [wishWithCoords[0].lat, wishWithCoords[0].lng]
       : [37.5665, 126.9780]
+
+  function handleLocate() {
+    if (!navigator.geolocation) return
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const coords = [pos.coords.latitude, pos.coords.longitude]
+        setUserLocation(coords)
+        setFlyTarget(coords)
+        setLocating(false)
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    )
+  }
 
   async function handleSaveWish(e) {
     e.preventDefault()
@@ -244,36 +290,70 @@ export default function MealMap() {
         </div>
       )}
 
-      {/* 지도 */}
-      <div className="rounded-2xl overflow-hidden shadow-sm" style={{ height: '54vh' }}>
-        <MapContainer
-          center={center}
-          zoom={hasContent ? 12 : 11}
-          style={{ height: '100%', width: '100%' }}
-          zoomControl={false}
-          key={currentSpace?.id}
+      {/* 지도 래퍼: 바깥 relative, 안쪽 overflow-hidden — 현재위치 버튼이 클리핑 안 되게 */}
+      <div className="relative rounded-2xl shadow-sm" style={{ height: '54vh' }}>
+        <div className="absolute inset-0 rounded-2xl overflow-hidden">
+          <MapContainer
+            center={center}
+            zoom={hasContent ? 12 : 11}
+            style={{ height: '100%', width: '100%' }}
+            zoomControl={false}
+            scrollWheelZoom={false}
+            key={currentSpace?.id}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            />
+            <FlyTo coords={flyTarget} />
+            {/* 식사 클러스터 핀 */}
+            {clusters.map((cluster, i) => {
+              const key = `${Math.round(cluster.coords[0] * ROUND)},${Math.round(cluster.coords[1] * ROUND)}`
+              const isSelected = key === selectedClusterKey
+              return (
+                <Marker
+                  key={`c-${i}`}
+                  position={cluster.coords}
+                  icon={makeMealIcon(TAG_COLORS[cluster.meals[0].tag], cluster.meals.length, isSelected)}
+                  zIndexOffset={isSelected ? 1000 : 0}
+                  eventHandlers={{ click: () => setBottomSheet({ type: 'cluster', cluster }) }}
+                />
+              )
+            })}
+            {/* 위시리스트 핀 */}
+            {showWishlist && wishWithCoords.map(w => (
+              <Marker
+                key={`w-${w.id}`}
+                position={[w.lat, w.lng]}
+                icon={makeWishIcon()}
+                eventHandlers={{ click: () => setBottomSheet({ type: 'wish', item: w }) }}
+              />
+            ))}
+            {/* 현재 위치 파란 점 */}
+            {userLocation && (
+              <Marker position={userLocation} icon={makeUserIcon()} zIndexOffset={2000} />
+            )}
+          </MapContainer>
+        </div>
+
+        {/* 현재 위치 버튼 */}
+        <button
+          onClick={handleLocate}
+          disabled={locating}
+          title="현재 위치로 이동"
+          style={{ position: 'absolute', right: 12, bottom: 28, zIndex: 400 }}
+          className="bg-white rounded-full w-10 h-10 shadow-md flex items-center justify-center hover:bg-cream-50 active:scale-95 transition-all disabled:opacity-60"
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-          />
-          {clusters.map((cluster, i) => (
-            <Marker
-              key={`c-${i}`}
-              position={cluster.coords}
-              icon={makeMealIcon(TAG_COLORS[cluster.meals[0].tag], cluster.meals.length)}
-              eventHandlers={{ click: () => setBottomSheet({ type: 'cluster', cluster }) }}
-            />
-          ))}
-          {showWishlist && wishWithCoords.map(w => (
-            <Marker
-              key={`w-${w.id}`}
-              position={[w.lat, w.lng]}
-              icon={makeWishIcon()}
-              eventHandlers={{ click: () => setBottomSheet({ type: 'wish', item: w }) }}
-            />
-          ))}
-        </MapContainer>
+          {locating ? (
+            <div className="w-4 h-4 border-2 border-cream-300 border-t-blue-400 rounded-full animate-spin" />
+          ) : (
+            <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8a4 4 0 100 8 4 4 0 000-8z" />
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* 바텀 시트 — 클러스터 상세 */}
@@ -288,7 +368,13 @@ export default function MealMap() {
             </div>
             <CloseBtn onClick={() => setBottomSheet(null)} />
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-4 px-4 scrollbar-hide" style={{ scrollSnapType: 'x mandatory' }}>
+          {/* 스크롤 이벤트가 지도로 전파되지 않도록 stopPropagation */}
+          <div
+            className="flex gap-3 overflow-x-auto pb-4 px-4 scrollbar-hide"
+            style={{ scrollSnapType: 'x mandatory' }}
+            onTouchStart={e => e.stopPropagation()}
+            onTouchMove={e => e.stopPropagation()}
+          >
             {bottomSheet.cluster.meals.map(meal => {
               const liveMeal = currentSpace?.meals.find(m => m.id === meal.id) ?? meal
               return <MealPinCard key={meal.id} meal={meal} liveMeal={liveMeal} onClick={() => setViewingMeal(liveMeal)} />
