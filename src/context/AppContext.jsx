@@ -728,15 +728,16 @@ export function AppProvider({ children }) {
     ))
   }
 
-  // 코드로 스페이스 참가 — 이제 다른 기기에서 생성된 스페이스도 찾을 수 있음
+  // 코드로 스페이스 참가 — owner_id 상관없이 code만 일치하면 참가
   async function joinByCode(code) {
-    const { data: spaceRow, error } = await supabase
+    // maybeSingle(): 0 rows여도 에러 대신 data: null 반환
+    const { data: spaceRow } = await supabase
       .from('spaces')
       .select('*')
       .ilike('code', code.trim())
-      .single()
+      .maybeSingle()
 
-    if (error || !spaceRow) return null
+    if (!spaceRow) return null
 
     // 이미 로컬에 있으면 그냥 전환
     const existing = spaces.find(s => s.id === spaceRow.id)
@@ -762,6 +763,7 @@ export function AppProvider({ children }) {
       name: spaceRow.name,
       emoji: spaceRow.emoji,
       code: spaceRow.code,
+      ownerId: spaceRow.owner_id || null,
       createdAt: spaceRow.created_at,
       meals: (mealsData || []).map(row => rowToMeal(row, { photosLoaded: false })),
       ingredients: {
@@ -771,7 +773,11 @@ export function AppProvider({ children }) {
       wishlist: joinWishlistData.map(rowToWishlist),
     }
 
-    setSpaces(prev => [...prev, space])
+    setSpaces(prev => {
+      // 중복 방지: 이미 있으면 교체, 없으면 추가
+      if (prev.find(s => s.id === space.id)) return prev.map(s => s.id === space.id ? space : s)
+      return [...prev, space]
+    })
     setCurrentSpaceId(space.id)
     return space
   }

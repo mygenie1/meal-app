@@ -30,38 +30,30 @@ function compressImage(file) {
   })
 }
 
-// ─── Nominatim geocoding ───────────────────────────────────────────────────
-async function geocodeKr(query) {
-  const params = new URLSearchParams({
-    q: query, format: 'json', limit: '1',
-    countrycodes: 'kr', 'accept-language': 'ko',
+// ─── Kakao SDK geocoding ──────────────────────────────────────────────────
+async function geocodeKakao(query) {
+  if (!window.kakao?.maps?.services || !query.trim()) return null
+  return new Promise(resolve => {
+    const geocoder = new window.kakao.maps.services.Geocoder()
+    geocoder.addressSearch(query, (result, status) => {
+      if (status === window.kakao.maps.services.Status.OK && result[0]) {
+        resolve([parseFloat(result[0].y), parseFloat(result[0].x)])
+      } else {
+        resolve(null)
+      }
+    })
   })
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?${params}`,
-    { headers: { 'Accept-Language': 'ko' } }
-  )
-  const data = await res.json()
-  if (data[0]) return [parseFloat(data[0].lat), parseFloat(data[0].lon)]
-  return null
 }
 
-// ─── Kakao Local API ──────────────────────────────────────────────────────
-const KAKAO_KEY = import.meta.env.VITE_KAKAO_API_KEY
-
+// ─── Kakao SDK 장소 검색 ──────────────────────────────────────────────────
 async function searchKakaoPlaces(query) {
-  if (!KAKAO_KEY || !query.trim()) return []
-  try {
-    const params = new URLSearchParams({ query, size: '5' })
-    const res = await fetch(
-      `https://dapi.kakao.com/v2/local/search/keyword.json?${params}`,
-      { headers: { Authorization: `KakaoAK ${KAKAO_KEY}` } }
-    )
-    if (!res.ok) return []
-    const data = await res.json()
-    return data.documents || []
-  } catch {
-    return []
-  }
+  if (!window.kakao?.maps?.services || !query.trim()) return []
+  return new Promise(resolve => {
+    const ps = new window.kakao.maps.services.Places()
+    ps.keywordSearch(query, (result, status) => {
+      resolve(status === window.kakao.maps.services.Status.OK ? result.slice(0, 5) : [])
+    }, { size: 5 })
+  })
 }
 
 // ─── 현재 시간 → 끼니 자동 감지 ─────────────────────────────────────────
@@ -150,7 +142,7 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
     const q = e.target.value
     onChange(q)
     clearTimeout(timerRef.current)
-    if (!KAKAO_KEY || !q.trim()) {
+    if (!q.trim()) {
       setSuggestions([])
       setShowDropdown(false)
       return
@@ -213,9 +205,6 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
         </div>
       )}
 
-      {!KAKAO_KEY && (
-        <p className="text-[10px] text-cream-400 mt-1 ml-1">자동완성: VITE_KAKAO_API_KEY 설정 시 활성화</p>
-      )}
     </div>
   )
 }
@@ -321,7 +310,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     if (!location || form.lat) return
     setGeoStatus('loading')
     try {
-      const coords = await geocodeKr(location)
+      const coords = await geocodeKakao(location)
       if (coords) {
         setForm(prev => ({ ...prev, lat: coords[0], lng: coords[1] }))
         setGeoStatus('found')
@@ -354,7 +343,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     if (needsGeo && form.location.trim() && !lat && geoStatus === 'idle') {
       setGeoStatus('loading')
       try {
-        const coords = await geocodeKr(form.location)
+        const coords = await geocodeKakao(form.location)
         if (coords) { lat = coords[0]; lng = coords[1]; setGeoStatus('found') }
         else setGeoStatus('notfound')
       } catch {

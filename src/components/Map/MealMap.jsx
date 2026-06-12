@@ -1,19 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useApp } from '../../context/AppContext'
 import { getThumbUrl, uploadPhotoToStorage } from '../../lib/uploadPhoto'
 import MealDetailModal from '../MealRecord/MealDetailModal'
 import Modal from '../common/Modal'
 import MealForm from '../MealRecord/MealForm'
-
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-})
 
 // ── 상수 ──────────────────────────────────────────────────────
 const TAG_COLORS = { 집밥: '#86efac', 외식: '#fcd34d', 카페: '#f9a8d4', 배달: '#93c5fd' }
@@ -24,33 +14,24 @@ const WISH_CATEGORY_COLORS = { 한식: '#fca5a5', 일식: '#93c5fd', 양식: '#8
 const MOOD_TAGS = ['🔥 핫플', '💕 로맨틱', '🌿 힐링', '📸 인생샷', '✨ 특별한 날', '🍽️ 맛집 예감']
 const EMPTY_WISH_FORM = { name: '', location: '', memo: '', moodTags: [] }
 
-// ── 아이콘 팩토리 ──────────────────────────────────────────────
-function makeMealIcon(color, count = 1, selected = false) {
-  const sz = selected ? (count > 1 ? 30 : 24) : (count > 1 ? 22 : 16)
-  const pad = count > 1 ? 8 : 0
-  const total = sz + pad
-  const border = selected ? '3px solid white' : '2.5px solid white'
-  const shadow = selected ? '0 3px 14px rgba(0,0,0,.4)' : '0 2px 6px rgba(0,0,0,.25)'
-  const badge = count > 1
-    ? `<div style="position:absolute;top:-6px;right:-6px;background:#6b4f3a;color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center;font-weight:700;border:1.5px solid #fff">${count}</div>`
-    : ''
-  return L.divIcon({
-    className: '',
-    html: `<div style="position:relative;width:${total}px;height:${total}px;display:flex;align-items:center;justify-content:center">
-      <div style="width:${sz}px;height:${sz}px;background:${color || '#a07850'};border:${border};border-radius:50%;box-shadow:${shadow}"></div>
-      ${badge}
-    </div>`,
-    iconSize: [total, total],
-    iconAnchor: [total / 2, total / 2],
-  })
-}
-
-function makeUserIcon() {
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:14px;height:14px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(59,130,246,0.25)"></div>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
+// ── Kakao 지오코딩 ─────────────────────────────────────────────
+async function geocodeKakao(query) {
+  if (!window.kakao?.maps?.services || !query.trim()) return null
+  return new Promise(resolve => {
+    const geocoder = new window.kakao.maps.services.Geocoder()
+    geocoder.addressSearch(query, (result, status) => {
+      if (status === window.kakao.maps.services.Status.OK && result[0]) {
+        resolve([parseFloat(result[0].y), parseFloat(result[0].x)])
+      } else {
+        new window.kakao.maps.services.Places().keywordSearch(query, (res2, st2) => {
+          if (st2 === window.kakao.maps.services.Status.OK && res2[0]) {
+            resolve([parseFloat(res2[0].y), parseFloat(res2[0].x)])
+          } else {
+            resolve(null)
+          }
+        }, { size: 1 })
+      }
+    })
   })
 }
 
@@ -64,23 +45,20 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-async function geocode(q) {
-  const params = new URLSearchParams({ q, format: 'json', limit: '1', countrycodes: 'kr', 'accept-language': 'ko' })
-  const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { 'Accept-Language': 'ko' } })
-  const data = await res.json()
-  return data[0] ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null
-}
-
-function FlyTo({ coords }) {
-  const map = useMap()
-  useEffect(() => {
-    if (coords) map.flyTo(coords, 15, { duration: 1.2 })
-  }, [coords?.[0], coords?.[1]])
-  return null
+function makePinHTML(color, count, selected) {
+  const sz = selected ? (count > 1 ? 30 : 24) : (count > 1 ? 22 : 16)
+  const shadow = selected ? '0 3px 14px rgba(0,0,0,.4)' : '0 2px 6px rgba(0,0,0,.25)'
+  const border = selected ? '3px solid white' : '2.5px solid white'
+  const badge = count > 1
+    ? `<div style="position:absolute;top:-6px;right:-6px;background:#6b4f3a;color:#fff;border-radius:50%;width:14px;height:14px;font-size:8px;display:flex;align-items:center;justify-content:center;font-weight:700;border:1.5px solid #fff">${count}</div>`
+    : ''
+  return `<div style="position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:4px">
+    <div style="width:${sz}px;height:${sz}px;background:${color || '#a07850'};border:${border};border-radius:50%;box-shadow:${shadow}"></div>
+    ${badge}
+  </div>`
 }
 
 // ── 서브 컴포넌트 ──────────────────────────────────────────────
-
 function MealPinCard({ meal, liveMeal, onClick }) {
   const display = liveMeal || meal
   const thumb = getThumbUrl(display.photos?.[0] || display.photo || '')
@@ -192,9 +170,7 @@ function WishListCard({ item, onEdit, onDelete, onVisit, onViewOnMap }) {
   const catColor = WISH_CATEGORY_COLORS[item.category]
   return (
     <div className={`bg-white rounded-2xl border border-cream-200 overflow-hidden ${item.visited ? 'opacity-60' : ''}`}>
-      {item.photo && (
-        <img src={item.photo} alt="" className="w-full h-40 object-cover" />
-      )}
+      {item.photo && <img src={item.photo} alt="" className="w-full h-40 object-cover" />}
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="min-w-0 flex-1">
@@ -210,8 +186,7 @@ function WishListCard({ item, onEdit, onDelete, onVisit, onViewOnMap }) {
             )}
           </div>
           {item.category && catColor && (
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium text-warm-dark shrink-0"
-              style={{ background: catColor }}>
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium text-warm-dark shrink-0" style={{ background: catColor }}>
               {item.category}
             </span>
           )}
@@ -219,15 +194,11 @@ function WishListCard({ item, onEdit, onDelete, onVisit, onViewOnMap }) {
         {item.moodTags?.length > 0 && (
           <div className="flex gap-1.5 flex-wrap mb-2">
             {item.moodTags.map(tag => (
-              <span key={tag} className="text-xs px-2.5 py-1 rounded-full bg-cream-100 text-warm-light border border-cream-200">
-                {tag}
-              </span>
+              <span key={tag} className="text-xs px-2.5 py-1 rounded-full bg-cream-100 text-warm-light border border-cream-200">{tag}</span>
             ))}
           </div>
         )}
-        {item.memo && (
-          <p className="text-sm text-warm-light leading-relaxed mb-3">{item.memo}</p>
-        )}
+        {item.memo && <p className="text-sm text-warm-light leading-relaxed mb-3">{item.memo}</p>}
         <div className="flex gap-2 flex-wrap">
           {!item.visited && (
             <button onClick={onVisit}
@@ -247,14 +218,8 @@ function WishListCard({ item, onEdit, onDelete, onVisit, onViewOnMap }) {
               지도에서 확인
             </button>
           )}
-          <button onClick={onEdit}
-            className="px-3 py-2 rounded-2xl border border-cream-300 text-warm-brown text-sm hover:bg-cream-100 transition-colors active:scale-95">
-            수정
-          </button>
-          <button onClick={onDelete}
-            className="px-3 py-2 rounded-2xl border border-cream-200 text-red-400 text-sm hover:bg-red-50 transition-colors active:scale-95">
-            삭제
-          </button>
+          <button onClick={onEdit} className="px-3 py-2 rounded-2xl border border-cream-300 text-warm-brown text-sm hover:bg-cream-100 transition-colors active:scale-95">수정</button>
+          <button onClick={onDelete} className="px-3 py-2 rounded-2xl border border-cream-200 text-red-400 text-sm hover:bg-red-50 transition-colors active:scale-95">삭제</button>
         </div>
       </div>
     </div>
@@ -265,52 +230,152 @@ function WishListCard({ item, onEdit, onDelete, onVisit, onViewOnMap }) {
 export default function MealMap() {
   const { currentSpace, addMeal, addWishlistItem, updateWishlistItem, deleteWishlistItem, cacheGeocoords, loadMealPhotos } = useApp()
 
-  // 탭
   const [activeTab, setActiveTab] = useState('map')
 
-  // 맛집 지도 탭
+  // Kakao 지도 — ref 콜백 패턴: mapContainer가 바뀔 때만 지도 재초기화
+  const [mapContainer, setMapContainer] = useState(null)
+  const setMapContainerRef = useCallback(node => setMapContainer(node), [])
+  const [mapReady, setMapReady] = useState(false)
+  const kakaoMapRef = useRef(null)
+  const mealOverlaysRef = useRef([])
+  const userOverlayRef = useRef(null)
+  const hasFittedBoundsRef = useRef(false)
+
   const [pins, setPins] = useState([])
   const [loading, setLoading] = useState(false)
   const [activeFilters, setActiveFilters] = useState(new Set(['전체']))
-  const [clusterSheet, setClusterSheet] = useState(null) // { cluster }
+  const [clusterSheet, setClusterSheet] = useState(null)
   const [viewingMeal, setViewingMeal] = useState(null)
   const [userLocation, setUserLocation] = useState(null)
   const [flyTarget, setFlyTarget] = useState(null)
   const [locating, setLocating] = useState(false)
 
-  // 근처 알림 배너
   const [nearbyWish, setNearbyWish] = useState(null)
   const [nearbyDismissed, setNearbyDismissed] = useState(false)
   const [bannerVisible, setBannerVisible] = useState(false)
   const hasCheckedNearbyRef = useRef(false)
 
-  // 가고 싶은 곳 탭 — 추가
   const [showAddModal, setShowAddModal] = useState(false)
   const [addForm, setAddForm] = useState(EMPTY_WISH_FORM)
   const [addPhotoPreview, setAddPhotoPreview] = useState('')
   const [savingAdd, setSavingAdd] = useState(false)
   const addPhotoRef = useRef()
 
-  // 가고 싶은 곳 탭 — 수정
   const [editingWish, setEditingWish] = useState(null)
   const [editForm, setEditForm] = useState(EMPTY_WISH_FORM)
   const [editPhotoPreview, setEditPhotoPreview] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const editPhotoRef = useRef()
 
-  // 방문 기록
   const [visitingWish, setVisitingWish] = useState(null)
-
   const requestedPhotosRef = useRef(new Set())
 
   const meals = useMemo(() => (currentSpace?.meals || []).filter(m => m.location), [currentSpace?.meals])
   const wishlist = currentSpace?.wishlist || []
   const unvisited = wishlist.filter(w => !w.visited)
   const visited = wishlist.filter(w => w.visited)
-
   const uncachedKey = meals.filter(m => !m.lat || !m.lng).map(m => m.id).join(',')
 
-  // 식사 핀 지오코딩 로드
+  const activeMealTags = [...activeFilters].filter(f => f !== '전체')
+  const filteredPins = activeFilters.has('전체') ? pins
+    : activeMealTags.length === 0 ? []
+    : pins.filter(p => activeMealTags.includes(p.meal.tag))
+
+  const clusters = useMemo(() => {
+    const map = {}
+    filteredPins.forEach(({ meal, coords }) => {
+      const key = `${Math.round(coords[0] * ROUND)},${Math.round(coords[1] * ROUND)}`
+      if (!map[key]) map[key] = { coords, meals: [] }
+      map[key].meals.push(meal)
+    })
+    return Object.values(map)
+  }, [filteredPins])
+
+  const selectedClusterKey = useMemo(() => {
+    if (!clusterSheet) return null
+    const [lat, lng] = clusterSheet.cluster.coords
+    return `${Math.round(lat * ROUND)},${Math.round(lng * ROUND)}`
+  }, [clusterSheet])
+
+  // ── Kakao 지도 초기화 ─────────────────────────────────────────
+  useEffect(() => {
+    if (!mapContainer || !window.kakao?.maps) return
+    const center = new window.kakao.maps.LatLng(37.5665, 126.9780)
+    const map = new window.kakao.maps.Map(mapContainer, { center, level: 7 })
+    kakaoMapRef.current = map
+    setMapReady(true)
+    return () => {
+      mealOverlaysRef.current.forEach(o => o.setMap(null))
+      mealOverlaysRef.current = []
+      if (userOverlayRef.current) { userOverlayRef.current.setMap(null); userOverlayRef.current = null }
+      kakaoMapRef.current = null
+      hasFittedBoundsRef.current = false
+      setMapReady(false)
+    }
+  }, [mapContainer])
+
+  // ── 식사 마커 갱신 ────────────────────────────────────────────
+  useEffect(() => {
+    if (!mapReady || !kakaoMapRef.current) return
+    mealOverlaysRef.current.forEach(o => o.setMap(null))
+    mealOverlaysRef.current = []
+    clusters.forEach(cluster => {
+      const key = `${Math.round(cluster.coords[0] * ROUND)},${Math.round(cluster.coords[1] * ROUND)}`
+      const isSelected = key === selectedClusterKey
+      const el = document.createElement('div')
+      el.innerHTML = makePinHTML(TAG_COLORS[cluster.meals[0].tag] || '#a07850', cluster.meals.length, isSelected)
+      el.addEventListener('click', () => setClusterSheet({ cluster }))
+      const overlay = new window.kakao.maps.CustomOverlay({
+        position: new window.kakao.maps.LatLng(cluster.coords[0], cluster.coords[1]),
+        content: el,
+        xAnchor: 0.5,
+        yAnchor: 0.5,
+        zIndex: isSelected ? 10 : 1,
+      })
+      overlay.setMap(kakaoMapRef.current)
+      mealOverlaysRef.current.push(overlay)
+    })
+    if (!hasFittedBoundsRef.current && clusters.length > 0) {
+      hasFittedBoundsRef.current = true
+      if (clusters.length === 1) {
+        kakaoMapRef.current.setCenter(new window.kakao.maps.LatLng(clusters[0].coords[0], clusters[0].coords[1]))
+        kakaoMapRef.current.setLevel(5)
+      } else {
+        const bounds = new window.kakao.maps.LatLngBounds()
+        clusters.forEach(c => bounds.extend(new window.kakao.maps.LatLng(c.coords[0], c.coords[1])))
+        kakaoMapRef.current.setBounds(bounds, 60)
+        if (kakaoMapRef.current.getLevel() < 3) kakaoMapRef.current.setLevel(3)
+      }
+    }
+  }, [clusters, selectedClusterKey, mapReady])
+
+  // ── 내 위치 마커 ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!mapReady || !kakaoMapRef.current) return
+    if (userOverlayRef.current) { userOverlayRef.current.setMap(null); userOverlayRef.current = null }
+    if (!userLocation) return
+    const el = document.createElement('div')
+    el.style.cssText = 'width:14px;height:14px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(59,130,246,0.25)'
+    const overlay = new window.kakao.maps.CustomOverlay({
+      position: new window.kakao.maps.LatLng(userLocation[0], userLocation[1]),
+      content: el,
+      xAnchor: 0.5,
+      yAnchor: 0.5,
+      zIndex: 20,
+    })
+    overlay.setMap(kakaoMapRef.current)
+    userOverlayRef.current = overlay
+  }, [userLocation, mapReady])
+
+  // ── 지도 이동 ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!flyTarget || !mapReady || !kakaoMapRef.current) return
+    kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(flyTarget[0], flyTarget[1]))
+    kakaoMapRef.current.setLevel(4)
+    setFlyTarget(null)
+  }, [flyTarget, mapReady])
+
+  // ── 식사 핀 로드 (지오코딩) ───────────────────────────────────
   useEffect(() => {
     if (meals.length === 0) { setPins([]); return }
     async function loadPins() {
@@ -319,7 +384,7 @@ export default function MealMap() {
         meals.map(async meal => {
           if (meal.lat && meal.lng) return { meal, coords: [meal.lat, meal.lng] }
           try {
-            const coords = await geocode(meal.location)
+            const coords = await geocodeKakao(meal.location)
             if (coords && currentSpace?.id) cacheGeocoords(currentSpace.id, meal.id, coords[0], coords[1])
             return { meal, coords }
           } catch { return { meal, coords: null } }
@@ -332,6 +397,7 @@ export default function MealMap() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meals.length, uncachedKey])
 
+  // ── 식사 사진 로드 ────────────────────────────────────────────
   useEffect(() => {
     meals.forEach(m => {
       if (!m.photosLoaded && !requestedPhotosRef.current.has(m.id)) {
@@ -341,7 +407,7 @@ export default function MealMap() {
     })
   }, [meals.length])
 
-  // 지도 진입 시 근처 위시 탐색 (1회)
+  // ── 근처 위시 탐색 (1회) ──────────────────────────────────────
   useEffect(() => {
     if (hasCheckedNearbyRef.current) return
     const candidates = wishlist.filter(w => w.lat && w.lng && !w.visited)
@@ -365,18 +431,14 @@ export default function MealMap() {
     )
   }, [wishlist])
 
-  // ── 맛집 지도 핸들러 ────────────────────────────────────────
+  // ── 핸들러 ────────────────────────────────────────────────────
   function handleToggleFilter(tag) {
     setActiveFilters(prev => {
       const next = new Set(prev)
       if (tag === '전체') return new Set(['전체'])
       next.delete('전체')
-      if (next.has(tag)) {
-        next.delete(tag)
-        if (next.size === 0) next.add('전체')
-      } else {
-        next.add(tag)
-      }
+      if (next.has(tag)) { next.delete(tag); if (next.size === 0) next.add('전체') }
+      else next.add(tag)
       return next
     })
   }
@@ -396,30 +458,6 @@ export default function MealMap() {
     )
   }
 
-  const activeMealTags = [...activeFilters].filter(f => f !== '전체')
-  const filteredPins = activeFilters.has('전체') ? pins
-    : activeMealTags.length === 0 ? []
-    : pins.filter(p => activeMealTags.includes(p.meal.tag))
-
-  const clusters = useMemo(() => {
-    const map = {}
-    filteredPins.forEach(({ meal, coords }) => {
-      const key = `${Math.round(coords[0] * ROUND)},${Math.round(coords[1] * ROUND)}`
-      if (!map[key]) map[key] = { coords, meals: [] }
-      map[key].meals.push(meal)
-    })
-    return Object.values(map)
-  }, [filteredPins])
-
-  const selectedClusterKey = useMemo(() => {
-    if (!clusterSheet) return null
-    const [lat, lng] = clusterSheet.cluster.coords
-    return `${Math.round(lat * ROUND)},${Math.round(lng * ROUND)}`
-  }, [clusterSheet])
-
-  const mapCenter = clusters.length > 0 ? clusters[0].coords : [37.5665, 126.9780]
-
-  // ── 가고 싶은 곳 핸들러 ─────────────────────────────────────
   function handleOpenAdd() {
     setAddForm(EMPTY_WISH_FORM)
     setAddPhotoPreview('')
@@ -432,10 +470,7 @@ export default function MealMap() {
     setSavingAdd(true)
     let lat = null, lng = null
     if (addForm.location.trim()) {
-      try {
-        const coords = await geocode(addForm.location)
-        if (coords) { lat = coords[0]; lng = coords[1] }
-      } catch {}
+      try { const coords = await geocodeKakao(addForm.location); if (coords) { lat = coords[0]; lng = coords[1] } } catch {}
     }
     let photoUrl = ''
     if (addPhotoPreview) photoUrl = await uploadPhotoToStorage(addPhotoPreview, currentSpace?.id)
@@ -456,10 +491,7 @@ export default function MealMap() {
     setSavingEdit(true)
     let lat = editingWish.lat, lng = editingWish.lng
     if (editForm.location.trim() && editForm.location !== editingWish.location) {
-      try {
-        const coords = await geocode(editForm.location)
-        if (coords) { lat = coords[0]; lng = coords[1] }
-      } catch {}
+      try { const coords = await geocodeKakao(editForm.location); if (coords) { lat = coords[0]; lng = coords[1] } } catch {}
     }
     let photoUrl = editingWish.photo || ''
     if (editPhotoPreview && editPhotoPreview !== editingWish.photo) {
@@ -509,7 +541,7 @@ export default function MealMap() {
         </button>
       </div>
 
-      {/* ────────── 탭 1: 맛집 지도 ────────── */}
+      {/* ── 탭 1: 맛집 지도 ── */}
       {activeTab === 'map' && (
         <>
           {/* 근처 알림 배너 */}
@@ -524,9 +556,7 @@ export default function MealMap() {
                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                   </svg>
                 </div>
-                <div className="flex-1 min-w-0 cursor-pointer"
-                  onClick={() => setFlyTarget([nearbyWish.item.lat, nearbyWish.item.lng])}
-                >
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setFlyTarget([nearbyWish.item.lat, nearbyWish.item.lng])}>
                   <p className="text-[11px] text-warm-light font-medium mb-0.5">근처에 가고 싶은 곳이 있어요</p>
                   <p className="text-sm font-semibold text-warm-dark truncate">
                     {nearbyWish.item.name}
@@ -563,42 +593,11 @@ export default function MealMap() {
 
           {/* 지도 */}
           <div className="relative rounded-2xl shadow-sm overflow-hidden" style={{ height: '58vh', minHeight: 320 }}>
-            <div className="absolute inset-0" style={{ isolation: 'isolate' }}>
-              <MapContainer
-                center={mapCenter}
-                zoom={clusters.length > 0 ? 12 : 11}
-                style={{ height: '100%', width: '100%' }}
-                zoomControl={false}
-                scrollWheelZoom={false}
-                key={currentSpace?.id}
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                  url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                />
-                <FlyTo coords={flyTarget} />
-                {clusters.map((cluster, i) => {
-                  const key = `${Math.round(cluster.coords[0] * ROUND)},${Math.round(cluster.coords[1] * ROUND)}`
-                  const isSelected = key === selectedClusterKey
-                  return (
-                    <Marker
-                      key={`c-${i}`}
-                      position={cluster.coords}
-                      icon={makeMealIcon(TAG_COLORS[cluster.meals[0].tag], cluster.meals.length, isSelected)}
-                      zIndexOffset={isSelected ? 1000 : 0}
-                      eventHandlers={{ click: () => setClusterSheet({ cluster }) }}
-                    />
-                  )
-                })}
-                {userLocation && (
-                  <Marker position={userLocation} icon={makeUserIcon()} zIndexOffset={2000} />
-                )}
-              </MapContainer>
-            </div>
+            <div ref={setMapContainerRef} className="w-full h-full" />
 
             {/* 현재 위치 버튼 */}
             <button onClick={handleLocate} disabled={locating}
-              style={{ position: 'absolute', right: 12, bottom: 28, zIndex: 400 }}
+              style={{ position: 'absolute', right: 12, bottom: 28, zIndex: 10 }}
               className="bg-white rounded-full w-10 h-10 shadow-md flex items-center justify-center hover:bg-cream-50 active:scale-95 transition-all disabled:opacity-60"
             >
               {locating ? (
@@ -619,7 +618,6 @@ export default function MealMap() {
             )}
           </div>
 
-          {/* 빈 상태 */}
           {clusters.length === 0 && !loading && (
             <div className="mt-4 py-8 text-center">
               <p className="text-sm font-medium text-warm-dark mb-1">아직 등록된 맛집이 없어요</p>
@@ -629,10 +627,9 @@ export default function MealMap() {
         </>
       )}
 
-      {/* ────────── 탭 2: 가고 싶은 곳 ────────── */}
+      {/* ── 탭 2: 가고 싶은 곳 ── */}
       {activeTab === 'wishlist' && (
         <>
-          {/* 추가 버튼 */}
           <button onClick={handleOpenAdd}
             className="w-full py-3 rounded-2xl border-2 border-dashed border-cream-300 text-warm-light text-sm font-medium hover:border-warm-brown hover:text-warm-brown transition-colors active:scale-[0.98] flex items-center justify-center gap-2 mb-4"
           >
@@ -642,7 +639,6 @@ export default function MealMap() {
             가고 싶은 곳 추가
           </button>
 
-          {/* 미방문 목록 */}
           {unvisited.length > 0 ? (
             <div className="space-y-3 mb-6">
               {unvisited.map(item => (
@@ -666,7 +662,6 @@ export default function MealMap() {
             </div>
           )}
 
-          {/* 방문 완료 섹션 */}
           {visited.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -689,11 +684,8 @@ export default function MealMap() {
         </>
       )}
 
-      {/* ────────── 바텀시트: 식사 클러스터 ────────── */}
-      <Modal
-        isOpen={!!clusterSheet}
-        onClose={() => setClusterSheet(null)}
-      >
+      {/* ── 바텀시트: 식사 클러스터 ── */}
+      <Modal isOpen={!!clusterSheet} onClose={() => setClusterSheet(null)}>
         {clusterSheet && (
           <>
             <p className="font-semibold text-warm-dark mb-0.5">
@@ -719,49 +711,29 @@ export default function MealMap() {
         )}
       </Modal>
 
-      {/* ────────── 모달: 가고 싶은 곳 추가 ────────── */}
+      {/* ── 모달: 가고 싶은 곳 추가 ── */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="가고 싶은 곳 추가">
         <form onSubmit={handleSaveAdd} className="space-y-4">
-          <WishFormFields
-            form={addForm} setForm={setAddForm}
-            photoPreview={addPhotoPreview} setPhotoPreview={setAddPhotoPreview}
-            photoRef={addPhotoRef}
-          />
+          <WishFormFields form={addForm} setForm={setAddForm} photoPreview={addPhotoPreview} setPhotoPreview={setAddPhotoPreview} photoRef={addPhotoRef} />
           <div className="flex gap-3 pt-1" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
-            <button type="button" onClick={() => setShowAddModal(false)}
-              className="flex-1 py-3 rounded-2xl border border-cream-300 text-warm-brown text-sm font-medium hover:bg-cream-100 transition-colors">
-              취소
-            </button>
-            <button type="submit" disabled={savingAdd}
-              className="flex-1 py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors disabled:opacity-60">
-              {savingAdd ? '저장 중...' : '저장'}
-            </button>
+            <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-3 rounded-2xl border border-cream-300 text-warm-brown text-sm font-medium hover:bg-cream-100 transition-colors">취소</button>
+            <button type="submit" disabled={savingAdd} className="flex-1 py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors disabled:opacity-60">{savingAdd ? '저장 중...' : '저장'}</button>
           </div>
         </form>
       </Modal>
 
-      {/* ────────── 모달: 가고 싶은 곳 수정 ────────── */}
+      {/* ── 모달: 가고 싶은 곳 수정 ── */}
       <Modal isOpen={!!editingWish} onClose={() => setEditingWish(null)} title="가고 싶은 곳 수정">
         <form onSubmit={handleSaveEdit} className="space-y-4">
-          <WishFormFields
-            form={editForm} setForm={setEditForm}
-            photoPreview={editPhotoPreview} setPhotoPreview={setEditPhotoPreview}
-            photoRef={editPhotoRef}
-          />
+          <WishFormFields form={editForm} setForm={setEditForm} photoPreview={editPhotoPreview} setPhotoPreview={setEditPhotoPreview} photoRef={editPhotoRef} />
           <div className="flex gap-3 pt-1" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
-            <button type="button" onClick={() => setEditingWish(null)}
-              className="flex-1 py-3 rounded-2xl border border-cream-300 text-warm-brown text-sm font-medium hover:bg-cream-100 transition-colors">
-              취소
-            </button>
-            <button type="submit" disabled={savingEdit}
-              className="flex-1 py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors disabled:opacity-60">
-              {savingEdit ? '수정 중...' : '수정 완료'}
-            </button>
+            <button type="button" onClick={() => setEditingWish(null)} className="flex-1 py-3 rounded-2xl border border-cream-300 text-warm-brown text-sm font-medium hover:bg-cream-100 transition-colors">취소</button>
+            <button type="submit" disabled={savingEdit} className="flex-1 py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors disabled:opacity-60">{savingEdit ? '수정 중...' : '수정 완료'}</button>
           </div>
         </form>
       </Modal>
 
-      {/* ────────── 모달: 방문 기록 ────────── */}
+      {/* ── 모달: 방문 기록 ── */}
       <Modal isOpen={!!visitingWish} onClose={() => setVisitingWish(null)}>
         {visitingWish && (
           <div className="pb-1">
@@ -781,7 +753,7 @@ export default function MealMap() {
         )}
       </Modal>
 
-      {/* ────────── 모달: 식사 상세 ────────── */}
+      {/* ── 모달: 식사 상세 ── */}
       {viewingMeal && (
         <MealDetailModal meal={viewingMeal} onClose={() => setViewingMeal(null)} />
       )}

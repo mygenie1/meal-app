@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useApp } from '../../context/AppContext'
@@ -14,64 +14,25 @@ const TAG_STYLES = {
   배달: 'bg-blue-50 text-blue-700 border-blue-200',
 }
 
-// Leaflet은 지도가 있을 때만 동적 임포트 — 모달 안에서 배경 지도와 z-index 충돌 방지
-let MapContainer, TileLayer, Marker, L
-
 function SmallMap({ lat, lng }) {
-  const [ready, setReady] = useState(false)
+  const containerRef = useRef(null)
 
   useEffect(() => {
-    if (ready) return
-    Promise.all([
-      import('react-leaflet'),
-      import('leaflet'),
-      import('leaflet/dist/leaflet.css'),
-    ]).then(([rl, leaflet]) => {
-      MapContainer = rl.MapContainer
-      TileLayer = rl.TileLayer
-      Marker = rl.Marker
-      L = leaflet.default
-      setReady(true)
+    if (!containerRef.current || !window.kakao?.maps) return
+    const center = new window.kakao.maps.LatLng(lat, lng)
+    const map = new window.kakao.maps.Map(containerRef.current, { center, level: 4 })
+    map.setDraggable(false)
+    map.setZoomable(false)
+    const pinEl = document.createElement('div')
+    pinEl.style.cssText = 'width:14px;height:14px;background:#6b4f3a;border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)'
+    const overlay = new window.kakao.maps.CustomOverlay({
+      position: center, content: pinEl, xAnchor: 0.5, yAnchor: 0.5,
     })
-  }, [])
+    overlay.setMap(map)
+    return () => overlay.setMap(null)
+  }, [lat, lng])
 
-  if (!ready || !MapContainer) {
-    return (
-      <div className="rounded-2xl bg-cream-100 flex items-center justify-center" style={{ height: 150 }}>
-        <div className="w-4 h-4 border-2 border-cream-300 border-t-warm-light rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  const pinIcon = L.divIcon({
-    className: '',
-    html: `<div style="width:14px;height:14px;background:#6b4f3a;border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
-  })
-
-  return (
-    <div className="rounded-2xl overflow-hidden" style={{ height: 150, isolation: 'isolate' }}>
-      <MapContainer
-        center={[lat, lng]}
-        zoom={15}
-        style={{ height: '100%', width: '100%' }}
-        zoomControl={false}
-        dragging={false}
-        scrollWheelZoom={false}
-        doubleClickZoom={false}
-        touchZoom={false}
-        boxZoom={false}
-        keyboard={false}
-      >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
-        />
-        <Marker position={[lat, lng]} icon={pinIcon} />
-      </MapContainer>
-    </div>
-  )
+  return <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ height: 150 }} />
 }
 
 export default function MealDetailModal({ meal, onClose }) {

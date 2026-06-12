@@ -36,18 +36,10 @@ body {
   background-color: #f5ede0;
 }
 
-/* Leaflet 팝업 스타일 오버라이드 */
-.leaflet-popup-content-wrapper {
-  border-radius: 14px !important;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
-  padding: 0 !important;
-  overflow: hidden;
-}
-.leaflet-popup-content {
-  margin: 12px !important;
-}
-.leaflet-popup-tip {
-  background: white !important;
+/* Kakao 지도 커스텀 오버레이 */
+.kakao-pin {
+  cursor: pointer;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
 }
 
 /* 별점 */
