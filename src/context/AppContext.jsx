@@ -67,6 +67,14 @@ function rowToWishlist(row) {
     lat: row.lat ?? null,
     lng: row.lng ?? null,
     createdAt: row.created_at,
+    category: row.category || '',
+    moodTags: Array.isArray(row.mood_tags) ? row.mood_tags : [],
+    photo: row.photo || '',
+    reason: row.reason || '',
+    hours: row.hours || '',
+    priceRange: row.price_range || '',
+    visited: row.visited || false,
+    visitedAt: row.visited_at || null,
   }
 }
 
@@ -598,19 +606,56 @@ export function AppProvider({ children }) {
   // 가고싶은곳 추가
   async function addWishlistItem(data) {
     if (!currentSpaceId) return null
-    const { data: row, error } = await supabase
-      .from('wishlist')
-      .insert({ space_id: currentSpaceId, ...data })
-      .select()
-      .single()
+    const row = {
+      space_id: currentSpaceId,
+      name: data.name,
+      memo: data.memo || '',
+      location: data.location || '',
+      lat: data.lat ?? null,
+      lng: data.lng ?? null,
+      category: data.category || '',
+      mood_tags: data.moodTags || [],
+      photo: data.photo || '',
+      reason: data.reason || '',
+      hours: data.hours || '',
+      price_range: data.priceRange || '',
+      visited: false,
+    }
+    const { data: rowData, error } = await supabase.from('wishlist').insert(row).select().single()
     if (error) { console.error(error); return null }
-    const item = rowToWishlist(row)
+    const item = rowToWishlist(rowData)
     setSpaces(prev => prev.map(s =>
       s.id === currentSpaceId
         ? { ...s, wishlist: [...(s.wishlist || []), item] }
         : s
     ))
     return item
+  }
+
+  // 가고싶은곳 수정 (방문 처리 포함)
+  async function updateWishlistItem(id, updates) {
+    const row = {}
+    if (updates.name !== undefined) row.name = updates.name
+    if (updates.memo !== undefined) row.memo = updates.memo
+    if (updates.location !== undefined) row.location = updates.location
+    if (updates.lat !== undefined) row.lat = updates.lat
+    if (updates.lng !== undefined) row.lng = updates.lng
+    if (updates.category !== undefined) row.category = updates.category
+    if (updates.moodTags !== undefined) row.mood_tags = updates.moodTags
+    if (updates.photo !== undefined) row.photo = updates.photo
+    if (updates.reason !== undefined) row.reason = updates.reason
+    if (updates.hours !== undefined) row.hours = updates.hours
+    if (updates.priceRange !== undefined) row.price_range = updates.priceRange
+    if (updates.visited !== undefined) row.visited = updates.visited
+    if (updates.visitedAt !== undefined) row.visited_at = updates.visitedAt
+
+    const { error } = await supabase.from('wishlist').update(row).eq('id', id)
+    if (error) { console.error(error); return }
+    setSpaces(prev => prev.map(s =>
+      s.id === currentSpaceId
+        ? { ...s, wishlist: (s.wishlist || []).map(w => w.id === id ? { ...w, ...updates } : w) }
+        : s
+    ))
   }
 
   // 가고싶은곳 삭제
@@ -693,6 +738,7 @@ export function AppProvider({ children }) {
         toggleIngredient,
         deleteIngredient,
         addWishlistItem,
+        updateWishlistItem,
         deleteWishlistItem,
         joinByCode,
       }}
