@@ -83,6 +83,15 @@ function makeUserIcon() {
   })
 }
 
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 async function geocode(q) {
   const params = new URLSearchParams({ q, format: 'json', limit: '1', countrycodes: 'kr', 'accept-language': 'ko' })
   const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { 'Accept-Language': 'ko' } })
@@ -222,6 +231,12 @@ export default function MealMap() {
   const [wishPhotoPreview, setWishPhotoPreview] = useState('')
   const wishPhotoRef = useRef()
 
+  // 근처 알림 배너
+  const [nearbyWish, setNearbyWish] = useState(null) // { item, distanceM }
+  const [nearbyDismissed, setNearbyDismissed] = useState(false)
+  const [bannerVisible, setBannerVisible] = useState(false)
+  const hasCheckedNearbyRef = useRef(false)
+
   const requestedPhotosRef = useRef(new Set())
 
   const meals = useMemo(() =>
@@ -262,6 +277,33 @@ export default function MealMap() {
       }
     })
   }, [meals.length])
+
+  // 지도 화면 진입 시 현재 위치 기준 근처 위시 탐색 (1회)
+  useEffect(() => {
+    if (hasCheckedNearbyRef.current) return
+    const candidates = wishlist.filter(w => w.lat && w.lng && !w.visited)
+    if (candidates.length === 0) return
+    if (!navigator.geolocation) return
+
+    hasCheckedNearbyRef.current = true
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude, longitude } = pos.coords
+        let closest = null
+        let closestDist = Infinity
+        candidates.forEach(w => {
+          const d = haversineKm(latitude, longitude, w.lat, w.lng)
+          if (d < closestDist) { closestDist = d; closest = w }
+        })
+        if (closest && closestDist < 1) {
+          setNearbyWish({ item: closest, distanceM: Math.round(closestDist * 1000) })
+          setTimeout(() => setBannerVisible(true), 80)
+        }
+      },
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+    )
+  }, [wishlist])
 
   const filteredPins = activeTag ? pins.filter(p => p.meal.tag === activeTag) : pins
 
@@ -386,6 +428,47 @@ export default function MealMap() {
 
   return (
     <div className="relative">
+      {/* 근처 가고 싶은 곳 알림 배너 */}
+      {nearbyWish && !nearbyDismissed && (
+        <div
+          style={{
+            transform: bannerVisible ? 'translateY(0)' : 'translateY(-6px)',
+            opacity: bannerVisible ? 1 : 0,
+            transition: 'transform 0.35s ease, opacity 0.35s ease',
+          }}
+          className="mb-3"
+        >
+          <div className="flex items-center gap-3 px-4 py-3 bg-cream-100 border border-cream-300 rounded-2xl">
+            <div className="shrink-0 w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center">
+              <svg className="w-4 h-4 text-rose-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+            </div>
+            <div
+              className="flex-1 min-w-0 cursor-pointer"
+              onClick={() => {
+                setFlyTarget([nearbyWish.item.lat, nearbyWish.item.lng])
+                setBottomSheet({ type: 'wish', item: nearbyWish.item })
+              }}
+            >
+              <p className="text-[11px] text-warm-light font-medium mb-0.5">근처에 가고 싶은 곳이 있어요</p>
+              <p className="text-sm font-semibold text-warm-dark truncate">
+                {nearbyWish.item.name}
+                <span className="text-xs text-warm-light font-normal ml-1.5">약 {nearbyWish.distanceM}m</span>
+              </p>
+            </div>
+            <button
+              onClick={() => setNearbyDismissed(true)}
+              className="text-cream-400 hover:text-warm-light transition-colors p-1 shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 식사 태그 필터 + 위시리스트 토글 */}
       <div className="flex gap-2 mb-2 overflow-x-auto pb-1 scrollbar-hide">
         {FILTER_TAGS.map(tag => {
