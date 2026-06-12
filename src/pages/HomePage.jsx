@@ -92,8 +92,11 @@ export default function HomePage() {
   const [ratingFilter, setRatingFilter] = useState('')
   const [tagFilter, setTagFilter] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const sentinelRef = useRef(null)
   const requestedPhotosRef = useRef(new Set())
+  const searchInputRef = useRef(null)
   const today = useMemo(() => new Date(), [])
 
   const meals = currentSpace?.meals || []
@@ -148,6 +151,18 @@ export default function HomePage() {
   const visibleMeals = filteredMeals.slice(0, visibleCount)
   const hasMore = visibleCount < filteredMeals.length
 
+  // 검색 결과
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return []
+    return sortedMeals.filter(m =>
+      (m.title && m.title.toLowerCase().includes(q)) ||
+      (m.restaurantName && m.restaurantName.toLowerCase().includes(q)) ||
+      (m.review && m.review.toLowerCase().includes(q)) ||
+      (m.memo && m.memo.toLowerCase().includes(q))
+    )
+  }, [searchQuery, sortedMeals])
+
   // 필터 변경 시 페이지 리셋
   useEffect(() => { setVisibleCount(PAGE_SIZE) }, [ratingFilter, tagFilter])
 
@@ -160,6 +175,17 @@ export default function HomePage() {
       }
     })
   }, [visibleMeals])
+
+  // 검색 결과 사진 로드
+  useEffect(() => {
+    if (!searchQuery.trim()) return
+    searchResults.forEach(m => {
+      if (!m.photosLoaded && !requestedPhotosRef.current.has(m.id)) {
+        requestedPhotosRef.current.add(m.id)
+        loadMealPhotos(m.id)
+      }
+    })
+  }, [searchResults])
 
   // 무한 스크롤
   useEffect(() => {
@@ -204,18 +230,90 @@ export default function HomePage() {
   return (
     <>
       <header className="sticky top-0 z-40 bg-cream-50/90 backdrop-blur-sm border-b border-cream-200 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <h1 className="text-base font-semibold text-warm-dark">식탁 일기</h1>
-          <button
-            onClick={() => navigate('/spaces')}
-            className="text-xs text-warm-light bg-cream-200 px-3 py-1 rounded-full hover:bg-cream-300 transition-colors"
-          >
-            {currentSpace?.emoji} {currentSpace?.name}
-          </button>
-        </div>
+        {searchOpen ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setSearchOpen(false); setSearchQuery('') }}
+              className="p-1 -ml-1 text-warm-light hover:text-warm-brown transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="제목, 식당명, 한줄평, 메모 검색"
+              autoFocus
+              className="flex-1 bg-transparent text-sm text-warm-dark outline-none placeholder-cream-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-cream-400 hover:text-warm-light transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <h1 className="text-base font-semibold text-warm-dark">식탁 일기</h1>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="p-1.5 text-warm-light hover:text-warm-brown transition-colors"
+              >
+                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => navigate('/spaces')}
+                className="text-xs text-warm-light bg-cream-200 px-3 py-1 rounded-full hover:bg-cream-300 transition-colors"
+              >
+                {currentSpace?.emoji} {currentSpace?.name}
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
-      <div className="pb-28 pt-5">
+      {/* 검색 결과 화면 */}
+      {searchOpen && (
+        <div className="pb-28 pt-4 px-4">
+          {!searchQuery.trim() ? (
+            <div className="flex flex-col items-center justify-center text-center py-20">
+              <svg className="w-10 h-10 text-cream-300 mb-3" fill="none" stroke="currentColor" strokeWidth="1.4" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+              <p className="text-sm text-cream-400">검색어를 입력해주세요</p>
+              <p className="text-xs text-cream-300 mt-1">제목, 식당명, 한줄평, 메모</p>
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center py-20">
+              <p className="text-sm font-medium text-warm-dark mb-1">검색 결과가 없어요</p>
+              <p className="text-xs text-warm-light">다른 키워드로 검색해보세요</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-warm-light mb-3">
+                <span className="font-medium text-warm-brown">"{searchQuery}"</span> 검색 결과 {searchResults.length}건
+              </p>
+              <div className="space-y-3">
+                {searchResults.map(meal => (
+                  <FeedCard key={meal.id} meal={meal} onClick={() => setSelectedMeal(meal)} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className={`pb-28 pt-5 ${searchOpen ? 'hidden' : ''}`}>
         {/* 오늘 식사 기록 버튼 */}
         <div className="px-4 mb-5">
           <button

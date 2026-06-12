@@ -75,7 +75,7 @@ function MonthPicker({ current, onSelect, onClose }) {
 }
 
 // ─── CalendarGrid ─────────────────────────────────────────────────────────
-export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, filter = '전체' }) {
+export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, filter = '전체', repMeals = {} }) {
   const [current, setCurrent] = useState(new Date())
   const [showPicker, setShowPicker] = useState(false)
   const touchStartX = useRef(null)
@@ -190,7 +190,12 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
         {days.map((day, idx) => {
           const dayMeals = getMealsForDay(day)
           const hasMeals = dayMeals.length > 0
-          const thumbPhoto = getThumbUrl(dayMeals.find(m => m.photos?.[0])?.photos?.[0] || '')
+          const dateStr = format(day, 'yyyy-MM-dd')
+          const repMealId = repMeals[dateStr]
+          const repMeal = repMealId ? dayMeals.find(m => m.id === repMealId) : null
+          const displayMeal = repMeal || dayMeals.find(m => m.photos?.[0]) || dayMeals[0]
+          const thumbPhoto = displayMeal ? getThumbUrl(displayMeal.photos?.[0] || '') : ''
+          const displayTitle = displayMeal?.title || displayMeal?.restaurantName || '식사'
           const inMonth = isSameMonth(day, current)
           const today = isToday(day)
           const dayOfWeek = idx % 7
@@ -207,6 +212,12 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
                 ${!hasMeals ? 'hover:bg-cream-100' : ''}
               `}
             >
+              {/* 게시글 수 배지 */}
+              {hasMeals && dayMeals.length > 1 && (
+                <div className="absolute top-1 right-1 bg-warm-brown text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center z-20 leading-none">
+                  {dayMeals.length}
+                </div>
+              )}
               {thumbPhoto && (
                 <div className="absolute inset-0">
                   <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
@@ -246,7 +257,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
                       wordBreak: 'break-all',
                     }}
                   >
-                    {dayMeals.length > 1 ? `+${dayMeals.length}` : dayMeals[0].title || dayMeals[0].restaurantName || '식사'}
+                    {displayTitle}
                   </span>
                 </div>
               )}

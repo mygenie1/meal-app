@@ -34,16 +34,35 @@ function StatBanner({ space, displayMonth }) {
   )
 }
 
+function loadRepMeals(spaceId) {
+  if (!spaceId) return {}
+  try {
+    const raw = localStorage.getItem(`mealapp_rep_${spaceId}`)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+function saveRepMeals(spaceId, map) {
+  if (!spaceId) return
+  try { localStorage.setItem(`mealapp_rep_${spaceId}`, JSON.stringify(map)) } catch {}
+}
+
 export default function CalendarPage() {
   const { currentSpace, spaces, loadMealPhotos } = useApp()
   const [selectedDay, setSelectedDay] = useState(null)
   const [viewingMeal, setViewingMeal] = useState(null)
   const [displayMonth, setDisplayMonth] = useState(new Date())
   const [filter, setFilter] = useState('전체')
+  const [repMeals, setRepMeals] = useState({})
   const requestedPhotosRef = useRef(new Set())
   const navigate = useNavigate()
 
   const meals = currentSpace?.meals || []
+
+  // 스페이스 전환 시 대표 게시글 로드
+  useEffect(() => {
+    setRepMeals(loadRepMeals(currentSpace?.id))
+  }, [currentSpace?.id])
 
   // 현재 월 게시글 사진 자동 로딩
   useEffect(() => {
@@ -58,6 +77,12 @@ export default function CalendarPage() {
       } catch {}
     })
   }, [displayMonth, currentSpace?.id, currentSpace?.meals?.length])
+
+  function handleSetRepMeal(dateStr, mealId) {
+    const updated = { ...repMeals, [dateStr]: mealId }
+    setRepMeals(updated)
+    saveRepMeals(currentSpace?.id, updated)
+  }
 
   if (spaces.length === 0) {
     return (
@@ -123,7 +148,13 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        <CalendarGrid meals={meals} onDayClick={setSelectedDay} onMonthChange={setDisplayMonth} filter={filter} />
+        <CalendarGrid
+          meals={meals}
+          onDayClick={setSelectedDay}
+          onMonthChange={setDisplayMonth}
+          filter={filter}
+          repMeals={repMeals}
+        />
       </div>
 
       <Modal
@@ -136,6 +167,8 @@ export default function CalendarPage() {
             date={selectedDay}
             onClose={() => setSelectedDay(null)}
             onViewMeal={meal => setViewingMeal(meal)}
+            repMeals={repMeals}
+            onSetRepMeal={handleSetRepMeal}
           />
         )}
       </Modal>

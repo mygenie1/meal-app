@@ -294,6 +294,15 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     setForm(prev => ({ ...prev, photos: prev.photos.filter((_, j) => j !== i) }))
   }
 
+  function movePhoto(from, to) {
+    setForm(prev => {
+      const photos = [...prev.photos]
+      const [removed] = photos.splice(from, 1)
+      photos.splice(to, 0, removed)
+      return { ...prev, photos }
+    })
+  }
+
   function handleLocationChange(e) {
     setForm(prev => ({ ...prev, location: e.target.value, lat: null, lng: null }))
     setGeoStatus('idle')
@@ -504,11 +513,39 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
               {form.photos.map((p, i) => (
                 <div key={i} className="relative shrink-0 w-[100px] h-[100px] rounded-2xl overflow-hidden">
                   <img src={getThumbUrl(p) || p} alt={`사진 ${i + 1}`} className="w-full h-full object-cover" />
+                  {/* 삭제 버튼 */}
                   <button
                     type="button"
                     onClick={() => removePhoto(i)}
                     className="absolute top-1.5 right-1.5 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-black/70 transition-colors"
                   >×</button>
+                  {/* 순서 이동 버튼 */}
+                  {form.photos.length > 1 && (
+                    <div className="absolute bottom-1.5 left-0 right-0 flex justify-center gap-1">
+                      {i > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => movePhoto(i, i - 1)}
+                          className="bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-black/70 transition-colors"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                      )}
+                      {i < form.photos.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => movePhoto(i, i + 1)}
+                          className="bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-black/70 transition-colors"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
               {form.photos.length < 5 && (
