@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { format, startOfMonth, endOfMonth, isSameMonth } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useApp } from '../context/AppContext'
 import Modal from '../components/common/Modal'
 import CalendarGrid from '../components/Calendar/CalendarGrid'
 import DayDetail from '../components/MealRecord/DayDetail'
+import MealDetailModal from '../components/MealRecord/MealDetailModal'
 import { useNavigate } from 'react-router-dom'
 
 function StatBanner({ space, displayMonth }) {
@@ -34,12 +35,29 @@ function StatBanner({ space, displayMonth }) {
 }
 
 export default function CalendarPage() {
-  const { currentSpace, spaces } = useApp()
+  const { currentSpace, spaces, loadMealPhotos } = useApp()
   const [selectedDay, setSelectedDay] = useState(null)
+  const [viewingMeal, setViewingMeal] = useState(null)
   const [displayMonth, setDisplayMonth] = useState(new Date())
+  const [filter, setFilter] = useState('전체')
+  const requestedPhotosRef = useRef(new Set())
   const navigate = useNavigate()
 
   const meals = currentSpace?.meals || []
+
+  // 현재 월 게시글 사진 자동 로딩
+  useEffect(() => {
+    if (!currentSpace) return
+    ;(currentSpace.meals || []).forEach(m => {
+      if (!m.date || m.photosLoaded || requestedPhotosRef.current.has(m.id)) return
+      try {
+        if (isSameMonth(new Date(m.date), displayMonth)) {
+          requestedPhotosRef.current.add(m.id)
+          loadMealPhotos(m.id)
+        }
+      } catch {}
+    })
+  }, [displayMonth, currentSpace?.id, currentSpace?.meals?.length])
 
   if (spaces.length === 0) {
     return (
@@ -87,7 +105,25 @@ export default function CalendarPage() {
         {/* 월간 통계 배너 */}
         {currentSpace && <StatBanner space={currentSpace} displayMonth={displayMonth} />}
 
-        <CalendarGrid meals={meals} onDayClick={setSelectedDay} onMonthChange={setDisplayMonth} />
+        {/* 태그 필터 드롭다운 */}
+        <div className="px-4 mb-2 flex items-center justify-end">
+          <div className="relative">
+            <select
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              className="text-xs border border-cream-200 rounded-xl pl-3 pr-7 py-1.5 bg-cream-50 text-warm-dark focus:outline-none focus:border-warm-light appearance-none cursor-pointer"
+            >
+              {['전체', '집밥', '외식', '카페', '배달'].map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-cream-400 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+
+        <CalendarGrid meals={meals} onDayClick={setSelectedDay} onMonthChange={setDisplayMonth} filter={filter} />
       </div>
 
       <Modal
@@ -99,9 +135,17 @@ export default function CalendarPage() {
           <DayDetail
             date={selectedDay}
             onClose={() => setSelectedDay(null)}
+            onViewMeal={meal => setViewingMeal(meal)}
           />
         )}
       </Modal>
+
+      {viewingMeal && (
+        <MealDetailModal
+          meal={viewingMeal}
+          onClose={() => setViewingMeal(null)}
+        />
+      )}
     </>
   )
 }

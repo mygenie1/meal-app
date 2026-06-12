@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import StarRating from '../common/StarRating'
 import { useApp } from '../../context/AppContext'
-import { uploadPhotoWithThumbnail } from '../../lib/uploadPhoto'
+import { uploadPhotoWithThumbnail, getThumbUrl } from '../../lib/uploadPhoto'
 
 // ─── 이미지 압축 (Canvas, max 1200px, JPEG 0.82) ─────────────────────────
 // 결과물은 base64 — 로컬 미리보기용. 실제 저장 시 Storage에 업로드 후 URL로 교체
@@ -503,7 +503,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
             <div className="flex gap-2 overflow-x-auto pb-1">
               {form.photos.map((p, i) => (
                 <div key={i} className="relative shrink-0 w-[100px] h-[100px] rounded-2xl overflow-hidden">
-                  <img src={p} alt={`사진 ${i + 1}`} className="w-full h-full object-cover" />
+                  <img src={getThumbUrl(p) || p} alt={`사진 ${i + 1}`} className="w-full h-full object-cover" />
                   <button
                     type="button"
                     onClick={() => removePhoto(i)}

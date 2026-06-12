@@ -75,7 +75,7 @@ function MonthPicker({ current, onSelect, onClose }) {
 }
 
 // ─── CalendarGrid ─────────────────────────────────────────────────────────
-export default function CalendarGrid({ meals = [], onDayClick, onMonthChange }) {
+export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, filter = '전체' }) {
   const [current, setCurrent] = useState(new Date())
   const [showPicker, setShowPicker] = useState(false)
   const touchStartX = useRef(null)
@@ -97,7 +97,8 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange }) 
   }
 
   function getMealsForDay(date) {
-    return meals.filter(m => isSameDay(new Date(m.date), date))
+    const dayMeals = meals.filter(m => isSameDay(new Date(m.date), date))
+    return filter && filter !== '전체' ? dayMeals.filter(m => m.tag === filter) : dayMeals
   }
 
   function handleTouchStart(e) {

@@ -7,7 +7,7 @@ import MealForm from './MealForm'
 
 const MEAL_TIME_ORDER = { 아침: 0, 점심: 1, 저녁: 2 }
 
-export default function DayDetail({ date, onClose }) {
+export default function DayDetail({ date, onClose, onViewMeal }) {
   const { currentSpace, addMeal, updateMeal, deleteMeal, loadMealPhotos } = useApp()
 
   const dateStr = format(date, 'yyyy-MM-dd')
@@ -117,6 +117,7 @@ export default function DayDetail({ date, onClose }) {
           <MealCard
             key={meal.id}
             meal={meal}
+            onView={onViewMeal ? () => onViewMeal(meal) : undefined}
             onEdit={() => handleEditClick(meal)}
             onDelete={() => handleDelete(meal.id)}
           />
