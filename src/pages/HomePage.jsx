@@ -9,6 +9,7 @@ import DayDetail from '../components/MealRecord/DayDetail'
 import PhotoGallery from '../components/common/PhotoGallery'
 import { getOriginalUrl } from '../lib/uploadPhoto'
 import AuthorBadge from '../components/common/AuthorBadge'
+import { linkify } from '../lib/linkify'
 import NotificationPanel, { NotificationBell } from '../components/common/NotificationPanel'
 
 const TAG_STYLES = {
@@ -100,6 +101,11 @@ function FeedCard({ meal, onClick }) {
             </div>
           )}
         </div>
+        {meal.review && (
+          <p className="text-xs text-warm-light mt-1.5 line-clamp-2 leading-relaxed break-words">
+            {linkify(meal.review)}
+          </p>
+        )}
         <AuthorBadge meal={meal} className="mt-2" />
       </div>
     </button>

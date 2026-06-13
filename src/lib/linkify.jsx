@@ -16,6 +16,7 @@ export function linkify(text) {
           target="_blank"
           rel="noopener noreferrer"
           className="text-warm-brown underline break-all"
+          onClick={e => e.stopPropagation()}
         >
           {part}
         </a>
