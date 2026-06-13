@@ -80,8 +80,9 @@ function MealPinCard({ meal, liveMeal, onClick }) {
     : display.rating || 0
   const ratingCount = mealRatings.length
   return (
-    <div
-      className="shrink-0 w-52 rounded-2xl border border-cream-200 bg-white overflow-hidden active:scale-[0.98] transition-transform cursor-pointer"
+    <button
+      type="button"
+      className="shrink-0 w-52 rounded-2xl border border-cream-200 bg-white overflow-hidden active:scale-[0.98] transition-transform text-left"
       style={{ scrollSnapAlign: 'start' }}
       onClick={onClick}
     >
@@ -110,7 +111,7 @@ function MealPinCard({ meal, liveMeal, onClick }) {
         )}
         <p className="text-[10px] text-cream-400 mt-1.5">{display.date}</p>
       </div>
-    </div>
+    </button>
   )
 }
 
