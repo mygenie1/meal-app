@@ -647,8 +647,9 @@ export default function MealMap({ onViewMeal }) {
         if (destroyed || kakaoMapRef.current) return
         try {
           const center = new window.kakao.maps.LatLng(lat, lng)
-          const map = new window.kakao.maps.Map(mapContainer, { center, level: 4 })
+          const map = new window.kakao.maps.Map(mapContainer, { center, level: 5 })
           kakaoMapRef.current = map
+          window.kakao.maps.event.trigger(map, 'resize')
           setMapReady(true)
         } catch (err) {
           console.error('[MealMap] 초기화 실패:', err)
@@ -781,7 +782,13 @@ export default function MealMap({ onViewMeal }) {
       const isSelected = key === selectedClusterKey
       const el = document.createElement('div')
       el.innerHTML = makePinHTML(TAG_COLORS[cluster.meals[0].tag] || '#a07850', cluster.meals.length, isSelected)
-      el.addEventListener('click', () => setSelectedCluster(cluster))
+      el.addEventListener('click', () => {
+        setSelectedCluster(cluster)
+        if (kakaoMapRef.current) {
+          kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(cluster.coords[0], cluster.coords[1]))
+          kakaoMapRef.current.setLevel(3)
+        }
+      })
       const overlay = new window.kakao.maps.CustomOverlay({
         position: new window.kakao.maps.LatLng(cluster.coords[0], cluster.coords[1]),
         content: el,
@@ -809,11 +816,11 @@ export default function MealMap({ onViewMeal }) {
     userOverlayRef.current = overlay
   }, [userLocation, mapReady])
 
-  // ── 지도 이동 ─────────────────────────────────────────────────
+  // ── 지도 이동 (현재 위치 버튼 → level 5 유지) ──────────────────
   useEffect(() => {
     if (!flyTarget || !mapReady || !kakaoMapRef.current) return
     kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(flyTarget[0], flyTarget[1]))
-    kakaoMapRef.current.setLevel(4)
+    kakaoMapRef.current.setLevel(5)
     setFlyTarget(null)
   }, [flyTarget, mapReady])
 
@@ -836,7 +843,7 @@ export default function MealMap({ onViewMeal }) {
   useEffect(() => {
     if (!wishFlyTarget || !wishMapReady || !wishKakaoMapRef.current) return
     wishKakaoMapRef.current.panTo(new window.kakao.maps.LatLng(wishFlyTarget[0], wishFlyTarget[1]))
-    wishKakaoMapRef.current.setLevel(4)
+    wishKakaoMapRef.current.setLevel(5)
     setWishFlyTarget(null)
   }, [wishFlyTarget, wishMapReady])
 
@@ -1117,7 +1124,7 @@ export default function MealMap({ onViewMeal }) {
           </div>
 
           {/* 스크롤 가능 영역 — 게시글 목록 */}
-          <div className="flex-1 overflow-y-auto px-4 pt-3 pb-28">
+          <div className="flex-1 overflow-y-auto px-4 pt-3 pb-20 border-t border-cream-200">
             {selectedCluster && (
               <div className="bg-white rounded-2xl border border-cream-200 p-4 mb-3">
                 <div className="flex items-center justify-between mb-3">
@@ -1200,7 +1207,7 @@ export default function MealMap({ onViewMeal }) {
           )}
 
           {/* 스크롤 가능 영역 — 위시리스트 목록 */}
-          <div className="flex-1 overflow-y-auto px-4 pb-28">
+          <div className="flex-1 overflow-y-auto px-4 pb-20 border-t border-cream-200">
             <button onClick={handleOpenAdd}
               className="w-full py-3 rounded-2xl border-2 border-dashed border-cream-300 text-warm-light text-sm font-medium hover:border-warm-brown hover:text-warm-brown transition-colors active:scale-[0.98] flex items-center justify-center gap-2 mb-3"
             >
