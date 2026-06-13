@@ -2,14 +2,16 @@ import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import Modal from '../common/Modal'
 import BulkPhotoUpload from './BulkPhotoUpload'
+import SettingsModal from './SettingsModal'
 
 const EMOJIS = ['🍽️', '🍜', '🍕', '🍱', '🍰', '☕', '🥗', '🍣', '🌮', '🥘']
 
 export default function SpaceManager() {
-  const { user, signOut, spaces, currentSpace, createSpace, switchSpace, leaveSpace, joinByCode, claimSpace } = useApp()
+  const { user, spaces, currentSpace, createSpace, switchSpace, leaveSpace, joinByCode, claimSpace } = useApp()
   const [showCreate, setShowCreate] = useState(false)
   const [showJoin, setShowJoin] = useState(false)
   const [showBulkUpload, setShowBulkUpload] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [name, setName] = useState('')
   const [emoji, setEmoji] = useState('🍽️')
   const [code, setCode] = useState('')
@@ -61,10 +63,6 @@ export default function SpaceManager() {
     setClaimingId(null)
   }
 
-  function handleSignOut() {
-    if (confirm('로그아웃 할까요?')) signOut()
-  }
-
   const displayName = user?.user_metadata?.name
     || user?.user_metadata?.full_name
     || user?.email
@@ -72,28 +70,28 @@ export default function SpaceManager() {
 
   return (
     <div className="space-y-4">
-      {/* 로그인 정보 */}
+      {/* 프로필 — 클릭하면 설정 열림 */}
       {user && (
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowSettings(true)}
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-2xl bg-white border border-cream-200 hover:border-cream-300 hover:bg-cream-50 active:scale-[0.99] transition-all"
+        >
+          <div className="flex items-center gap-2.5">
             {user.user_metadata?.avatar_url ? (
-              <img src={user.user_metadata.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+              <img src={user.user_metadata.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
             ) : (
-              <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: '#FEE500' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="#3C1E1E">
-                  <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.79 1.63 5.24 4.1 6.73l-1.05 3.85a.25.25 0 0 0 .38.27L9.7 19.2a11.2 11.2 0 0 0 2.3.24C17.523 19.44 22 15.963 22 11.64 22 7.317 17.523 3 12 3z"/>
+              <div className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center" style={{ background: '#FEE500' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#3C1E1E">
+                  <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.79 1.63 5.24 4.1 6.73l-1.05 3.85a.25.25 0 0 0 .38.27L9.7 19.2a11.2 11.2 0 0 0 2.3.24C17.523 19.44 22 15.963 22 11.64 22 7.317 17.523 3 12 3z" />
                 </svg>
               </div>
             )}
-            <p className="text-xs text-warm-light truncate max-w-[160px]">{displayName}</p>
+            <p className="text-sm font-medium text-warm-dark truncate max-w-[180px]">{displayName}</p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="text-xs text-warm-light hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-50"
-          >
-            로그아웃
-          </button>
-        </div>
+          <svg className="w-4 h-4 text-cream-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       )}
 
       {/* 현재 스페이스 */}
@@ -295,6 +293,9 @@ export default function SpaceManager() {
       <Modal isOpen={showBulkUpload} onClose={() => setShowBulkUpload(false)} title="사진 일괄 등록">
         <BulkPhotoUpload onClose={() => setShowBulkUpload(false)} />
       </Modal>
+
+      {/* 설정 모달 */}
+      <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   )
 }

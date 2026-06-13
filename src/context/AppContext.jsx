@@ -441,6 +441,14 @@ export function AppProvider({ children }) {
     }))
   }
 
+  // 프로필 업데이트 (닉네임 등 user_metadata)
+  async function updateProfile(updates) {
+    const { data, error } = await supabase.auth.updateUser({ data: updates })
+    if (error) { console.error(error); return false }
+    setUser(data.user)
+    return true
+  }
+
   // 카카오 로그인
   async function signIn() {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -827,6 +835,7 @@ export function AppProvider({ children }) {
         authLoading,
         signIn,
         signOut,
+        updateProfile,
         spaces,
         currentSpace,
         loading,
