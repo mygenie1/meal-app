@@ -300,7 +300,9 @@ export function AppProvider({ children }) {
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
         ({ new: newRow }) => {
-          if (!destroyed) setNotifications(prev => [newRow, ...prev].slice(0, 50))
+          if (!destroyed && newRow?.user_id === user.id) {
+            setNotifications(prev => [newRow, ...prev].slice(0, 50))
+          }
         }
       )
       .subscribe()

@@ -8,6 +8,7 @@ import MealForm from './MealForm'
 import PhotoGallery from '../common/PhotoGallery'
 import { getOriginalUrl } from '../../lib/uploadPhoto'
 import AuthorBadge from '../common/AuthorBadge'
+import { sendNotification, buildFromUser } from '../../lib/notify'
 
 const TAG_STYLES = {
   집밥: 'bg-green-50 text-green-700 border-green-200',
@@ -88,33 +89,16 @@ function RatingsSection({ mealId }) {
       await deleteRating(mealId)
     } else {
       await addOrUpdateRating(mealId, value)
-      // 식사 작성자에게 별점 알림 (내 게시글이 아닐 때만)
-      try {
-        const meal = spaces?.flatMap(s => s.meals).find(m => m.id === mealId)
-        console.log('[RatingsSection] 별점 알림 체크:', { mealId, mealUserId: meal?.userId, myId: user.id })
-        if (meal?.userId && meal.userId !== user.id) {
-          const fromNickname = user.user_metadata?.name || user.user_metadata?.full_name || '멤버'
-          const payload = {
-            user_id: meal.userId,
-            space_id: currentSpace?.id || null,
-            meal_id: mealId,
-            from_user_id: user.id,
-            from_nickname: fromNickname,
-            from_avatar_url: user.user_metadata?.avatar_url || '',
-            type: 'new_rating',
-            message: `${fromNickname}님이 별점 ${value}점을 남겼어요`,
-            is_read: false,
-          }
-          console.log('[RatingsSection] notifications insert 시도:', payload)
-          const { error: notifErr } = await supabase.from('notifications').insert(payload)
-          if (notifErr) console.error('[RatingsSection] 알림 생성 실패:', notifErr)
-          else console.log('[RatingsSection] 알림 insert 성공')
-        } else {
-          console.log('[RatingsSection] 알림 조건 미충족 → 생략 (내 게시글이거나 userId 없음)')
-        }
-      } catch (e) {
-        console.error('[RatingsSection] 알림 처리 중 오류:', e)
-      }
+      const fromUser = buildFromUser(user)
+      const meal = spaces?.flatMap(s => s.meals).find(m => m.id === mealId)
+      await sendNotification({
+        toUserId: meal?.userId,
+        spaceId: currentSpace?.id,
+        mealId,
+        fromUser,
+        type: 'new_rating',
+        message: `${fromUser?.nickname || '멤버'}님이 별점 ${value}점을 남겼어요`,
+      })
     }
     setSaving(false)
   }
@@ -301,32 +285,16 @@ export default function MealDetailModal({ meal, onClose }) {
       setComments(prev => prev.find(c => c.id === data.id) ? prev : [...prev, data])
       setCommentText('')
       setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
-      // 식사 작성자에게 알림 (내 게시글이 아닐 때만)
-      try {
-        console.log('[댓글] 알림 체크:', { mealUserId: liveMeal.userId, myId: user?.id })
-        if (liveMeal.userId && liveMeal.userId !== user?.id) {
-          const fromNickname = user?.user_metadata?.name || user?.user_metadata?.full_name || '멤버'
-          const payload = {
-            user_id: liveMeal.userId,
-            space_id: currentSpace?.id || null,
-            meal_id: liveMeal.id,
-            from_user_id: user?.id || null,
-            from_nickname: fromNickname,
-            from_avatar_url: user?.user_metadata?.avatar_url || '',
-            type: 'new_comment',
-            message: `${fromNickname}님이 댓글을 남겼어요: ${trimmed.length > 20 ? trimmed.slice(0, 20) + '…' : trimmed}`,
-            is_read: false,
-          }
-          console.log('[댓글] notifications insert 시도:', payload)
-          const { error: notifErr } = await supabase.from('notifications').insert(payload)
-          if (notifErr) console.error('[handleAddComment] 알림 생성 실패:', notifErr)
-          else console.log('[댓글] 알림 insert 성공')
-        } else {
-          console.log('[댓글] 알림 조건 미충족 → 생략 (내 게시글이거나 userId 없음)')
-        }
-      } catch (e) {
-        console.error('[handleAddComment] 알림 처리 중 오류:', e)
-      }
+      const fromUser = buildFromUser(user)
+      const preview = trimmed.length > 20 ? trimmed.slice(0, 20) + '…' : trimmed
+      await sendNotification({
+        toUserId: liveMeal.userId,
+        spaceId: currentSpace?.id,
+        mealId: liveMeal.id,
+        fromUser,
+        type: 'new_comment',
+        message: `${fromUser?.nickname || '멤버'}님이 댓글을 남겼어요: ${preview}`,
+      })
     }
   }
 
