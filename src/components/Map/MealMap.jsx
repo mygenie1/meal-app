@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useApp } from '../../context/AppContext'
 import { getThumbUrl, uploadPhotoToStorage } from '../../lib/uploadPhoto'
-import MealDetailModal from '../MealRecord/MealDetailModal'
 import Modal from '../common/Modal'
 import MealForm from '../MealRecord/MealForm'
 
@@ -255,7 +254,7 @@ function WishListCard({ item, onEdit, onDelete, onVisit, onViewOnMap, highlighte
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────
-export default function MealMap() {
+export default function MealMap({ onViewMeal }) {
   const { currentSpace, addMeal, addWishlistItem, updateWishlistItem, deleteWishlistItem, cacheGeocoords, loadMealPhotos } = useApp()
 
   const [activeTab, setActiveTab] = useState('map')
@@ -273,7 +272,6 @@ export default function MealMap() {
   const [loading, setLoading] = useState(false)
   const [activeFilters, setActiveFilters] = useState(new Set(['전체']))
   const [selectedCluster, setSelectedCluster] = useState(null)
-  const [viewingMeal, setViewingMeal] = useState(null)
   const [userLocation, setUserLocation] = useState(null)
   const [flyTarget, setFlyTarget] = useState(null)
   const [locating, setLocating] = useState(false)
@@ -316,7 +314,7 @@ export default function MealMap() {
   const unvisited = wishlist.filter(w => !w.visited)
   const visited = wishlist.filter(w => w.visited)
   const uncachedKey = meals.filter(m => !m.lat || !m.lng).map(m => m.id).join(',')
-  const wishlistWithCoords = useMemo(() => wishlist.filter(w => w.lat && w.lng), [wishlist])
+  const wishlistWithCoords = useMemo(() => wishlist.filter(w => w.lat && w.lng && !w.visited), [wishlist])
 
   const activeMealTags = [...activeFilters].filter(f => f !== '전체')
   const filteredPins = activeFilters.has('전체') ? pins
@@ -829,7 +827,7 @@ export default function MealMap() {
                   const liveMeal = currentSpace?.meals.find(m => m.id === meal.id) ?? meal
                   return (
                     <MealPinCard key={meal.id} meal={meal} liveMeal={liveMeal}
-                      onClick={() => setViewingMeal(liveMeal)}
+                      onClick={() => onViewMeal?.(liveMeal)}
                     />
                   )
                 })}
@@ -965,10 +963,6 @@ export default function MealMap() {
         )}
       </Modal>
 
-      {/* ── 식사 상세 모달 ── */}
-      {viewingMeal && (
-        <MealDetailModal meal={viewingMeal} onClose={() => setViewingMeal(null)} />
-      )}
     </div>
   )
 }

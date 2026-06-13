@@ -1,6 +1,10 @@
+import { useState } from 'react'
 import MealMap from '../components/Map/MealMap'
+import MealDetailModal from '../components/MealRecord/MealDetailModal'
 
 export default function MapPage() {
+  const [viewingMeal, setViewingMeal] = useState(null)
+
   return (
     <>
       <header className="sticky top-0 z-40 bg-cream-50/90 backdrop-blur-sm border-b border-cream-200 px-4 py-3">
@@ -9,8 +13,11 @@ export default function MapPage() {
         </div>
       </header>
       <div className="px-4 pb-28 pt-4">
-        <MealMap />
+        <MealMap onViewMeal={setViewingMeal} />
       </div>
+      {viewingMeal && (
+        <MealDetailModal meal={viewingMeal} onClose={() => setViewingMeal(null)} />
+      )}
     </>
   )
 }
