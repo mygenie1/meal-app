@@ -8,6 +8,7 @@ import MapPage from './pages/MapPage'
 import IngredientsPage from './pages/IngredientsPage'
 import SpacesPage from './pages/SpacesPage'
 import LoginPage from './pages/LoginPage'
+import InstallBanner from './components/common/InstallBanner'
 
 function OfflineBanner() {
   return (
@@ -130,6 +131,7 @@ function AppContent() {
         </Routes>
       </main>
       <BottomNav />
+      <InstallBanner />
     </div>
   )
 }

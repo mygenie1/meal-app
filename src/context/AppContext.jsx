@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { requestFCMToken } from '../lib/firebase'
 
 const AppContext = createContext(null)
 
@@ -125,6 +126,7 @@ export function AppProvider({ children }) {
         if (!hasBootedRef.current) {
           hasBootedRef.current = true
           boot(0, currentUser)
+          registerFCMToken(currentUser.id)
         }
       } else if (event === 'INITIAL_SESSION' && !currentUser) {
         setLoading(false)
@@ -312,6 +314,20 @@ export function AppProvider({ children }) {
 
   const MAX_RETRIES = 3
   const RETRY_DELAYS = [1500, 3000, 5000]
+
+  // FCM 토큰 등록 — 로그인 직후 한 번만 시도 (알림 권한 이미 허용된 경우 자동 등록)
+  async function registerFCMToken(userId) {
+    if (!userId) return
+    try {
+      const token = await requestFCMToken()
+      if (!token) return
+      await supabase
+        .from('fcm_tokens')
+        .upsert({ user_id: userId, token }, { onConflict: 'user_id,token' })
+    } catch (e) {
+      console.error('[FCM] 토큰 등록 오류:', e)
+    }
+  }
 
   // Phase 1: spaces만 빠르게 조회 — DB 웜업 후 앱 즉시 오픈
   async function boot(attempt = 0, currentUser = null) {
