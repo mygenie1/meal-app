@@ -4,10 +4,10 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js')
 
 firebase.initializeApp({
-  apiKey: 'REPLACE_WITH_YOUR_API_KEY',
-  projectId: 'REPLACE_WITH_YOUR_PROJECT_ID',
-  messagingSenderId: 'REPLACE_WITH_YOUR_SENDER_ID',
-  appId: 'REPLACE_WITH_YOUR_APP_ID',
+  apiKey: 'AIzaSyBdt2CKTJp5t1atJ7aFe29KDGVJ7Vw7eOo',
+  projectId: 'siktak-ilgi',
+  messagingSenderId: '583553438722',
+  appId: '1:583553438722:web:e3ab666205d60dfb09031b',
 })
 
 const messaging = firebase.messaging()
