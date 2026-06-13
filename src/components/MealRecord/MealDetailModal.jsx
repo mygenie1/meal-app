@@ -207,11 +207,12 @@ export default function MealDetailModal({ meal, onClose }) {
     let destroyed = false
 
     async function fetchComments() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('comments')
-        .select('*')
+        .select('id, meal_id, user_id, nickname, avatar_url, content, created_at')
         .eq('meal_id', meal.id)
         .order('created_at')
+      if (error) console.error('[댓글 로딩] 오류:', error)
       if (!destroyed) {
         setComments(data || [])
         setCommentsLoaded(true)

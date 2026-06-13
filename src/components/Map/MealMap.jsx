@@ -174,7 +174,8 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
     if (!item?.id) return
     let destroyed = false
 
-    supabase.from('comments').select('*').eq('wishlist_id', item.id).order('created_at').then(({ data }) => {
+    supabase.from('comments').select('id, wishlist_id, user_id, nickname, avatar_url, content, created_at').eq('wishlist_id', item.id).order('created_at').then(({ data, error }) => {
+      if (error) console.error('[위시리스트 댓글 로딩] 오류:', error)
       if (!destroyed) { setComments(data || []); setCommentsLoaded(true) }
     })
 
