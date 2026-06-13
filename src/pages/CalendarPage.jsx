@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { format, startOfMonth, endOfMonth, isSameMonth } from 'date-fns'
+import { format, startOfMonth, endOfMonth, isSameMonth, addMonths, subMonths } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useApp } from '../context/AppContext'
 import Modal from '../components/common/Modal'
@@ -64,13 +64,20 @@ export default function CalendarPage() {
     setRepMeals(loadRepMeals(currentSpace?.id))
   }, [currentSpace?.id])
 
-  // 현재 월 게시글 사진 자동 로딩
+  // 현재 달 ±1달 사진 미리 로딩 (총 3달치)
   useEffect(() => {
     if (!currentSpace) return
+    const prev = subMonths(displayMonth, 1)
+    const next = addMonths(displayMonth, 1)
     ;(currentSpace.meals || []).forEach(m => {
       if (!m.date || m.photosLoaded || requestedPhotosRef.current.has(m.id)) return
       try {
-        if (isSameMonth(new Date(m.date), displayMonth)) {
+        const mealDate = new Date(m.date)
+        if (
+          isSameMonth(mealDate, displayMonth) ||
+          isSameMonth(mealDate, prev) ||
+          isSameMonth(mealDate, next)
+        ) {
           requestedPhotosRef.current.add(m.id)
           loadMealPhotos(m.id)
         }

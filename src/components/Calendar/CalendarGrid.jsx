@@ -79,6 +79,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
   const [current, setCurrent] = useState(new Date())
   const [showPicker, setShowPicker] = useState(false)
   const touchStartX = useRef(null)
+  const touchStartY = useRef(null)
 
   useEffect(() => {
     onMonthChange?.(current)
@@ -104,15 +105,19 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
   function handleTouchStart(e) {
     if (showPicker) return
     touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
   }
 
   function handleTouchEnd(e) {
     if (showPicker || touchStartX.current === null) return
     const dx = e.changedTouches[0].clientX - touchStartX.current
-    if (Math.abs(dx) < 50) return
+    const dy = e.changedTouches[0].clientY - touchStartY.current
+    touchStartX.current = null
+    touchStartY.current = null
+    // 수평 이동이 50px 이상이고 수직 이동보다 커야 스와이프로 인식
+    if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return
     if (dx < 0) setCurrent(prev => addMonths(prev, 1))
     else setCurrent(prev => subMonths(prev, 1))
-    touchStartX.current = null
   }
 
   function handlePickerSelect(date) {
