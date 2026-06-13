@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { getThumbUrl, uploadPhotoToStorage } from '../../lib/uploadPhoto'
 import Modal from '../common/Modal'
 import MealForm from '../MealRecord/MealForm'
+import { linkify } from '../../lib/linkify'
 
 // ── 상수 ──────────────────────────────────────────────────────
 const TAG_COLORS = { 집밥: '#86efac', 외식: '#fcd34d', 카페: '#f9a8d4', 배달: '#93c5fd' }
@@ -108,7 +109,7 @@ function CommentItem({ comment, currentUserId, onDelete }) {
             </button>
           )}
         </div>
-        <p className="text-sm text-warm-dark leading-relaxed mt-0.5 break-words">{comment.content}</p>
+        <p className="text-sm text-warm-dark leading-relaxed mt-0.5 break-words">{linkify(comment.content)}</p>
       </div>
     </div>
   )
