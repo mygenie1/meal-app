@@ -286,7 +286,6 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <h1 className="text-base font-semibold text-warm-dark">식탁 일기</h1>
             <div className="flex items-center gap-2">
-              <NotificationBell onClick={() => setNotifOpen(true)} />
               <button
                 onClick={() => setSearchOpen(true)}
                 className="p-1.5 text-warm-light hover:text-warm-brown transition-colors"
@@ -295,6 +294,7 @@ export default function HomePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
                 </svg>
               </button>
+              <NotificationBell onClick={() => setNotifOpen(true)} />
               <button
                 onClick={() => navigate('/spaces')}
                 className="text-xs text-warm-light bg-cream-200 px-3 py-1 rounded-full hover:bg-cream-300 transition-colors"

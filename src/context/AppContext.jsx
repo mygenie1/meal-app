@@ -99,6 +99,12 @@ export function AppProvider({ children }) {
   const [ratingsMap, setRatingsMap] = useState({})
   // 현재 유저의 알림 목록 (최신 50건)
   const [notifications, setNotifications] = useState([])
+  const [notifEnabled, setNotifEnabled] = useState(() => localStorage.getItem('notif_enabled') !== 'false')
+
+  function setNotifEnabledPref(val) {
+    setNotifEnabled(val)
+    localStorage.setItem('notif_enabled', val ? 'true' : 'false')
+  }
 
   const currentSpace = spaces.find(s => s.id === currentSpaceId) || null
 
@@ -1012,8 +1018,10 @@ export function AppProvider({ children }) {
         ratingsMap,
         addOrUpdateRating,
         deleteRating,
-        notifications,
-        unreadCount: notifications.filter(n => !n.is_read).length,
+        notifications: notifEnabled ? notifications : [],
+        unreadCount: notifEnabled ? notifications.filter(n => !n.is_read).length : 0,
+        notifEnabled,
+        setNotifEnabledPref,
         markNotificationRead,
         markAllNotificationsRead,
       }}

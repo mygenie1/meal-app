@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext'
 import { version } from '../../../package.json'
 
 export default function SettingsModal({ isOpen, onClose }) {
-  const { user, signOut, updateProfile } = useApp()
+  const { user, signOut, updateProfile, notifEnabled, setNotifEnabledPref } = useApp()
 
   const [nickname, setNickname] = useState('')
   const [saving, setSaving] = useState(false)
@@ -111,21 +111,24 @@ export default function SettingsModal({ isOpen, onClose }) {
           <p className="text-[11px] font-semibold text-warm-light tracking-widest uppercase mb-3">앱 설정</p>
           <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden divide-y divide-cream-100">
 
-            {/* 알림 (준비 중) */}
+            {/* 알림 토글 */}
             <div className="flex items-center justify-between px-4 py-3.5">
               <div className="flex items-center gap-3">
-                <svg className="w-4 h-4 text-cream-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+                <svg className={`w-4 h-4 shrink-0 ${notifEnabled ? 'text-warm-brown' : 'text-cream-400'}`} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
                 <div>
-                  <p className="text-sm text-warm-dark">알림 설정</p>
-                  <p className="text-[11px] text-cream-400">준비 중</p>
+                  <p className="text-sm text-warm-dark">알림</p>
+                  <p className="text-[11px] text-cream-400">{notifEnabled ? '새 기록·댓글·별점 알림 받는 중' : '알림 꺼짐'}</p>
                 </div>
               </div>
-              {/* 비활성 토글 */}
-              <div className="w-10 h-6 rounded-full bg-cream-200 relative opacity-40 shrink-0 cursor-not-allowed">
-                <div className="absolute left-1 top-1 w-4 h-4 rounded-full bg-white shadow-sm" />
-              </div>
+              <button
+                onClick={() => setNotifEnabledPref(!notifEnabled)}
+                className={`w-10 h-6 rounded-full relative shrink-0 transition-colors duration-200 ${notifEnabled ? 'bg-warm-brown' : 'bg-cream-200'}`}
+                aria-pressed={notifEnabled}
+              >
+                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${notifEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+              </button>
             </div>
 
             {/* 앱 버전 */}
