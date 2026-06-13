@@ -95,6 +95,8 @@ export function AppProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [retryAttempt, setRetryAttempt] = useState(0) // 0 = 첫 시도, 1~2 = 재시도 중
+  // mealId → [{ id, user_id, nickname, rating }]
+  const [ratingsMap, setRatingsMap] = useState({})
 
   const currentSpace = spaces.find(s => s.id === currentSpaceId) || null
 
@@ -381,6 +383,26 @@ export function AppProvider({ children }) {
         } catch {}
 
         console.log(`[loadAllSpaceData] space=${space.id} DB 조회 완료, meals수=${mealsData?.length}`)
+
+        // 별점 로드 (테이블 미존재 시 무시)
+        const mealIds = (mealsData || []).map(r => r.id)
+        if (mealIds.length > 0) {
+          try {
+            const { data: ratingsData } = await supabase
+              .from('ratings')
+              .select('id, meal_id, user_id, nickname, rating')
+              .in('meal_id', mealIds)
+            if (ratingsData?.length > 0) {
+              const rMap = {}
+              ratingsData.forEach(r => {
+                if (!rMap[r.meal_id]) rMap[r.meal_id] = []
+                rMap[r.meal_id].push(r)
+              })
+              setRatingsMap(prev => ({ ...prev, ...rMap }))
+            }
+          } catch {}
+        }
+
         setSpaces(prev => prev.map(s => {
           if (s.id !== space.id) return s
           const dbMeals = (mealsData || []).map(row => rowToMeal(row, { photosLoaded: false }))
@@ -775,6 +797,43 @@ export function AppProvider({ children }) {
     ))
   }
 
+  // 별점 추가 또는 수정 (UPSERT)
+  async function addOrUpdateRating(mealId, rating) {
+    if (!user) return false
+    const { data, error } = await supabase
+      .from('ratings')
+      .upsert({
+        meal_id: mealId,
+        user_id: user.id,
+        nickname: user.user_metadata?.name || user.user_metadata?.full_name || '',
+        rating,
+      }, { onConflict: 'meal_id,user_id' })
+      .select('id, meal_id, user_id, nickname, rating')
+      .single()
+    if (error) { console.error(error); return false }
+    setRatingsMap(prev => {
+      const existing = (prev[mealId] || []).filter(r => r.user_id !== user.id)
+      return { ...prev, [mealId]: [...existing, data] }
+    })
+    return true
+  }
+
+  // 내 별점 삭제
+  async function deleteRating(mealId) {
+    if (!user) return false
+    const { error } = await supabase
+      .from('ratings')
+      .delete()
+      .eq('meal_id', mealId)
+      .eq('user_id', user.id)
+    if (error) { console.error(error); return false }
+    setRatingsMap(prev => ({
+      ...prev,
+      [mealId]: (prev[mealId] || []).filter(r => r.user_id !== user.id),
+    }))
+    return true
+  }
+
   // 코드로 스페이스 참가
   async function joinByCode(code) {
     // RPC (SECURITY DEFINER): RLS 우회하여 code로 스페이스 찾고 space_members에 등록
@@ -868,6 +927,9 @@ export function AppProvider({ children }) {
         updateWishlistItem,
         deleteWishlistItem,
         joinByCode,
+        ratingsMap,
+        addOrUpdateRating,
+        deleteRating,
       }}
     >
       {children}

@@ -69,6 +69,65 @@ function CommentItem({ comment, currentUserId, onDelete }) {
   )
 }
 
+// ── 별점 섹션 (평균 표시 + 내 별점 입력) ────────────────────────────────
+function RatingsSection({ mealId }) {
+  const { user, ratingsMap, addOrUpdateRating, deleteRating } = useApp()
+  const ratings = ratingsMap?.[mealId] || []
+  const myRating = ratings.find(r => r.user_id === user?.id)
+  const [saving, setSaving] = useState(false)
+
+  const avg = ratings.length > 0
+    ? ratings.reduce((s, r) => s + r.rating, 0) / ratings.length
+    : null
+  const floorAvg = avg !== null ? Math.floor(avg) : 0
+
+  async function handleRate(value) {
+    if (!user || saving) return
+    setSaving(true)
+    if (myRating?.rating === value) {
+      await deleteRating(mealId)
+    } else {
+      await addOrUpdateRating(mealId, value)
+    }
+    setSaving(false)
+  }
+
+  if (!user && ratings.length === 0) return null
+
+  return (
+    <div className="mb-3">
+      {ratings.length > 0 && (
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="flex gap-0.5">
+            {[1,2,3,4,5].map(i => (
+              <span key={i} className={`text-xl ${i <= floorAvg ? 'star-filled' : 'star-empty'}`}>★</span>
+            ))}
+          </div>
+          {ratings.length >= 2 && (
+            <span className="text-xs text-warm-light">{ratings.length}명 평가</span>
+          )}
+        </div>
+      )}
+      {user && (
+        <div>
+          <p className="text-[10px] text-cream-400 mb-1">
+            {myRating ? '내 별점 (다시 탭하면 취소)' : '내 별점'}
+          </p>
+          <div className={`flex gap-1 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+            {[1,2,3,4,5].map(i => (
+              <button
+                key={i}
+                onClick={() => handleRate(i)}
+                className={`text-xl transition-colors active:scale-90 ${i <= (myRating?.rating || 0) ? 'star-filled' : 'star-empty'}`}
+              >★</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── 지도 미니 뷰 ──────────────────────────────────────────────────────────
 function SmallMap({ lat, lng }) {
   const containerRef = useRef(null)
@@ -293,13 +352,7 @@ export default function MealDetailModal({ meal, onClose }) {
       <AuthorBadge meal={liveMeal} className="mb-2" />
 
       {/* ② 별점 */}
-      {liveMeal.rating > 0 && (
-        <div className="flex gap-0.5 mb-3">
-          {[1, 2, 3, 4, 5].map(i => (
-            <span key={i} className={`text-xl ${i <= liveMeal.rating ? 'star-filled' : 'star-empty'}`}>★</span>
-          ))}
-        </div>
-      )}
+      <RatingsSection mealId={liveMeal.id} />
 
       {/* ③ 식당명 */}
       {liveMeal.restaurantName && (

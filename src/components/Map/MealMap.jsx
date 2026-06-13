@@ -72,8 +72,14 @@ function makeWishPinHTML(selected) {
 
 // ── 서브 컴포넌트 ──────────────────────────────────────────────
 function MealPinCard({ meal, liveMeal, onClick }) {
+  const { ratingsMap } = useApp()
   const display = liveMeal || meal
   const thumb = getThumbUrl(display.photos?.[0] || display.photo || '')
+  const mealRatings = ratingsMap?.[display.id] || []
+  const avgRating = mealRatings.length > 0
+    ? Math.floor(mealRatings.reduce((s, r) => s + r.rating, 0) / mealRatings.length)
+    : display.rating || 0
+  const ratingCount = mealRatings.length
   return (
     <div
       className="shrink-0 w-52 rounded-2xl border border-cream-200 bg-white overflow-hidden active:scale-[0.98] transition-transform cursor-pointer"
@@ -88,11 +94,16 @@ function MealPinCard({ meal, liveMeal, onClick }) {
         {display.restaurantName && display.title && (
           <p className="text-xs text-warm-light truncate mt-0.5">{display.restaurantName}</p>
         )}
-        {display.rating > 0 && (
-          <div className="flex gap-0.5 mt-1">
-            {[1,2,3,4,5].map(i => (
-              <span key={i} style={{ color: i <= display.rating ? '#c4a882' : '#e5ddd5', fontSize: '13px' }}>★</span>
-            ))}
+        {avgRating > 0 && (
+          <div className="flex items-center gap-1 mt-1">
+            <div className="flex gap-0.5">
+              {[1,2,3,4,5].map(i => (
+                <span key={i} style={{ color: i <= avgRating ? '#c4a882' : '#e5ddd5', fontSize: '13px' }}>★</span>
+              ))}
+            </div>
+            {ratingCount >= 2 && (
+              <span style={{ fontSize: '10px', color: '#c4a882' }}>{ratingCount}명</span>
+            )}
           </div>
         )}
         {display.review && (

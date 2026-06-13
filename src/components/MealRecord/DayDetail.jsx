@@ -19,11 +19,17 @@ const TAG_STYLES = {
 }
 
 function DayMealCard({ meal, isRep, showRepBtn, onSetRep, onView, onEdit, onDelete }) {
+  const { ratingsMap } = useApp()
   const rawPhotos = meal.photosLoaded
     ? (meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : []))
     : []
   const thumbPhotos = rawPhotos.map(p => getThumbUrl(p)).filter(Boolean)
   const originalPhotos = rawPhotos.map(p => getOriginalUrl(p)).filter(Boolean)
+  const mealRatings = ratingsMap?.[meal.id] || []
+  const avgRating = mealRatings.length > 0
+    ? Math.floor(mealRatings.reduce((s, r) => s + r.rating, 0) / mealRatings.length)
+    : meal.rating || 0
+  const ratingCount = mealRatings.length
 
   return (
     <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden">
@@ -68,9 +74,12 @@ function DayMealCard({ meal, isRep, showRepBtn, onSetRep, onView, onEdit, onDele
             )}
           </div>
         </div>
-        {meal.rating > 0 && (
-          <div className="mt-1.5">
-            <StarRating value={meal.rating} readonly />
+        {avgRating > 0 && (
+          <div className="mt-1.5 flex items-center gap-1">
+            <StarRating value={avgRating} readonly />
+            {ratingCount >= 2 && (
+              <span className="text-[10px] text-cream-400">{ratingCount}명</span>
+            )}
           </div>
         )}
         {meal.review && (

@@ -36,12 +36,18 @@ const RATING_FILTERS = [
 const TAG_FILTERS = ['전체', '집밥', '외식', '카페', '배달']
 
 function FeedCard({ meal, onClick }) {
+  const { ratingsMap } = useApp()
   const dateObj = parseISO(meal.date)
   const title = meal.title || meal.restaurantName || '식사 기록'
   const photos = (meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : []))
     .map(p => getOriginalUrl(p))
     .filter(Boolean)
   const showPhotos = meal.photosLoaded && photos.length > 0
+  const mealRatings = ratingsMap?.[meal.id] || []
+  const avgRating = mealRatings.length > 0
+    ? Math.floor(mealRatings.reduce((s, r) => s + r.rating, 0) / mealRatings.length)
+    : meal.rating || 0
+  const ratingCount = mealRatings.length
 
   return (
     <button
@@ -80,11 +86,16 @@ function FeedCard({ meal, onClick }) {
           <p className="text-xs text-cream-400">
             {format(dateObj, 'yyyy.M.d (eee)', { locale: ko })}
           </p>
-          {meal.rating > 0 && (
-            <div className="flex gap-0.5">
-              {[1, 2, 3, 4, 5].map(i => (
-                <span key={i} className={`text-sm leading-none ${i <= meal.rating ? 'star-filled' : 'star-empty'}`}>★</span>
-              ))}
+          {avgRating > 0 && (
+            <div className="flex items-center gap-1">
+              <div className="flex gap-0.5">
+                {[1,2,3,4,5].map(i => (
+                  <span key={i} className={`text-sm leading-none ${i <= avgRating ? 'star-filled' : 'star-empty'}`}>★</span>
+                ))}
+              </div>
+              {ratingCount >= 2 && (
+                <span className="text-[10px] text-cream-400">{ratingCount}명</span>
+              )}
             </div>
           )}
         </div>
