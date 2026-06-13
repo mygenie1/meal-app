@@ -368,35 +368,44 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
         form.photos.map(p => uploadPhotoWithThumbnail(p, spaceId))
       )
       const newMeal = await onSubmit({ ...form, date: formDate, lat, lng, photos: uploadedPhotos, photo: uploadedPhotos[0] || '' })
+      console.log('[MealForm] onSubmit 결과:', newMeal, '| initial:', !!initial, '| user:', user?.id, '| space:', currentSpace?.id)
       // 새 게시글 알림 — 수정이 아닌 신규 등록이고 다른 멤버가 있을 때만
       if (!initial && newMeal?.id && user && currentSpace?.id) {
         try {
-          const { data: members } = await supabase
+          const { data: members, error: membersErr } = await supabase
             .from('space_members')
             .select('user_id')
             .eq('space_id', currentSpace.id)
             .neq('user_id', user.id)
-          if (members?.length > 0) {
+          console.log('[MealForm] space_members 조회:', { members, membersErr })
+          if (membersErr) {
+            console.error('[MealForm] space_members 조회 실패:', membersErr)
+          } else if (members?.length > 0) {
             const title = form.title || form.restaurantName || '식사'
             const fromNickname = user.user_metadata?.name || user.user_metadata?.full_name || '멤버'
-            const { error: notifErr } = await supabase.from('notifications').insert(
-              members.map(m => ({
-                user_id: m.user_id,
-                space_id: currentSpace.id,
-                meal_id: newMeal.id,
-                from_user_id: user.id,
-                from_nickname: fromNickname,
-                from_avatar_url: user.user_metadata?.avatar_url || '',
-                type: 'new_meal',
-                message: `${fromNickname}님이 새 식사를 기록했어요: ${title}`,
-                is_read: false,
-              }))
-            )
+            const payload = members.map(m => ({
+              user_id: m.user_id,
+              space_id: currentSpace.id,
+              meal_id: newMeal.id,
+              from_user_id: user.id,
+              from_nickname: fromNickname,
+              from_avatar_url: user.user_metadata?.avatar_url || '',
+              type: 'new_meal',
+              message: `${fromNickname}님이 새 식사를 기록했어요: ${title}`,
+              is_read: false,
+            }))
+            console.log('[MealForm] notifications insert 시도:', payload)
+            const { error: notifErr } = await supabase.from('notifications').insert(payload)
             if (notifErr) console.error('[MealForm] 알림 생성 실패:', notifErr)
+            else console.log('[MealForm] 알림 insert 성공')
+          } else {
+            console.log('[MealForm] 다른 멤버 없음 → 알림 생략')
           }
         } catch (e) {
           console.error('[MealForm] 알림 처리 중 오류:', e)
         }
+      } else {
+        console.log('[MealForm] 알림 조건 미충족 → 생략')
       }
     } finally {
       setUploading(false)

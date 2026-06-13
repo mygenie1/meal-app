@@ -91,9 +91,10 @@ function RatingsSection({ mealId }) {
       // 식사 작성자에게 별점 알림 (내 게시글이 아닐 때만)
       try {
         const meal = spaces?.flatMap(s => s.meals).find(m => m.id === mealId)
+        console.log('[RatingsSection] 별점 알림 체크:', { mealId, mealUserId: meal?.userId, myId: user.id })
         if (meal?.userId && meal.userId !== user.id) {
           const fromNickname = user.user_metadata?.name || user.user_metadata?.full_name || '멤버'
-          const { error: notifErr } = await supabase.from('notifications').insert({
+          const payload = {
             user_id: meal.userId,
             space_id: currentSpace?.id || null,
             meal_id: mealId,
@@ -103,8 +104,13 @@ function RatingsSection({ mealId }) {
             type: 'new_rating',
             message: `${fromNickname}님이 별점 ${value}점을 남겼어요`,
             is_read: false,
-          })
+          }
+          console.log('[RatingsSection] notifications insert 시도:', payload)
+          const { error: notifErr } = await supabase.from('notifications').insert(payload)
           if (notifErr) console.error('[RatingsSection] 알림 생성 실패:', notifErr)
+          else console.log('[RatingsSection] 알림 insert 성공')
+        } else {
+          console.log('[RatingsSection] 알림 조건 미충족 → 생략 (내 게시글이거나 userId 없음)')
         }
       } catch (e) {
         console.error('[RatingsSection] 알림 처리 중 오류:', e)
@@ -296,9 +302,10 @@ export default function MealDetailModal({ meal, onClose }) {
       setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
       // 식사 작성자에게 알림 (내 게시글이 아닐 때만)
       try {
+        console.log('[댓글] 알림 체크:', { mealUserId: liveMeal.userId, myId: user?.id })
         if (liveMeal.userId && liveMeal.userId !== user?.id) {
           const fromNickname = user?.user_metadata?.name || user?.user_metadata?.full_name || '멤버'
-          const { error: notifErr } = await supabase.from('notifications').insert({
+          const payload = {
             user_id: liveMeal.userId,
             space_id: currentSpace?.id || null,
             meal_id: liveMeal.id,
@@ -308,8 +315,13 @@ export default function MealDetailModal({ meal, onClose }) {
             type: 'new_comment',
             message: `${fromNickname}님이 댓글을 남겼어요: ${trimmed.length > 20 ? trimmed.slice(0, 20) + '…' : trimmed}`,
             is_read: false,
-          })
+          }
+          console.log('[댓글] notifications insert 시도:', payload)
+          const { error: notifErr } = await supabase.from('notifications').insert(payload)
           if (notifErr) console.error('[handleAddComment] 알림 생성 실패:', notifErr)
+          else console.log('[댓글] 알림 insert 성공')
+        } else {
+          console.log('[댓글] 알림 조건 미충족 → 생략 (내 게시글이거나 userId 없음)')
         }
       } catch (e) {
         console.error('[handleAddComment] 알림 처리 중 오류:', e)
