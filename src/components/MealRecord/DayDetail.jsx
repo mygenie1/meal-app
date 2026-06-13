@@ -7,6 +7,7 @@ import PhotoGallery from '../common/PhotoGallery'
 import StarRating from '../common/StarRating'
 import { getThumbUrl, getOriginalUrl } from '../../lib/uploadPhoto'
 import AuthorBadge from '../common/AuthorBadge'
+import { linkify } from '../../lib/linkify'
 
 const MEAL_TIME_ORDER = { 아침: 0, 점심: 1, 저녁: 2 }
 const MEAL_TIMES = ['아침', '점심', '저녁']
@@ -83,7 +84,7 @@ function DayMealCard({ meal, isRep, showRepBtn, onSetRep, onView, onEdit, onDele
           </div>
         )}
         {meal.review && (
-          <p className="text-xs text-warm-dark mt-1 leading-relaxed line-clamp-2">{meal.review}</p>
+          <p className="text-xs text-warm-dark mt-1 leading-relaxed line-clamp-2 break-words">{linkify(meal.review)}</p>
         )}
         <AuthorBadge meal={meal} className="mt-2" />
       </div>
