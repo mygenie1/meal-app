@@ -8,6 +8,7 @@ import Modal from '../components/common/Modal'
 import DayDetail from '../components/MealRecord/DayDetail'
 import PhotoGallery from '../components/common/PhotoGallery'
 import { getOriginalUrl } from '../lib/uploadPhoto'
+import AuthorBadge from '../components/common/AuthorBadge'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700',
@@ -87,6 +88,7 @@ function FeedCard({ meal, onClick }) {
             </div>
           )}
         </div>
+        <AuthorBadge meal={meal} className="mt-2" />
       </div>
     </button>
   )

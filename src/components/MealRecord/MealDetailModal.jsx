@@ -6,6 +6,7 @@ import Modal from '../common/Modal'
 import MealForm from './MealForm'
 import PhotoGallery from '../common/PhotoGallery'
 import { getOriginalUrl } from '../../lib/uploadPhoto'
+import AuthorBadge from '../common/AuthorBadge'
 
 const TAG_STYLES = {
   집밥: 'bg-green-50 text-green-700 border-green-200',
@@ -153,6 +154,9 @@ export default function MealDetailModal({ meal, onClose }) {
           </span>
         )}
       </div>
+
+      {/* ② 작성자 */}
+      <AuthorBadge meal={liveMeal} className="mb-2" />
 
       {/* ② 별점 */}
       {liveMeal.rating > 0 && (

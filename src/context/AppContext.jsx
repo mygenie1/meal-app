@@ -29,11 +29,14 @@ function rowToMeal(row, { photosLoaded = true } = {}) {
     tag: row.tag || '',
     mealTime: row.meal_time || '',
     fromWishlist: row.from_wishlist || false,
+    userId: row.user_id || null,
+    nickname: row.nickname || '',
+    avatarUrl: row.avatar_url || '',
   }
 }
 
 // 목록 조회 시 photos(base64 대용량) 제외 → 타임아웃 방지
-const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, lat, lng, rating, review, memo, tag, meal_time, from_wishlist, created_at'
+const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, lat, lng, rating, review, memo, tag, meal_time, from_wishlist, user_id, nickname, avatar_url, created_at'
 
 // 앱 내부 meal 객체 → DB insert/update 용
 function mealToRow(data) {
@@ -545,6 +548,13 @@ export function AppProvider({ children }) {
     }
 
     const rowData = mealToRow(mealData)
+
+    // 작성자 정보 자동 추가
+    if (user) {
+      rowData.user_id = user.id
+      rowData.nickname = user.user_metadata?.name || user.user_metadata?.full_name || ''
+      rowData.avatar_url = user.user_metadata?.avatar_url || ''
+    }
 
     // Optimistic update: INSERT 완료 전에 즉시 목록에 표시
     const tempId = 'temp_' + Date.now()
