@@ -270,10 +270,25 @@ export default function MealDetailModal({ meal, onClose }) {
       .single()
     setSubmitting(false)
     if (!error && data) {
-      // Realtime이 대신 추가할 수도 있지만 즉시 반영 보장
       setComments(prev => prev.find(c => c.id === data.id) ? prev : [...prev, data])
       setCommentText('')
       setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+      // 식사 작성자에게 알림 (내 게시글이 아닐 때만)
+      try {
+        if (liveMeal.userId && liveMeal.userId !== user?.id) {
+          const fromNickname = user?.user_metadata?.name || user?.user_metadata?.full_name || '멤버'
+          await supabase.from('notifications').insert({
+            user_id: liveMeal.userId,
+            space_id: currentSpace?.id || null,
+            meal_id: liveMeal.id,
+            from_user_id: user?.id || null,
+            from_nickname: fromNickname,
+            from_avatar_url: user?.user_metadata?.avatar_url || '',
+            type: 'comment',
+            message: `${fromNickname}님이 댓글을 달았어요: ${trimmed.length > 20 ? trimmed.slice(0, 20) + '…' : trimmed}`,
+          })
+        }
+      } catch {}
     }
   }
 

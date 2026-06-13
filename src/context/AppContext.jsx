@@ -97,6 +97,8 @@ export function AppProvider({ children }) {
   const [retryAttempt, setRetryAttempt] = useState(0) // 0 = 첫 시도, 1~2 = 재시도 중
   // mealId → [{ id, user_id, nickname, rating }]
   const [ratingsMap, setRatingsMap] = useState({})
+  // 현재 유저의 알림 목록 (최신 50건)
+  const [notifications, setNotifications] = useState([])
 
   const currentSpace = spaces.find(s => s.id === currentSpaceId) || null
 
@@ -273,6 +275,32 @@ export function AppProvider({ children }) {
       supabase.removeChannel(ingredientsChannel)
     }
   }, [])
+
+  // 알림 로드 + Realtime 구독 (로그인 시)
+  useEffect(() => {
+    if (!user?.id) { setNotifications([]); return }
+    let destroyed = false
+
+    supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+      .then(({ data }) => { if (!destroyed && data) setNotifications(data) })
+
+    const channel = supabase
+      .channel(`notifications:${user.id}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        ({ new: newRow }) => {
+          if (!destroyed) setNotifications(prev => [newRow, ...prev].slice(0, 50))
+        }
+      )
+      .subscribe()
+
+    return () => { destroyed = true; supabase.removeChannel(channel) }
+  }, [user?.id])
 
   const MAX_RETRIES = 3
   const RETRY_DELAYS = [1500, 3000, 5000]
@@ -609,6 +637,33 @@ export function AppProvider({ children }) {
 
     console.log('[addMeal] INSERT 성공, DB id=', data.id, '| created_at=', data.created_at)
 
+    // 스페이스 멤버들에게 새 식사 알림 (비동기, 실패해도 무시)
+    if (user) {
+      try {
+        const { data: members } = await supabase
+          .from('space_members')
+          .select('user_id')
+          .eq('space_id', currentSpaceId)
+          .neq('user_id', user.id)
+        if (members?.length > 0) {
+          const title = mealData.title || mealData.restaurantName || '식사'
+          const fromNickname = user.user_metadata?.name || user.user_metadata?.full_name || '멤버'
+          await supabase.from('notifications').insert(
+            members.map(m => ({
+              user_id: m.user_id,
+              space_id: currentSpaceId,
+              meal_id: data.id,
+              from_user_id: user.id,
+              from_nickname: fromNickname,
+              from_avatar_url: user.user_metadata?.avatar_url || '',
+              type: 'new_meal',
+              message: `${fromNickname}님이 새 식사를 기록했어요: ${title}`,
+            }))
+          )
+        }
+      } catch {}
+    }
+
     // 임시 항목을 DB 실제 ID로 교체
     // Realtime INSERT가 먼저 도착했을 수 있으므로 실제 ID도 같이 제거 후 추가
     const newMeal = rowToMeal({ ...rowData, id: data.id, created_at: data.created_at })
@@ -797,6 +852,18 @@ export function AppProvider({ children }) {
     ))
   }
 
+  // 알림 읽음 처리
+  async function markNotificationRead(id) {
+    await supabase.from('notifications').update({ is_read: true }).eq('id', id)
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+  }
+
+  async function markAllNotificationsRead() {
+    if (!user) return
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+  }
+
   // 별점 추가 또는 수정 (UPSERT)
   async function addOrUpdateRating(mealId, rating) {
     if (!user) return false
@@ -815,6 +882,21 @@ export function AppProvider({ children }) {
       const existing = (prev[mealId] || []).filter(r => r.user_id !== user.id)
       return { ...prev, [mealId]: [...existing, data] }
     })
+    // 식사 작성자에게 알림 (내 게시글이 아닐 때만)
+    try {
+      const meal = spaces.flatMap(s => s.meals).find(m => m.id === mealId)
+      if (meal?.userId && meal.userId !== user.id) {
+        const spaceId = spaces.find(s => s.meals.some(m => m.id === mealId))?.id || null
+        const fromNickname = user.user_metadata?.name || user.user_metadata?.full_name || '멤버'
+        await supabase.from('notifications').insert({
+          user_id: meal.userId, space_id: spaceId, meal_id: mealId,
+          from_user_id: user.id, from_nickname: fromNickname,
+          from_avatar_url: user.user_metadata?.avatar_url || '',
+          type: 'rating',
+          message: `${fromNickname}님이 별점 ${rating}점을 남겼어요`,
+        })
+      }
+    } catch {}
     return true
   }
 
@@ -930,6 +1012,10 @@ export function AppProvider({ children }) {
         ratingsMap,
         addOrUpdateRating,
         deleteRating,
+        notifications,
+        unreadCount: notifications.filter(n => !n.is_read).length,
+        markNotificationRead,
+        markAllNotificationsRead,
       }}
     >
       {children}

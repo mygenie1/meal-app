@@ -9,6 +9,7 @@ import DayDetail from '../components/MealRecord/DayDetail'
 import PhotoGallery from '../components/common/PhotoGallery'
 import { getOriginalUrl } from '../lib/uploadPhoto'
 import AuthorBadge from '../components/common/AuthorBadge'
+import NotificationPanel, { NotificationBell } from '../components/common/NotificationPanel'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700',
@@ -110,6 +111,7 @@ export default function HomePage() {
   const navigate = useNavigate()
   const [selectedMeal, setSelectedMeal] = useState(null)
   const [todayFormOpen, setTodayFormOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
   const [ratingFilter, setRatingFilter] = useState('')
   const [tagFilter, setTagFilter] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -284,6 +286,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <h1 className="text-base font-semibold text-warm-dark">식탁 일기</h1>
             <div className="flex items-center gap-2">
+              <NotificationBell onClick={() => setNotifOpen(true)} />
               <button
                 onClick={() => setSearchOpen(true)}
                 className="p-1.5 text-warm-light hover:text-warm-brown transition-colors"
@@ -530,6 +533,15 @@ export default function HomePage() {
       <Modal isOpen={todayFormOpen} onClose={() => setTodayFormOpen(false)}>
         <DayDetail date={today} onClose={() => setTodayFormOpen(false)} />
       </Modal>
+
+      <NotificationPanel
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        onSelectMeal={mealId => {
+          const meal = spaces.flatMap(s => s.meals).find(m => m.id === mealId)
+          if (meal) setSelectedMeal(meal)
+        }}
+      />
     </>
   )
 }
