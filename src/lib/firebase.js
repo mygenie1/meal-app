@@ -1,7 +1,5 @@
-import { initializeApp } from 'firebase/app'
-import { getMessaging, getToken, onMessage } from 'firebase/messaging'
-
-console.log('[FCM] 초기화 시작')
+// firebase/messaging은 브라우저 런타임에서만 동적으로 import
+// 모듈 최상위에서 즉시 실행하면 Vercel 빌드(Node.js 환경)에서 IndexedDB 등 충돌
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -10,30 +8,45 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-  console.warn('[FCM] 환경변수 미설정 — apiKey:', firebaseConfig.apiKey, 'projectId:', firebaseConfig.projectId)
+let _messaging = null
+let _initDone = false
+
+async function getMessagingInstance() {
+  if (_initDone) return _messaging
+  _initDone = true
+
+  console.log('[FCM] 초기화 시작')
+
+  if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+    console.warn('[FCM] 환경변수 미설정 — apiKey:', firebaseConfig.apiKey)
+    return null
+  }
+
+  try {
+    const { initializeApp } = await import('firebase/app')
+    const { getMessaging } = await import('firebase/messaging')
+    const app = initializeApp(firebaseConfig)
+    _messaging = getMessaging(app)
+    console.log('[FCM] messaging 초기화 완료')
+  } catch (e) {
+    console.warn('[FCM] messaging 초기화 실패:', e.message)
+  }
+
+  return _messaging
 }
 
-const app = initializeApp(firebaseConfig)
-
-let messaging = null
-try {
-  messaging = getMessaging(app)
-  console.log('[FCM] messaging 초기화 완료')
-} catch (e) {
-  console.warn('[FCM] messaging 초기화 실패:', e.message)
+// 포그라운드 메시지 리스너 등록 (앱이 열려 있을 때)
+export async function onFCMMessage(callback) {
+  const messaging = await getMessagingInstance()
+  if (!messaging) return
+  const { onMessage } = await import('firebase/messaging')
+  onMessage(messaging, callback)
 }
-
-export { messaging, onMessage }
 
 // 푸시 알림 권한 요청 + FCM 토큰 반환
 export async function requestFCMToken() {
   console.log('[FCM] requestFCMToken 호출')
 
-  if (!messaging) {
-    console.warn('[FCM] messaging이 null — Firebase 초기화 실패 상태')
-    return null
-  }
   if (!('Notification' in window)) {
     console.warn('[FCM] Notification API 미지원 브라우저')
     return null
@@ -43,17 +56,23 @@ export async function requestFCMToken() {
     return null
   }
 
+  const messaging = await getMessagingInstance()
+  if (!messaging) {
+    console.warn('[FCM] messaging이 null — 초기화 실패')
+    return null
+  }
+
   try {
     console.log('[FCM] 알림 권한 요청')
     const permission = await Notification.requestPermission()
     console.log(`[FCM] 권한 결과: ${permission}`)
     if (permission !== 'granted') return null
 
-    // 기본 scope로 등록 — 커스텀 scope는 Service-Worker-Allowed 헤더가 없으면 실패함
     const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js')
     await swReg.update()
     console.log('[FCM] SW 등록 완료, scope:', swReg.scope)
 
+    const { getToken } = await import('firebase/messaging')
     const token = await getToken(messaging, {
       vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
       serviceWorkerRegistration: swReg,
