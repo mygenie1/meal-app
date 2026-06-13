@@ -285,6 +285,9 @@ export default function MealMap({ onViewMeal }) {
   const [wishMapReady, setWishMapReady] = useState(false)
   const [wishMapFailed, setWishMapFailed] = useState(false)
   const [highlightedWishId, setHighlightedWishId] = useState(null)
+  const [wishFlyTarget, setWishFlyTarget] = useState(null)
+  const wishUserOverlayRef = useRef(null)
+  const [wishLocating, setWishLocating] = useState(false)
 
   // ── 근처 알림 ─────────────────────────────────────────────────
   const [nearbyWish, setNearbyWish] = useState(null)
@@ -428,6 +431,7 @@ export default function MealMap({ onViewMeal }) {
       clearTimeout(failTimer)
       wishOverlaysRef.current.forEach(o => o.setMap(null))
       wishOverlaysRef.current = []
+      if (wishUserOverlayRef.current) { wishUserOverlayRef.current.setMap(null); wishUserOverlayRef.current = null }
       wishKakaoMapRef.current = null
       setWishMapReady(false)
       setWishMapFailed(false)
@@ -534,6 +538,32 @@ export default function MealMap({ onViewMeal }) {
     setFlyTarget(null)
   }, [flyTarget, mapReady])
 
+  // ── 가고 싶은 곳 지도 내 위치 마커 ──────────────────────────────
+  useEffect(() => {
+    if (!wishMapReady || !wishKakaoMapRef.current) return
+    if (wishUserOverlayRef.current) { wishUserOverlayRef.current.setMap(null); wishUserOverlayRef.current = null }
+    if (!userLocation) return
+    const el = document.createElement('div')
+    el.style.cssText = 'width:14px;height:14px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 0 4px rgba(59,130,246,0.25)'
+    const overlay = new window.kakao.maps.CustomOverlay({
+      position: new window.kakao.maps.LatLng(userLocation[0], userLocation[1]),
+      content: el,
+      xAnchor: 0.5,
+      yAnchor: 0.5,
+      zIndex: 20,
+    })
+    overlay.setMap(wishKakaoMapRef.current)
+    wishUserOverlayRef.current = overlay
+  }, [userLocation, wishMapReady])
+
+  // ── 가고 싶은 곳 지도 이동 ───────────────────────────────────────
+  useEffect(() => {
+    if (!wishFlyTarget || !wishMapReady || !wishKakaoMapRef.current) return
+    wishKakaoMapRef.current.panTo(new window.kakao.maps.LatLng(wishFlyTarget[0], wishFlyTarget[1]))
+    wishKakaoMapRef.current.setLevel(4)
+    setWishFlyTarget(null)
+  }, [wishFlyTarget, wishMapReady])
+
   // ── 식사 핀 로드 (지오코딩) ───────────────────────────────────
   useEffect(() => {
     if (meals.length === 0) { setPins([]); return }
@@ -617,6 +647,21 @@ export default function MealMap({ onViewMeal }) {
     )
   }
 
+  function handleWishLocate() {
+    if (!navigator.geolocation) return
+    setWishLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const coords = [pos.coords.latitude, pos.coords.longitude]
+        setUserLocation(coords)
+        setWishFlyTarget(coords)
+        setWishLocating(false)
+      },
+      () => setWishLocating(false),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    )
+  }
+
   function handleOpenAdd() {
     setAddForm(EMPTY_WISH_FORM)
     setAddPhotoPreview('')
@@ -669,8 +714,8 @@ export default function MealMap({ onViewMeal }) {
   }
 
   function handleViewOnMap(wish) {
-    setActiveTab('map')
-    setFlyTarget([wish.lat, wish.lng])
+    setHighlightedWishId(wish.id)
+    setWishFlyTarget([wish.lat, wish.lng])
   }
 
   async function handleVisitSubmit(mealData) {
@@ -862,6 +907,20 @@ export default function MealMap({ onViewMeal }) {
                   <p className="text-xs text-warm-light text-center px-4">지도를 불러올 수 없어요</p>
                 </div>
               )}
+              {/* 현재 위치 버튼 */}
+              <button onClick={handleWishLocate} disabled={wishLocating}
+                style={{ position: 'absolute', right: 12, bottom: 12, zIndex: 10 }}
+                className="bg-white rounded-full w-10 h-10 shadow-md flex items-center justify-center hover:bg-cream-50 active:scale-95 transition-all disabled:opacity-60"
+              >
+                {wishLocating ? (
+                  <div className="w-4 h-4 border-2 border-cream-300 border-t-blue-400 rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="3" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+                  </svg>
+                )}
+              </button>
             </div>
           )}
 
