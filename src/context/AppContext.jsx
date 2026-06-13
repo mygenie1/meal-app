@@ -315,15 +315,24 @@ export function AppProvider({ children }) {
   const MAX_RETRIES = 3
   const RETRY_DELAYS = [1500, 3000, 5000]
 
-  // FCM 토큰 등록 — 로그인 직후 한 번만 시도 (알림 권한 이미 허용된 경우 자동 등록)
+  // FCM 토큰 등록 — 로그인 직후 한 번만 시도
   async function registerFCMToken(userId) {
     if (!userId) return
+    console.log('[FCM] registerFCMToken 시작, userId:', userId)
     try {
       const token = await requestFCMToken()
-      if (!token) return
-      await supabase
+      if (!token) {
+        console.log('[FCM] 토큰 없음 — 저장 스킵')
+        return
+      }
+      const { error } = await supabase
         .from('fcm_tokens')
         .upsert({ user_id: userId, token }, { onConflict: 'user_id,token' })
+      if (error) {
+        console.error('[FCM] 토큰 저장 실패:', error)
+      } else {
+        console.log('[FCM] 토큰 저장 완료')
+      }
     } catch (e) {
       console.error('[FCM] 토큰 등록 오류:', e)
     }
