@@ -9,6 +9,7 @@ import PhotoGallery from '../common/PhotoGallery'
 import { getOriginalUrl } from '../../lib/uploadPhoto'
 import AuthorBadge from '../common/AuthorBadge'
 import { sendNotification, buildFromUser } from '../../lib/notify'
+import { linkify } from '../../lib/linkify'
 
 const TAG_STYLES = {
   집밥: 'bg-green-50 text-green-700 border-green-200',
@@ -63,7 +64,7 @@ function CommentItem({ comment, currentUserId, onDelete }) {
           )}
         </div>
         <p className="text-sm text-warm-dark leading-relaxed mt-0.5 break-words">
-          {comment.content}
+          {linkify(comment.content)}
         </p>
       </div>
     </div>
@@ -384,12 +385,12 @@ export default function MealDetailModal({ meal, onClose }) {
 
       {/* ③ 한줄평 */}
       {liveMeal.review && (
-        <p className="text-sm text-warm-dark mb-2 leading-relaxed">{liveMeal.review}</p>
+        <p className="text-sm text-warm-dark mb-2 leading-relaxed">{linkify(liveMeal.review)}</p>
       )}
 
       {/* ③ 메모 */}
       {liveMeal.memo && (
-        <p className="text-xs text-warm-light leading-relaxed whitespace-pre-line mb-3">{liveMeal.memo}</p>
+        <p className="text-xs text-warm-light leading-relaxed mb-3">{linkify(liveMeal.memo)}</p>
       )}
 
       {/* ④ 위치 + 지도 */}
