@@ -4,6 +4,7 @@ import { ko } from 'date-fns/locale'
 import StarRating from '../common/StarRating'
 import { useApp } from '../../context/AppContext'
 import { uploadPhotoWithThumbnail, getThumbUrl } from '../../lib/uploadPhoto'
+import { supabase } from '../../lib/supabase'
 
 // ─── 이미지 압축 (Canvas, max 1200px, JPEG 0.82) ─────────────────────────
 // 결과물은 base64 — 로컬 미리보기용. 실제 저장 시 Storage에 업로드 후 URL로 교체
@@ -247,7 +248,7 @@ function LocationField({ form, geoStatus, onLocationChange, onLocationBlur }) {
 
 // ─── MealForm 메인 컴포넌트 ───────────────────────────────────────────────
 export default function MealForm({ date, onSubmit, onCancel, initial }) {
-  const { currentSpace, deleteIngredient } = useApp()
+  const { currentSpace, deleteIngredient, user } = useApp()
 
   const [step, setStep] = useState(() => initial?.tag ? 'form' : 'tag')
   const [uploading, setUploading] = useState(false)
@@ -366,7 +367,37 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       const uploadedPhotos = await Promise.all(
         form.photos.map(p => uploadPhotoWithThumbnail(p, spaceId))
       )
-      onSubmit({ ...form, date: formDate, lat, lng, photos: uploadedPhotos, photo: uploadedPhotos[0] || '' })
+      const newMeal = await onSubmit({ ...form, date: formDate, lat, lng, photos: uploadedPhotos, photo: uploadedPhotos[0] || '' })
+      // 새 게시글 알림 — 수정이 아닌 신규 등록이고 다른 멤버가 있을 때만
+      if (!initial && newMeal?.id && user && currentSpace?.id) {
+        try {
+          const { data: members } = await supabase
+            .from('space_members')
+            .select('user_id')
+            .eq('space_id', currentSpace.id)
+            .neq('user_id', user.id)
+          if (members?.length > 0) {
+            const title = form.title || form.restaurantName || '식사'
+            const fromNickname = user.user_metadata?.name || user.user_metadata?.full_name || '멤버'
+            const { error: notifErr } = await supabase.from('notifications').insert(
+              members.map(m => ({
+                user_id: m.user_id,
+                space_id: currentSpace.id,
+                meal_id: newMeal.id,
+                from_user_id: user.id,
+                from_nickname: fromNickname,
+                from_avatar_url: user.user_metadata?.avatar_url || '',
+                type: 'new_meal',
+                message: `${fromNickname}님이 새 식사를 기록했어요: ${title}`,
+                is_read: false,
+              }))
+            )
+            if (notifErr) console.error('[MealForm] 알림 생성 실패:', notifErr)
+          }
+        } catch (e) {
+          console.error('[MealForm] 알림 처리 중 오류:', e)
+        }
+      }
     } finally {
       setUploading(false)
     }

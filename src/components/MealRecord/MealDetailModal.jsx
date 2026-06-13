@@ -71,7 +71,7 @@ function CommentItem({ comment, currentUserId, onDelete }) {
 
 // ── 별점 섹션 (평균 표시 + 내 별점 입력) ────────────────────────────────
 function RatingsSection({ mealId }) {
-  const { user, ratingsMap, addOrUpdateRating, deleteRating } = useApp()
+  const { user, ratingsMap, addOrUpdateRating, deleteRating, spaces, currentSpace } = useApp()
   const ratings = ratingsMap?.[mealId] || []
   const myRating = ratings.find(r => r.user_id === user?.id)
   const [saving, setSaving] = useState(false)
@@ -88,6 +88,27 @@ function RatingsSection({ mealId }) {
       await deleteRating(mealId)
     } else {
       await addOrUpdateRating(mealId, value)
+      // 식사 작성자에게 별점 알림 (내 게시글이 아닐 때만)
+      try {
+        const meal = spaces?.flatMap(s => s.meals).find(m => m.id === mealId)
+        if (meal?.userId && meal.userId !== user.id) {
+          const fromNickname = user.user_metadata?.name || user.user_metadata?.full_name || '멤버'
+          const { error: notifErr } = await supabase.from('notifications').insert({
+            user_id: meal.userId,
+            space_id: currentSpace?.id || null,
+            meal_id: mealId,
+            from_user_id: user.id,
+            from_nickname: fromNickname,
+            from_avatar_url: user.user_metadata?.avatar_url || '',
+            type: 'new_rating',
+            message: `${fromNickname}님이 별점 ${value}점을 남겼어요`,
+            is_read: false,
+          })
+          if (notifErr) console.error('[RatingsSection] 알림 생성 실패:', notifErr)
+        }
+      } catch (e) {
+        console.error('[RatingsSection] 알림 처리 중 오류:', e)
+      }
     }
     setSaving(false)
   }
