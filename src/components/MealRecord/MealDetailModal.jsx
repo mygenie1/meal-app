@@ -277,18 +277,22 @@ export default function MealDetailModal({ meal, onClose }) {
       try {
         if (liveMeal.userId && liveMeal.userId !== user?.id) {
           const fromNickname = user?.user_metadata?.name || user?.user_metadata?.full_name || '멤버'
-          await supabase.from('notifications').insert({
+          const { error: notifErr } = await supabase.from('notifications').insert({
             user_id: liveMeal.userId,
             space_id: currentSpace?.id || null,
             meal_id: liveMeal.id,
             from_user_id: user?.id || null,
             from_nickname: fromNickname,
             from_avatar_url: user?.user_metadata?.avatar_url || '',
-            type: 'comment',
-            message: `${fromNickname}님이 댓글을 달았어요: ${trimmed.length > 20 ? trimmed.slice(0, 20) + '…' : trimmed}`,
+            type: 'new_comment',
+            message: `${fromNickname}님이 댓글을 남겼어요: ${trimmed.length > 20 ? trimmed.slice(0, 20) + '…' : trimmed}`,
+            is_read: false,
           })
+          if (notifErr) console.error('[handleAddComment] 알림 생성 실패:', notifErr)
         }
-      } catch {}
+      } catch (e) {
+        console.error('[handleAddComment] 알림 처리 중 오류:', e)
+      }
     }
   }
 

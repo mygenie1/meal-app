@@ -643,18 +643,20 @@ export function AppProvider({ children }) {
 
     console.log('[addMeal] INSERT 성공, DB id=', data.id, '| created_at=', data.created_at)
 
-    // 스페이스 멤버들에게 새 식사 알림 (비동기, 실패해도 무시)
+    // 스페이스 멤버들에게 새 식사 알림 (비동기, 실패해도 메인 기능 영향 없음)
     if (user) {
       try {
-        const { data: members } = await supabase
+        const { data: members, error: membersErr } = await supabase
           .from('space_members')
           .select('user_id')
           .eq('space_id', currentSpaceId)
           .neq('user_id', user.id)
-        if (members?.length > 0) {
+        if (membersErr) {
+          console.error('[addMeal] space_members 조회 실패:', membersErr)
+        } else if (members?.length > 0) {
           const title = mealData.title || mealData.restaurantName || '식사'
           const fromNickname = user.user_metadata?.name || user.user_metadata?.full_name || '멤버'
-          await supabase.from('notifications').insert(
+          const { error: notifErr } = await supabase.from('notifications').insert(
             members.map(m => ({
               user_id: m.user_id,
               space_id: currentSpaceId,
@@ -664,10 +666,14 @@ export function AppProvider({ children }) {
               from_avatar_url: user.user_metadata?.avatar_url || '',
               type: 'new_meal',
               message: `${fromNickname}님이 새 식사를 기록했어요: ${title}`,
+              is_read: false,
             }))
           )
+          if (notifErr) console.error('[addMeal] 알림 생성 실패:', notifErr)
         }
-      } catch {}
+      } catch (e) {
+        console.error('[addMeal] 알림 처리 중 오류:', e)
+      }
     }
 
     // 임시 항목을 DB 실제 ID로 교체
@@ -894,15 +900,22 @@ export function AppProvider({ children }) {
       if (meal?.userId && meal.userId !== user.id) {
         const spaceId = spaces.find(s => s.meals.some(m => m.id === mealId))?.id || null
         const fromNickname = user.user_metadata?.name || user.user_metadata?.full_name || '멤버'
-        await supabase.from('notifications').insert({
-          user_id: meal.userId, space_id: spaceId, meal_id: mealId,
-          from_user_id: user.id, from_nickname: fromNickname,
+        const { error: notifErr } = await supabase.from('notifications').insert({
+          user_id: meal.userId,
+          space_id: spaceId,
+          meal_id: mealId,
+          from_user_id: user.id,
+          from_nickname: fromNickname,
           from_avatar_url: user.user_metadata?.avatar_url || '',
-          type: 'rating',
+          type: 'new_rating',
           message: `${fromNickname}님이 별점 ${rating}점을 남겼어요`,
+          is_read: false,
         })
+        if (notifErr) console.error('[addOrUpdateRating] 알림 생성 실패:', notifErr)
       }
-    } catch {}
+    } catch (e) {
+      console.error('[addOrUpdateRating] 알림 처리 중 오류:', e)
+    }
     return true
   }
 

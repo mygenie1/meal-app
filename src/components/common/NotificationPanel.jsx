@@ -12,7 +12,13 @@ function formatTimeAgo(dateStr) {
   return new Date(dateStr).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
 }
 
-const TYPE_LABEL = { new_meal: '새 기록', comment: '댓글', rating: '별점' }
+const TYPE_LABEL = {
+  new_meal: '새 기록',
+  new_comment: '댓글',
+  new_rating: '별점',
+  comment: '댓글',   // 레거시 호환
+  rating: '별점',    // 레거시 호환
+}
 
 // ── 벨 아이콘 버튼 (배지 포함) ──────────────────────────────────────────
 export function NotificationBell({ onClick }) {
