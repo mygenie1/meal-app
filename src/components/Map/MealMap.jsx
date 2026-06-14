@@ -722,9 +722,16 @@ function RandomPickModal({ candidates, result, onClose, onRepick, onViewOnMap })
   )
 }
 
+function formatWishDistance(km) {
+  if (km == null) return null
+  if (km < 1) return `${Math.round(km * 1000)}m`
+  return `${km.toFixed(1)}km`
+}
+
 // ── WishListCard ───────────────────────────────────────────────
-function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail, interestCount, isInterested, onInterestToggle }) {
+function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail, interestCount, isInterested, onInterestToggle, distance }) {
   const catColor = WISH_CATEGORY_COLORS[item.category]
+  const distStr = formatWishDistance(distance)
   return (
     <div
       id={`wish-card-${item.id}`}
@@ -738,15 +745,20 @@ function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail, i
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-warm-dark text-base leading-snug">{item.name}</p>
-            {item.location && (
-              <p className="text-xs text-warm-light mt-0.5 flex items-center gap-1">
-                <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
-                  <circle cx="12" cy="8" r="2" />
-                </svg>
-                {item.location}
-              </p>
-            )}
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              {item.location && (
+                <p className="text-xs text-warm-light flex items-center gap-1">
+                  <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
+                    <circle cx="12" cy="8" r="2" />
+                  </svg>
+                  {item.location}
+                </p>
+              )}
+              {distStr && (
+                <span className="text-xs text-cream-400 font-medium">{distStr}</span>
+              )}
+            </div>
           </div>
           {item.category && catColor && (
             <span className="text-xs px-2 py-0.5 rounded-full font-medium text-warm-dark shrink-0" style={{ background: catColor }}>
@@ -835,9 +847,10 @@ export default function MealMap({ onViewMeal, onTabChange }) {
   const [wishFlyTarget, setWishFlyTarget] = useState(null)
   const wishUserOverlayRef = useRef(null)
   const [wishLocating, setWishLocating] = useState(false)
-  const [visibleWishIds, setVisibleWishIds] = useState(null) // null = 전체 표시 (지도 미초기화 시)
-  const wishlistWithCoordsRef = useRef([])
   const wishMapContainerRef = useRef(null)
+  const [wishSortLocation, setWishSortLocation] = useState({ lat: SEOUL.lat, lng: SEOUL.lng })
+  const wishSortLocationFetchedRef = useRef(false)
+  const [wishDisplayCount, setWishDisplayCount] = useState(20)
 
   // ── 근처 알림 ─────────────────────────────────────────────────
   const [nearbyWish, setNearbyWish] = useState(null)
@@ -1039,35 +1052,20 @@ export default function MealMap({ onViewMeal, onTabChange }) {
     }
   }, [wishlistWithCoords, wishMapReady])
 
-  // ── 가고 싶은 곳 뷰포트 필터 (wishlist 변경 시 즉시 갱신 + ref 업데이트) ──
+  // ── 위시리스트 탭 진입 시 현재 위치 가져오기 (거리순 정렬용) ───────────
   useEffect(() => {
-    wishlistWithCoordsRef.current = wishlistWithCoords
-    if (!wishMapReady || !wishKakaoMapRef.current) return
-    const bounds = wishKakaoMapRef.current.getBounds()
-    if (!bounds) return
-    setVisibleWishIds(new Set(
-      wishlistWithCoords
-        .filter(w => bounds.contain(new window.kakao.maps.LatLng(w.lat, w.lng)))
-        .map(w => w.id)
-    ))
-  }, [wishlistWithCoords, wishMapReady])
+    if (activeTab !== 'wishlist') return
+    if (wishSortLocationFetchedRef.current) return
+    wishSortLocationFetchedRef.current = true
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      pos => setWishSortLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {} // 실패 시 서울시청 기본값 유지
+    )
+  }, [activeTab])
 
-  // ── 가고 싶은 곳 idle 이벤트 → 뷰포트 목록 갱신 ───────────────────
-  useEffect(() => {
-    if (!wishMapReady || !wishKakaoMapRef.current) return
-    const map = wishKakaoMapRef.current
-    const handleIdle = () => {
-      const bounds = map.getBounds()
-      if (!bounds) return
-      setVisibleWishIds(new Set(
-        wishlistWithCoordsRef.current
-          .filter(w => w.lat && w.lng && bounds.contain(new window.kakao.maps.LatLng(w.lat, w.lng)))
-          .map(w => w.id)
-      ))
-    }
-    window.kakao.maps.event.addListener(map, 'idle', handleIdle)
-    return () => { window.kakao.maps.event.removeListener(map, 'idle', handleIdle) }
-  }, [wishMapReady])
+  // ── 필터 변경 시 더보기 카운트 리셋 ───────────────────────────────
+  useEffect(() => { setWishDisplayCount(20) }, [wishFilter])
 
   // ── 맛집 마커 갱신 (fitBounds 제거) ──────────────────────────
   useEffect(() => {
@@ -1578,12 +1576,15 @@ export default function MealMap({ onViewMeal, onTabChange }) {
             )}
 
             {(() => {
-              // 뷰포트 필터 (좌표 있는 항목만)
-              const viewportFiltered = visibleWishIds === null
-                ? unvisited
-                : unvisited.filter(w => !w.lat || !w.lng || visibleWishIds.has(w.id))
+              // 거리순 정렬 (좌표 없는 항목은 뒤로)
+              const sorted = [...unvisited].sort((a, b) => {
+                if (!a.lat || !a.lng) return 1
+                if (!b.lat || !b.lng) return -1
+                return haversineKm(wishSortLocation.lat, wishSortLocation.lng, a.lat, a.lng)
+                     - haversineKm(wishSortLocation.lat, wishSortLocation.lng, b.lat, b.lng)
+              })
               // 관심 필터
-              const displayUnvisited = viewportFiltered.filter(w => {
+              const filtered = sorted.filter(w => {
                 if (wishFilter === 'all') return true
                 const interests = wishlistInterestsMap[w.id] || []
                 if (wishFilter === 'mine') return interests.some(i => i.user_id === user?.id)
@@ -1592,6 +1593,8 @@ export default function MealMap({ onViewMeal, onTabChange }) {
                 }
                 return true
               })
+              const displayUnvisited = filtered.slice(0, wishDisplayCount)
+              const hasMore = filtered.length > wishDisplayCount
               return unvisited.length === 0 ? (
                 <div className="py-10 text-center mb-6">
                   <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mx-auto mb-3">
@@ -1602,56 +1605,65 @@ export default function MealMap({ onViewMeal, onTabChange }) {
                   <p className="text-sm font-medium text-warm-dark mb-1">아직 가고 싶은 곳이 없어요</p>
                   <p className="text-xs text-warm-light">위 버튼으로 가고 싶은 장소를 추가해보세요</p>
                 </div>
-              ) : displayUnvisited.length === 0 ? (
+              ) : filtered.length === 0 ? (
                 <div className="py-8 text-center mb-6">
-                  <p className="text-sm font-medium text-warm-dark mb-1">
-                    {wishFilter !== 'all' ? '해당하는 장소가 없어요' : '이 지역에 등록된 장소가 없어요'}
-                  </p>
-                  <p className="text-xs text-warm-light">
-                    {wishFilter !== 'all' ? '다른 필터를 선택해보세요' : '지도를 이동하거나 축소하면 다른 장소가 보여요'}
-                  </p>
+                  <p className="text-sm font-medium text-warm-dark mb-1">해당하는 장소가 없어요</p>
+                  <p className="text-xs text-warm-light">다른 필터를 선택해보세요</p>
                 </div>
               ) : (
-                <div className="space-y-3 mb-6">
-                  {displayUnvisited.map(item => {
-                    const interests = wishlistInterestsMap[item.id] || []
-                    const isInterested = interests.some(i => i.user_id === user?.id)
-                    return (
-                      <WishListCard key={item.id} item={item}
-                        highlighted={item.id === highlightedWishId}
-                        onViewDetail={() => setViewingWish(item)}
-                        onVisit={e => { e?.stopPropagation(); setVisitingWish(item) }}
-                        onViewOnMap={item.lat && item.lng ? (e => { e?.stopPropagation(); handleViewOnMap(item) }) : null}
-                        interestCount={interests.length}
-                        isInterested={isInterested}
-                        onInterestToggle={async e => {
-                          e?.stopPropagation()
-                          if (isInterested) {
-                            await removeWishlistInterest(item.id)
-                          } else {
-                            const ok = await addWishlistInterest(item.id)
-                            if (ok) {
-                              try {
-                                const { data: members } = await supabase.from('space_members').select('user_id').eq('space_id', currentSpace?.id)
-                                if (members?.length > 0) {
-                                  const fromUser = buildFromUser(user)
-                                  const nick = user?.user_metadata?.name || user?.user_metadata?.full_name || '누군가'
-                                  await Promise.all(members.map(m => sendNotification({
-                                    toUserId: m.user_id,
-                                    spaceId: currentSpace?.id,
-                                    fromUser,
-                                    type: 'wishlist_interest',
-                                    message: `${nick}님도 "${item.name}"에 가고 싶어해요`,
-                                  })))
-                                }
-                              } catch {}
+                <>
+                  <div className="space-y-3 mb-3">
+                    {displayUnvisited.map(item => {
+                      const interests = wishlistInterestsMap[item.id] || []
+                      const isInterested = interests.some(i => i.user_id === user?.id)
+                      const dist = (item.lat && item.lng)
+                        ? haversineKm(wishSortLocation.lat, wishSortLocation.lng, item.lat, item.lng)
+                        : null
+                      return (
+                        <WishListCard key={item.id} item={item}
+                          highlighted={item.id === highlightedWishId}
+                          onViewDetail={() => setViewingWish(item)}
+                          onVisit={e => { e?.stopPropagation(); setVisitingWish(item) }}
+                          onViewOnMap={item.lat && item.lng ? (e => { e?.stopPropagation(); handleViewOnMap(item) }) : null}
+                          interestCount={interests.length}
+                          isInterested={isInterested}
+                          distance={dist}
+                          onInterestToggle={async e => {
+                            e?.stopPropagation()
+                            if (isInterested) {
+                              await removeWishlistInterest(item.id)
+                            } else {
+                              const ok = await addWishlistInterest(item.id)
+                              if (ok) {
+                                try {
+                                  const { data: members } = await supabase.from('space_members').select('user_id').eq('space_id', currentSpace?.id)
+                                  if (members?.length > 0) {
+                                    const fromUser = buildFromUser(user)
+                                    const nick = user?.user_metadata?.name || user?.user_metadata?.full_name || '누군가'
+                                    await Promise.all(members.map(m => sendNotification({
+                                      toUserId: m.user_id,
+                                      spaceId: currentSpace?.id,
+                                      fromUser,
+                                      type: 'wishlist_interest',
+                                      message: `${nick}님도 "${item.name}"에 가고 싶어해요`,
+                                    })))
+                                  }
+                                } catch {}
+                              }
                             }
-                          }
-                        }}
-                      />
-                    )
-                  })}
-                </div>
+                          }}
+                        />
+                      )
+                    })}
+                  </div>
+                  {hasMore && (
+                    <button
+                      onClick={() => setWishDisplayCount(c => c + 20)}
+                      className="w-full py-2.5 mb-3 rounded-2xl border border-cream-200 text-warm-light text-sm hover:bg-cream-100 transition-colors active:scale-[0.98]">
+                      더보기 ({filtered.length - wishDisplayCount}개 남음)
+                    </button>
+                  )}
+                </>
               )
             })()}
 
