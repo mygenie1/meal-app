@@ -169,6 +169,7 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
   const [commentsLoaded, setCommentsLoaded] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [commentError, setCommentError] = useState('')
   const [toast, setToast] = useState('')
   const [isPhotoFullscreen, setIsPhotoFullscreen] = useState(false)
   const commentsEndRef = useRef(null)
@@ -213,6 +214,7 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
     console.log('[wishlist comment] 게시 클릭', { wishlist_id: item.id, trimmed })
     if (!trimmed || submitting) return
     setSubmitting(true)
+    setCommentError('')
     console.log('[wishlist comment] insert 시도, wishlist_id=', item.id)
     const { data, error } = await supabase.from('comments').insert({
       wishlist_id: item.id,
@@ -229,6 +231,11 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
       setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     } else if (error) {
       console.error('[wishlist comment] insert 오류:', error.message, '| code:', error.code, '| details:', error.details)
+      if (error.code === '42703') {
+        setCommentError('DB 설정 필요: wishlist-comments-migration.sql을 Supabase에서 실행해주세요')
+      } else {
+        setCommentError('댓글 등록에 실패했어요. 잠시 후 다시 시도해주세요.')
+      }
     }
   }
 
@@ -388,6 +395,9 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
           )}
           <div ref={commentsEndRef} />
         </div>
+        {commentError && (
+          <p className="text-[11px] text-red-400 mb-2 px-1">{commentError}</p>
+        )}
         <form
           onSubmit={handleAddComment}
           className="flex items-center gap-2.5 sticky bottom-0 bg-cream-50 pt-2"
