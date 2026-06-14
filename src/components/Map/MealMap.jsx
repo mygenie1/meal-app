@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { getThumbUrl, uploadPhotoToStorage } from '../../lib/uploadPhoto'
 import Modal from '../common/Modal'
 import MealForm from '../MealRecord/MealForm'
+import FullscreenViewer from '../common/FullscreenViewer'
 import { linkify } from '../../lib/linkify'
 
 // ── 상수 ──────────────────────────────────────────────────────
@@ -169,6 +170,7 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
   const [commentText, setCommentText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState('')
+  const [isPhotoFullscreen, setIsPhotoFullscreen] = useState(false)
   const commentsEndRef = useRef(null)
 
   useEffect(() => {
@@ -208,8 +210,10 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
   async function handleAddComment(e) {
     e.preventDefault()
     const trimmed = commentText.trim()
+    console.log('[wishlist comment] 게시 클릭', { wishlist_id: item.id, trimmed })
     if (!trimmed || submitting) return
     setSubmitting(true)
+    console.log('[wishlist comment] insert 시도, wishlist_id=', item.id)
     const { data, error } = await supabase.from('comments').insert({
       wishlist_id: item.id,
       user_id: user?.id || null,
@@ -217,11 +221,14 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
       avatar_url: user?.user_metadata?.avatar_url || '',
       content: trimmed,
     }).select().single()
+    console.log('[wishlist comment] insert 결과:', { data, error: error?.message, code: error?.code })
     setSubmitting(false)
     if (!error && data) {
       setComments(prev => prev.find(c => c.id === data.id) ? prev : [...prev, data])
       setCommentText('')
       setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+    } else if (error) {
+      console.error('[wishlist comment] insert 오류:', error.message, '| code:', error.code, '| details:', error.details)
     }
   }
 
@@ -243,11 +250,25 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
         </div>
       )}
 
-      {/* 사진 */}
+      {/* 사진 — 클릭 시 전체화면 */}
       {item.photo && (
-        <div className="-mx-5 -mt-4 mb-4">
+        <div className="-mx-5 -mt-4 mb-4 cursor-pointer relative" onClick={() => setIsPhotoFullscreen(true)}>
           <img src={item.photo} alt="" className="w-full max-h-56 object-cover" />
+          <div className="absolute bottom-2 right-2 bg-black/40 rounded-full p-1.5 pointer-events-none">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+            </svg>
+          </div>
         </div>
+      )}
+
+      {/* 전체화면 뷰어 */}
+      {isPhotoFullscreen && item.photo && (
+        <FullscreenViewer
+          photos={[item.photo]}
+          initialIndex={0}
+          onClose={() => setIsPhotoFullscreen(false)}
+        />
       )}
 
       {/* 헤더: 장소명 + 공유 버튼 */}
