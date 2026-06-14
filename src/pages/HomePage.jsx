@@ -37,6 +37,13 @@ const RATING_FILTERS = [
 
 const TAG_FILTERS = ['전체', '집밥', '외식', '카페', '배달']
 
+// 별점 평균 — ratings 테이블(ratingsMap) 기준, 없으면 레거시 meal.rating 폴백
+function avgRatingOf(ratingsMap, meal) {
+  const rs = ratingsMap?.[meal.id] || []
+  if (rs.length > 0) return Math.floor(rs.reduce((s, r) => s + r.rating, 0) / rs.length)
+  return meal.rating || 0
+}
+
 function FeedCard({ meal, onClick }) {
   const { ratingsMap } = useApp()
   const dateObj = parseISO(meal.date)
@@ -113,7 +120,7 @@ function FeedCard({ meal, onClick }) {
 }
 
 export default function HomePage() {
-  const { currentSpace, spaces, loadMealPhotos } = useApp()
+  const { currentSpace, spaces, loadMealPhotos, ratingsMap } = useApp()
   const navigate = useNavigate()
   const [selectedMeal, setSelectedMeal] = useState(null)
   const [todayFormOpen, setTodayFormOpen] = useState(false)
@@ -151,10 +158,10 @@ export default function HomePage() {
     })
     const topTagEntry = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])[0] || null
 
-    const fiveStarCount = meals.filter(m => m.rating === 5).length
+    const fiveStarCount = meals.filter(m => avgRatingOf(ratingsMap, m) === 5).length
 
     return { totalCount, thisMonthCount, topRestaurants, topTagEntry, fiveStarCount }
-  }, [meals])
+  }, [meals, ratingsMap])
 
   const MEAL_TIME_ORDER = { 아침: 0, 점심: 1, 저녁: 2 }
   const sortedMeals = useMemo(
@@ -168,14 +175,14 @@ export default function HomePage() {
 
   const filteredMeals = useMemo(() => {
     return sortedMeals.filter(m => {
-      const r = m.rating || 0
+      const r = avgRatingOf(ratingsMap, m)
       if (ratingFilter === '3+' && r < 3) return false
       if (ratingFilter === '4+' && r < 4) return false
       if (ratingFilter === '5'  && r !== 5) return false
       if (tagFilter && m.tag !== tagFilter) return false
       return true
     })
-  }, [sortedMeals, ratingFilter, tagFilter])
+  }, [sortedMeals, ratingFilter, tagFilter, ratingsMap])
 
   const visibleMeals = filteredMeals.slice(0, visibleCount)
   const hasMore = visibleCount < filteredMeals.length

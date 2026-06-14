@@ -250,22 +250,31 @@ function LocationField({ form, geoStatus, onLocationChange, onLocationBlur }) {
 
 // ─── MealForm 메인 컴포넌트 ───────────────────────────────────────────────
 export default function MealForm({ date, onSubmit, onCancel, initial }) {
-  const { currentSpace, deleteIngredient, user } = useApp()
+  const { currentSpace, deleteIngredient, user, ratingsMap, addOrUpdateRating, deleteRating } = useApp()
 
   const [step, setStep] = useState(() => initial?.tag ? 'form' : 'tag')
   const [uploading, setUploading] = useState(false)
   const [formDate, setFormDate] = useState(
     () => initial?.date ?? format(date, 'yyyy-MM-dd')
   )
-  const [form, setForm] = useState(() => ({
-    title: '', restaurantName: '', location: '', lat: null, lng: null,
-    rating: 0, review: '', memo: '', tag: '',
-    mealTime: getAutoMealTime(),  // 현재 시간 자동 감지
-    ...initial,
-    photos: initial?.photos?.length > 0
-      ? initial.photos
-      : (initial?.photo ? [initial.photo] : []),
-  }))
+  const [form, setForm] = useState(() => {
+    // 별점은 ratings 테이블로 통일 — 수정 모드에서는 내(작성자) ratings row로 초기화
+    let initialRating = 0
+    if (initial?.id && user) {
+      const mine = (ratingsMap?.[initial.id] || []).find(r => r.user_id === user.id)
+      initialRating = mine?.rating || 0
+    }
+    return {
+      title: '', restaurantName: '', location: '', lat: null, lng: null,
+      review: '', memo: '', tag: '',
+      mealTime: getAutoMealTime(),  // 현재 시간 자동 감지
+      ...initial,
+      rating: initialRating,
+      photos: initial?.photos?.length > 0
+        ? initial.photos
+        : (initial?.photo ? [initial.photo] : []),
+    }
+  })
   const [geoStatus, setGeoStatus] = useState(
     () => (initial?.lat && initial?.lng) ? 'found' : 'idle'
   )
@@ -369,7 +378,25 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       const uploadedPhotos = await Promise.all(
         form.photos.map(p => uploadPhotoWithThumbnail(p, spaceId))
       )
-      const newMeal = await onSubmit({ ...form, date: formDate, lat, lng, photos: uploadedPhotos, photo: uploadedPhotos[0] || '' })
+      // 별점은 meals.rating에 쓰지 않고 ratings 테이블로 통일 → payload에서 제외
+      const { rating: _selectedRating, ...formNoRating } = form
+      const newMeal = await onSubmit({ ...formNoRating, date: formDate, lat, lng, photos: uploadedPhotos, photo: uploadedPhotos[0] || '' })
+
+      // 작성자 별점 → ratings 테이블 upsert (신규: meal insert 후 / 수정: 기존 row 갱신)
+      const mealId = newMeal?.id || initial?.id
+      if (mealId && user) {
+        try {
+          if (form.rating > 0) {
+            await addOrUpdateRating(mealId, form.rating)
+          } else if (initial?.id) {
+            // 수정 모드에서 별점을 비웠고 기존 내 별점이 있으면 삭제
+            const hadMine = (ratingsMap?.[initial.id] || []).some(r => r.user_id === user.id)
+            if (hadMine) await deleteRating(mealId)
+          }
+        } catch (e) {
+          console.error('[MealForm] 별점 저장 중 오류:', e)
+        }
+      }
       // 새 게시글 알림 — 수정이 아닌 신규 등록이고 다른 멤버가 있을 때만
       if (!initial && newMeal?.id && user && currentSpace?.id) {
         try {

@@ -42,14 +42,13 @@ const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, 
 // 앱 내부 meal 객체 → DB insert/update 용
 function mealToRow(data) {
   const photos = data.photos ?? (data.photo ? [data.photo] : [])
-  return {
+  const row = {
     date: data.date,
     title: data.title ?? '',
     restaurant_name: data.restaurantName ?? '',
     location: data.location ?? '',
     lat: data.lat ?? null,
     lng: data.lng ?? null,
-    rating: data.rating ?? 0,
     review: data.review ?? '',
     memo: data.memo ?? '',
     tag: data.tag ?? '',
@@ -58,6 +57,10 @@ function mealToRow(data) {
     meal_time: data.mealTime ?? '',
     from_wishlist: data.fromWishlist ?? false,
   }
+  // 별점은 ratings 테이블로 통일됨. rating이 명시적으로 전달된 경우에만 컬럼에 기록
+  // (레거시 데이터 보존 — MealForm은 더 이상 rating을 보내지 않으므로 수정 시 기존 값 유지)
+  if (data.rating !== undefined) row.rating = data.rating
+  return row
 }
 
 function rowToIngredient(row) {
