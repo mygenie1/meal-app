@@ -462,24 +462,25 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
 
   const isGeocoding = geoStatus === 'loading'
   const isBusy = isGeocoding || uploading
-  // 집밥 재료 = ingredients 테이블 toBuy 타입 (재료 탭 "살 것 목록"과 동일 데이터 공유)
-  const homeIngredients = currentSpace?.ingredients?.toBuy || []
+  // 집밥 재료 = ingredients 테이블 remaining 타입 (재료 탭 "남은 재료"와 동일 데이터 공유)
+  // 집밥은 이미 산(냉장고에 남은) 재료를 쓰는 것이므로 남은 재료 목록을 보여줌
+  const homeIngredients = currentSpace?.ingredients?.remaining || []
   const style = TAG_STYLE[form.tag] || {}
 
-  // 재료 추가 — ingredients 테이블에 즉시 insert (toBuy)
+  // 재료 추가 — ingredients 테이블에 즉시 insert (remaining)
   async function handleAddIngredient(e) {
     e.preventDefault()
     const text = ingInput.trim()
     if (!text) return
-    await addIngredient('toBuy', text, ingQty)
+    await addIngredient('remaining', text, ingQty)
     setIngInput('')
     setIngQty(1)
   }
 
   // - 버튼: quantity>1이면 감소, 1이면 삭제
   function handleIngredientDecrement(item) {
-    if (item.quantity > 1) updateIngredientQuantity('toBuy', item.id, item.quantity - 1)
-    else deleteIngredient('toBuy', item.id)
+    if (item.quantity > 1) updateIngredientQuantity('remaining', item.id, item.quantity - 1)
+    else deleteIngredient('remaining', item.id)
   }
 
   // ── Step 1: 날짜 + 태그 + 끼니 ───────────────────────────────────────
@@ -808,7 +809,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           </div>
         )}
 
-        {/* 집밥: 재료 — ingredients 테이블 toBuy와 공유 (재료 탭과 실시간 연동) */}
+        {/* 집밥: 재료 — ingredients 테이블 remaining과 공유 (재료 탭과 실시간 연동) */}
         {form.tag === '집밥' && (
           <div className="rounded-2xl border border-cream-200 overflow-hidden">
             <button
@@ -833,7 +834,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
             </button>
             {ingredientsOpen && (
               <div className="px-4 py-3 space-y-3">
-                <p className="text-xs text-warm-light">재료 탭 "살 것 목록"과 함께 관리돼요</p>
+                <p className="text-xs text-warm-light">재료 탭 "남은 재료"와 함께 관리돼요</p>
 
                 {/* 입력: 재료명 + 개수 스테퍼 + 추가 */}
                 <div className="flex items-center gap-2">
@@ -871,7 +872,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
                           quantity={item.quantity}
                           minusAsDelete={item.quantity <= 1}
                           onDecrement={() => handleIngredientDecrement(item)}
-                          onIncrement={() => updateIngredientQuantity('toBuy', item.id, item.quantity + 1)}
+                          onIncrement={() => updateIngredientQuantity('remaining', item.id, item.quantity + 1)}
                         />
                       </div>
                     ))}

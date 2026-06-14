@@ -260,13 +260,26 @@ export function AppProvider({ children }) {
           setSpaces(prev => prev.map(s => {
             if (s.id !== newRow.space_id) return s
             const type = newRow.type
+            const item = rowToIngredient(newRow)
+            const inTarget = s.ingredients[type]?.some(i => i.id === newRow.id)
+            if (inTarget) {
+              // 같은 타입 내 갱신 — 순서 유지
+              return {
+                ...s,
+                ingredients: {
+                  ...s.ingredients,
+                  [type]: s.ingredients[type].map(i => i.id === newRow.id ? item : i),
+                },
+              }
+            }
+            // 타입 변경(살것↔남은재료 이동) — 반대편에서 제거 후 새 타입에 추가
+            const other = type === 'toBuy' ? 'remaining' : 'toBuy'
             return {
               ...s,
               ingredients: {
                 ...s.ingredients,
-                [type]: s.ingredients[type].map(i =>
-                  i.id === newRow.id ? rowToIngredient(newRow) : i
-                ),
+                [other]: (s.ingredients[other] || []).filter(i => i.id !== newRow.id),
+                [type]: [...(s.ingredients[type] || []).filter(i => i.id !== newRow.id), item],
               },
             }
           }))
@@ -813,6 +826,31 @@ export function AppProvider({ children }) {
     ))
   }
 
+  // 살 것 → 남은 재료로 이동 (장본 재료를 냉장고로). type을 remaining으로 바꾸고 done 리셋
+  async function moveIngredientToRemaining(itemId) {
+    const item = currentSpace?.ingredients?.toBuy?.find(i => i.id === itemId)
+    if (!item) return
+
+    const { error } = await supabase
+      .from('ingredients')
+      .update({ type: 'remaining', done: false })
+      .eq('id', itemId)
+
+    if (error) { console.error(error); return }
+
+    setSpaces(prev => prev.map(s =>
+      s.id === currentSpaceId
+        ? {
+            ...s,
+            ingredients: {
+              toBuy: s.ingredients.toBuy.filter(i => i.id !== itemId),
+              remaining: [...s.ingredients.remaining, { ...item, done: false }],
+            },
+          }
+        : s
+    ))
+  }
+
   // 재료 개수 변경 (최소 1) — 0 이하로 줄이려면 호출 측에서 deleteIngredient 사용
   async function updateIngredientQuantity(type, itemId, quantity) {
     const qty = Math.max(1, quantity)
@@ -1122,6 +1160,7 @@ export function AppProvider({ children }) {
         cacheGeocoords,
         addIngredient,
         toggleIngredient,
+        moveIngredientToRemaining,
         updateIngredientQuantity,
         deleteIngredient,
         addWishlistItem,

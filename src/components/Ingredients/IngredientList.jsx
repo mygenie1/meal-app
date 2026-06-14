@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import { QtyStepper } from './QtyStepper'
 
-function Section({ title, emoji, type, items, onAdd, onToggle, onChangeQty, onDelete }) {
+function Section({ title, emoji, type, items, onAdd, onCheck, onChangeQty, onDelete, checkHint }) {
   const [input, setInput] = useState('')
   const [qty, setQty] = useState(1)
 
@@ -76,8 +76,9 @@ function Section({ title, emoji, type, items, onAdd, onToggle, onChangeQty, onDe
             >
               {/* 커스텀 원형 체크박스 */}
               <button
-                onClick={() => onToggle(type, item.id)}
-                aria-label={item.done ? '완료 해제' : '완료 체크'}
+                onClick={() => onCheck(item)}
+                aria-label={checkHint || (item.done ? '완료 해제' : '완료 체크')}
+                title={checkHint}
                 className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors ${
                   item.done ? 'bg-warm-brown border-warm-brown' : 'border-cream-300 hover:border-warm-brown'
                 }`}
@@ -110,7 +111,7 @@ function Section({ title, emoji, type, items, onAdd, onToggle, onChangeQty, onDe
 }
 
 export default function IngredientList() {
-  const { currentSpace, addIngredient, toggleIngredient, updateIngredientQuantity, deleteIngredient } = useApp()
+  const { currentSpace, addIngredient, toggleIngredient, moveIngredientToRemaining, updateIngredientQuantity, deleteIngredient } = useApp()
 
   if (!currentSpace) {
     return (
@@ -133,7 +134,8 @@ export default function IngredientList() {
         type="toBuy"
         items={toBuy}
         onAdd={addIngredient}
-        onToggle={toggleIngredient}
+        onCheck={item => moveIngredientToRemaining(item.id)}
+        checkHint="체크하면 남은 재료로 이동해요"
         onChangeQty={updateIngredientQuantity}
         onDelete={deleteIngredient}
       />
@@ -143,7 +145,7 @@ export default function IngredientList() {
         type="remaining"
         items={remaining}
         onAdd={addIngredient}
-        onToggle={toggleIngredient}
+        onCheck={item => toggleIngredient('remaining', item.id)}
         onChangeQty={updateIngredientQuantity}
         onDelete={deleteIngredient}
       />
