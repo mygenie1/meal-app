@@ -200,6 +200,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
           const repMeal = repMealId ? dayMeals.find(m => m.id === repMealId) : null
           const displayMeal = repMeal || dayMeals.find(m => m.photos?.[0]) || dayMeals[0]
           const thumbPhoto = displayMeal ? getThumbUrl(displayMeal.photos?.[0] || '') : ''
+          const displayTitle = displayMeal?.title || displayMeal?.restaurantName || '식사'
           const inMonth = isSameMonth(day, current)
           const today = isToday(day)
 
@@ -215,12 +216,14 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
             >
               {hasMeals ? (
                 <>
-                  {/* 사진 배경 (없으면 베이지) */}
+                  {/* 사진 배경 + 하단 그라데이션 (없으면 베이지) */}
                   {thumbPhoto ? (
-                    <div className="absolute inset-0">
-                      <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
-                      <div className="absolute inset-0 bg-black/20" />
-                    </div>
+                    <>
+                      <div className="absolute inset-0">
+                        <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
+                      </div>
+                      <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/60 to-transparent" />
+                    </>
                   ) : (
                     <div className="absolute inset-0 bg-cream-200" />
                   )}
@@ -229,8 +232,12 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
                     <span className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-rose-400 z-20 shadow-sm" />
                   )}
                   {/* 날짜 숫자 (우상단) */}
-                  <span className={`absolute top-0.5 right-1 text-[10px] font-medium z-10 ${thumbPhoto ? 'text-white drop-shadow-sm' : 'text-warm-dark'}`}>
+                  <span className={`absolute top-0.5 right-1 text-[10px] font-semibold z-10 drop-shadow-sm ${thumbPhoto ? 'text-white' : 'text-warm-dark'}`}>
                     {format(day, 'd')}
+                  </span>
+                  {/* 제목 (하단, 말줄임) */}
+                  <span className={`absolute bottom-0.5 left-1 right-1 text-[9px] font-medium leading-tight truncate z-10 ${dayMeals.length > 1 ? 'pr-3.5' : ''} ${thumbPhoto ? 'text-white drop-shadow-sm' : 'text-warm-brown'}`}>
+                    {displayTitle}
                   </span>
                   {/* 여러 끼니 기록 — 우하단 숫자 뱃지 */}
                   {dayMeals.length > 1 && (
