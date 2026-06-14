@@ -870,6 +870,7 @@ export default function MealMap({ onViewMeal, onTabChange }) {
   const [editPhotoPreview, setEditPhotoPreview] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const editPhotoRef = useRef()
+  const pendingEditRef = useRef(null)
 
   const [visitingWish, setVisitingWish] = useState(null)
   const [viewingWish, setViewingWish] = useState(null)
@@ -877,6 +878,21 @@ export default function MealMap({ onViewMeal, onTabChange }) {
   // { candidates: [], result: item|null } — null when closed
   const [randomPick, setRandomPick] = useState(null)
   const requestedPhotosRef = useRef(new Set())
+
+  // 상세 → 수정 전환: 상세 모달이 닫히며 발생한 popstate 직후에 수정 모달을 연다.
+  // 상세 모달의 popstate 핸들러는 이미 제거된 시점이라 새 수정 모달이 닫히지 않는다.
+  useEffect(() => {
+    function openPendingEdit() {
+      const item = pendingEditRef.current
+      if (!item) return
+      pendingEditRef.current = null
+      setEditForm({ name: item.name || '', location: item.location || '', memo: item.memo || '', moodTags: item.moodTags || [] })
+      setEditPhotoPreview(item.photo || '')
+      setEditingWish(item)
+    }
+    window.addEventListener('popstate', openPendingEdit)
+    return () => window.removeEventListener('popstate', openPendingEdit)
+  }, [])
 
   // ── 파생 상태 ─────────────────────────────────────────────────
   const meals = useMemo(() => (currentSpace?.meals || []).filter(m => m.location), [currentSpace?.meals])
@@ -1289,12 +1305,11 @@ export default function MealMap({ onViewMeal, onTabChange }) {
   }
 
   function handleOpenEdit(item) {
-    // 폼 데이터는 즉시 채우되, 모달 오픈은 한 틱 늦춘다.
-    // 상세 모달이 닫히면서 Modal이 호출하는 history.back()의 popstate가
-    // 곧바로 열리는 수정 모달의 핸들러에 잡혀 모달이 즉시 닫히는 race를 피하기 위함.
-    setEditForm({ name: item.name || '', location: item.location || '', memo: item.memo || '', moodTags: item.moodTags || [] })
-    setEditPhotoPreview(item.photo || '')
-    setTimeout(() => setEditingWish(item), 300)
+    // 상세 모달을 닫으면 Modal cleanup이 history.back()을 호출 → popstate 발생.
+    // 그 popstate가 끝난 뒤(= 상세 모달이 완전히 닫힌 시점)에 수정 모달을 연다.
+    // 고정 setTimeout 지연은 느린 기기에서 race가 남아 불안정하므로 popstate로 동기화.
+    // (실제 오픈은 아래 useEffect의 openPendingEdit가 담당)
+    pendingEditRef.current = item
   }
 
   async function handleSaveEdit(e) {
