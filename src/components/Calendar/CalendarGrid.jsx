@@ -241,7 +241,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
                     key={day.toISOString()}
                     onClick={() => onDayClick(day)}
                     className={`
-                      relative aspect-square rounded-lg overflow-hidden transition-all active:scale-95
+                      relative aspect-[3/4] rounded-lg overflow-hidden transition-all active:scale-95
                       ${!inMonth ? 'opacity-30' : ''}
                       ${today && hasMeals ? 'ring-2 ring-warm-brown ring-inset' : ''}
                     `}
@@ -268,11 +268,11 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
                           <span className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-rose-400 z-20 shadow-sm" />
                         )}
                         {/* 날짜 숫자 (우상단) */}
-                        <span className={`absolute top-0.5 right-1 text-[10px] font-semibold z-10 drop-shadow ${thumbPhoto ? 'text-white' : 'text-warm-dark'}`}>
+                        <span className={`absolute top-0.5 right-1 text-[11px] font-semibold z-10 drop-shadow ${thumbPhoto ? 'text-white' : 'text-warm-dark'}`}>
                           {format(day, 'd')}
                         </span>
                         {/* 제목 (하단, 1줄 — 말줄임 없이 최대한 노출) */}
-                        <span className={`absolute bottom-0.5 left-1 right-1 text-[9px] font-medium leading-tight whitespace-nowrap overflow-hidden z-10 ${thumbPhoto ? 'text-white' : 'text-warm-brown'}`}>
+                        <span className={`absolute bottom-1 left-1 right-1 text-[10px] font-medium leading-tight whitespace-nowrap overflow-hidden z-10 ${thumbPhoto ? 'text-white' : 'text-warm-brown'}`}>
                           {displayTitle}
                         </span>
                       </>
