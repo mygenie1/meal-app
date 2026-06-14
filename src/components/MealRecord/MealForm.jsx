@@ -122,6 +122,7 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
   const [searching, setSearching] = useState(false)
   const timerRef = useRef(null)
   const wrapperRef = useRef(null)
+  const scrollingRef = useRef(false)
 
   useEffect(() => {
     function handleOutside(e) {
@@ -177,32 +178,40 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
         {searching && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-cream-300 border-t-warm-light rounded-full animate-spin" />
         )}
+
+        {showDropdown && suggestions.length > 0 && (
+          <div
+            className="absolute top-full left-0 right-0 mt-1 rounded-2xl border border-cream-200 bg-white shadow-md max-h-60 overflow-y-auto z-50"
+            onTouchStart={() => { scrollingRef.current = false }}
+            onTouchMove={() => { scrollingRef.current = true }}
+            onScroll={e => e.stopPropagation()}
+          >
+            {suggestions.map((place, i) => (
+              <button
+                key={i}
+                type="button"
+                onMouseDown={e => { e.preventDefault(); handleSelect(place) }}
+                onTouchEnd={e => {
+                  if (scrollingRef.current) { scrollingRef.current = false; return }
+                  e.preventDefault()
+                  handleSelect(place)
+                }}
+                className="w-full text-left px-4 py-3 hover:bg-cream-50 active:bg-cream-100 transition-colors border-b border-cream-100 last:border-0"
+              >
+                <p className="text-sm font-medium text-warm-dark truncate">{place.place_name}</p>
+                {(place.road_address_name || place.address_name) && (
+                  <p className="text-[11px] text-warm-light mt-0.5 truncate">
+                    {place.road_address_name || place.address_name}
+                  </p>
+                )}
+                {place.category_name && (
+                  <p className="text-[10px] text-cream-400 mt-0.5 truncate">{place.category_name}</p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-
-      {showDropdown && suggestions.length > 0 && (
-        <div className="mt-1 rounded-2xl border border-cream-200 bg-white shadow-md max-h-48 overflow-y-auto z-50">
-          {suggestions.map((place, i) => (
-            <button
-              key={i}
-              type="button"
-              onMouseDown={e => { e.preventDefault(); handleSelect(place) }}
-              onTouchEnd={e => { e.preventDefault(); handleSelect(place) }}
-              className="w-full text-left px-4 py-3 hover:bg-cream-50 active:bg-cream-100 transition-colors border-b border-cream-100 last:border-0"
-            >
-              <p className="text-sm font-medium text-warm-dark truncate">{place.place_name}</p>
-              {(place.road_address_name || place.address_name) && (
-                <p className="text-[11px] text-warm-light mt-0.5 truncate">
-                  {place.road_address_name || place.address_name}
-                </p>
-              )}
-              {place.category_name && (
-                <p className="text-[10px] text-cream-400 mt-0.5 truncate">{place.category_name}</p>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
     </div>
   )
 }

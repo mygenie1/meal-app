@@ -1080,8 +1080,9 @@ export default function MealMap({ onViewMeal, onTabChange }) {
       el.addEventListener('click', () => {
         setSelectedCluster(cluster)
         if (kakaoMapRef.current) {
-          kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(cluster.coords[0], cluster.coords[1]))
+          // setLevel 먼저(동기/즉시) → 그 다음 panTo(비동기 애니메이션). 순서 바뀌면 panTo가 취소됨
           kakaoMapRef.current.setLevel(3)
+          kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(cluster.coords[0], cluster.coords[1]))
         }
       })
       const overlay = new window.kakao.maps.CustomOverlay({
@@ -1114,8 +1115,8 @@ export default function MealMap({ onViewMeal, onTabChange }) {
   // ── 지도 이동 (현재 위치 버튼 → level 5 유지) ──────────────────
   useEffect(() => {
     if (!flyTarget || !mapReady || !kakaoMapRef.current) return
-    kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(flyTarget[0], flyTarget[1]))
     kakaoMapRef.current.setLevel(5)
+    kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(flyTarget[0], flyTarget[1]))
     setFlyTarget(null)
   }, [flyTarget, mapReady])
 
@@ -1137,8 +1138,8 @@ export default function MealMap({ onViewMeal, onTabChange }) {
   // ── 가고 싶은 곳 지도 이동 ───────────────────────────────────────
   useEffect(() => {
     if (!wishFlyTarget || !wishMapReady || !wishKakaoMapRef.current) return
-    wishKakaoMapRef.current.panTo(new window.kakao.maps.LatLng(wishFlyTarget[0], wishFlyTarget[1]))
     wishKakaoMapRef.current.setLevel(5)
+    wishKakaoMapRef.current.panTo(new window.kakao.maps.LatLng(wishFlyTarget[0], wishFlyTarget[1]))
     setWishFlyTarget(null)
   }, [wishFlyTarget, wishMapReady])
 

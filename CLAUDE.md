@@ -115,11 +115,23 @@ meal-app/
 │   │
 │   ├── lib/
 │   │   ├── supabase.js                  Supabase 클라이언트 초기화 (15초 타임아웃 fetch 래퍼)
-│   │   └── uploadPhoto.js               사진 업로드 + 썸네일 헬퍼
-│   │                                    uploadPhotoWithThumbnail() — 400px thumb + 1200px original 병렬 업로드
-│   │                                    parsePhoto() / getThumbUrl() / getOriginalUrl() — DB 항목 파싱
-│   │                                    uploadPhotoToStorage() — 레거시 단일 업로드 (하위 호환)
-│   │                                    Storage 전용 클라이언트 (타임아웃 없음, 업로드가 15초 초과 가능)
+│   │   ├── uploadPhoto.js               사진 업로드 + 썸네일 헬퍼
+│   │   │                                uploadPhotoWithThumbnail() — 400px thumb + 1200px original 병렬 업로드
+│   │   │                                parsePhoto() / getThumbUrl() / getOriginalUrl() — DB 항목 파싱
+│   │   │                                uploadPhotoToStorage() — 레거시 단일 업로드 (하위 호환)
+│   │   │                                Storage 전용 클라이언트 (타임아웃 없음, 업로드가 15초 초과 가능)
+│   │   ├── notify.js                    알림 전송 헬퍼
+│   │   │                                buildFromUser(user) — user 객체 → { id, nickname, avatar_url }
+│   │   │                                sendNotification({ toUserId, spaceId, mealId, fromUser, type, message })
+│   │   │                                MealForm(new_meal) / MealDetailModal(comment, rating)에서 호출
+│   │   ├── linkify.jsx                  URL 자동 하이퍼링크 변환 (.jsx — JSX 반환)
+│   │   │                                linkify(text) — https:// URL → <a>, \n → <br/>
+│   │   │                                <a> onClick stopPropagation — 부모 버튼 클릭 차단
+│   │   │                                적용: MealDetailModal(review/memo/댓글), FeedCard, DayDetail, MealMap 위시 댓글
+│   │   └── firebase.js                  Firebase FCM 클라이언트 (동적 import — Vercel 빌드 충돌 방지)
+│   │                                    getMessagingInstance() — 브라우저 런타임에만 firebase/messaging 로드
+│   │                                    requestFCMToken() — 권한 요청 + SW 등록 + 토큰 발급 (단계별 로그)
+│   │                                    onFCMMessage(callback) — 포그라운드 메시지 리스너
 │   │
 │   ├── context/
 │   │   └── AppContext.jsx               전체 상태 관리 + Supabase CRUD + Realtime 구독
@@ -134,6 +146,7 @@ meal-app/
 │   │                                    notifEnabled: localStorage 'notif_enabled' 값, false면 배지/목록 숨김
 │   │                                    setNotifEnabledPref() — 상태 + localStorage 동시 업데이트
 │   │                                    markNotificationRead() / markAllNotificationsRead()
+│   │                                    registerFCMToken(userId) — 로그인 직후 FCM 토큰 요청 + fcm_tokens upsert
 │   │
 │   ├── components/
 │   │   ├── common/
@@ -151,6 +164,11 @@ meal-app/
 │   │   │   │                            NotificationPanel: top-sheet, z-[70], 알림 목록
 │   │   │   │                            항목 클릭 → 읽음 처리 + 해당 meal 상세 열기
 │   │   │   │                            "전체 읽음" 버튼
+│   │   │   ├── InstallBanner.jsx        PWA 홈화면 설치 안내 배너 (z-[80])
+│   │   │   │                            Android: beforeinstallprompt → "설치하기" 버튼
+│   │   │   │                            iOS Safari: "공유 → 홈 화면에 추가" 텍스트 안내
+│   │   │   │                            install_banner_dismissed (localStorage) 로 닫기 기억
+│   │   │   │                            display-mode: standalone이면 표시 안 함
 │   │   │   ├── PhotoGallery.jsx         터치 스와이프 사진 갤러리 (LazyImage + 도트 인디케이터 + n/total 뱃지)
 │   │   │   │                            호출 측에서 URL 해석 완료된 문자열 배열을 받음
 │   │   │   ├── FullscreenViewer.jsx     사진 전체화면 뷰어
