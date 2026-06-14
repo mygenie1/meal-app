@@ -374,6 +374,12 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
       {(() => {
         const interests = wishlistInterestsMap[item.id] || []
         const isInterested = interests.some(i => i.user_id === user?.id)
+        const othersInterest = interests.some(i => i.user_id !== user?.id)
+        const interestLabel = isInterested
+          ? '가고싶어요'
+          : othersInterest
+            ? '나도 가고싶어요'
+            : '가고싶어요'
         return (
           <div className="pt-3 border-t border-cream-100">
             <div className="flex gap-2 flex-wrap mb-3">
@@ -397,7 +403,7 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
                 <svg className="w-3.5 h-3.5" fill={isInterested ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
-                나도 가고싶어요
+                {interestLabel}
               </button>
               {item.lat && item.lng && (
                 <button
@@ -1252,7 +1258,10 @@ export default function MealMap({ onViewMeal, onTabChange }) {
     }
     let photoUrl = ''
     if (addPhotoPreview) photoUrl = await uploadPhotoToStorage(addPhotoPreview, currentSpace?.id)
-    await addWishlistItem({ name: addForm.name.trim(), memo: addForm.memo.trim(), location: addForm.location.trim(), lat, lng, moodTags: addForm.moodTags, photo: photoUrl })
+    const newItem = await addWishlistItem({ name: addForm.name.trim(), memo: addForm.memo.trim(), location: addForm.location.trim(), lat, lng, moodTags: addForm.moodTags, photo: photoUrl })
+    if (newItem?.id) {
+      try { await addWishlistInterest(newItem.id) } catch {}
+    }
     setShowAddModal(false)
     setSavingAdd(false)
   }
@@ -1545,7 +1554,7 @@ export default function MealMap({ onViewMeal, onTabChange }) {
                 <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
                   {[
                     { key: 'all', label: '전체' },
-                    { key: 'mine', label: '나도 가고싶어요' },
+                    { key: 'mine', label: '내가 가고싶어요' },
                     { key: 'theirs', label: '상대가 가고싶어요' },
                   ].map(({ key, label }) => (
                     <button key={key} onClick={() => setWishFilter(key)}

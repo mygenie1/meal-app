@@ -849,6 +849,7 @@ export function AppProvider({ children }) {
       hours: data.hours || '',
       price_range: data.priceRange || '',
       visited: false,
+      user_id: user?.id || null,
     }
     const { data: rowData, error } = await supabase.from('wishlist').insert(row).select().single()
     if (error) { console.error(error); return null }
