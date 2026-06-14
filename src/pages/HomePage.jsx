@@ -119,6 +119,72 @@ function FeedCard({ meal, onClick }) {
   )
 }
 
+// 포크+나이프 아이콘 (기록 유도용)
+function UtensilsIcon({ className }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v7m0 0a2 2 0 002-2V3m-2 7v8m3-15v18M19 3c-1.5 1-2 3-2 6 0 2 .5 3 2 3v6" />
+    </svg>
+  )
+}
+
+// 하트 아이콘 (완료 메시지용)
+function HeartIcon({ className }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+    </svg>
+  )
+}
+
+// 오늘 기록 상태별 CTA 카드
+function TodayCTA({ status, dateLabel, onRecord, onViewCalendar }) {
+  let title, subtitle, icon, button
+  if (status.kind === 'empty') {
+    icon = <UtensilsIcon className="w-5 h-5 text-warm-brown" />
+    title = '오늘의 식탁은 아직 비어있어요'
+    subtitle = '사진 한 장으로 오늘 먹은 한 끼를 남겨보세요.'
+    button = { label: '오늘 식사 기록하기', onClick: onRecord }
+  } else if (status.kind === 'partial') {
+    icon = <UtensilsIcon className="w-5 h-5 text-warm-brown" />
+    title = '오늘의 식탁이 기록됐어요 🍽️'
+    subtitle = `${status.next}도 함께 남겨볼까요?`
+    button = { label: '한 끼 더 기록하기', onClick: onRecord }
+  } else {
+    icon = <HeartIcon className="w-5 h-5 text-warm-brown" />
+    title = '오늘 하루 식탁이 모두 기록됐어요'
+    subtitle = '오늘도 함께한 식사를 남겨줘서 고마워요 🧡'
+    button = { label: '달력에서 보기', onClick: onViewCalendar, secondary: true }
+  }
+
+  return (
+    <div className="bg-cream-100 rounded-2xl px-4 py-4">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 bg-warm-brown/10 rounded-xl flex items-center justify-center shrink-0">
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-warm-dark">{title}</p>
+          <p className="text-xs text-warm-light mt-1 leading-relaxed">{subtitle}</p>
+          <p className="text-[11px] text-cream-400 mt-1">{dateLabel}</p>
+        </div>
+      </div>
+      {button && (
+        <button
+          onClick={button.onClick}
+          className={`w-full mt-3 py-2.5 rounded-2xl text-sm font-medium active:scale-[0.98] transition-all ${
+            button.secondary
+              ? 'border border-cream-300 text-warm-brown hover:bg-cream-200'
+              : 'bg-warm-brown text-white hover:bg-warm-dark'
+          }`}
+        >
+          {button.label}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function HomePage() {
   const { currentSpace, spaces, loadMealPhotos, ratingsMap } = useApp()
   const navigate = useNavigate()
@@ -136,6 +202,27 @@ export default function HomePage() {
   const today = useMemo(() => new Date(), [])
 
   const meals = currentSpace?.meals || []
+
+  // 오늘 기록 상태 — CTA 카드 문구/버튼 분기
+  const todayStatus = useMemo(() => {
+    const todayStr = format(today, 'yyyy-MM-dd')
+    const todayMeals = meals.filter(m => m.date === todayStr)
+    const recorded = new Set(todayMeals.map(m => m.mealTime).filter(Boolean))
+    const ALL_TIMES = ['아침', '점심', '저녁']
+
+    if (todayMeals.length === 0) return { kind: 'empty' }
+    if (ALL_TIMES.every(t => recorded.has(t))) return { kind: 'all' }
+
+    // 현재 시각 기준 가장 가까운 미기록 끼니 (시간대 게이트 → 폴백: 가장 이른 미기록)
+    const hour = today.getHours()
+    let next = null
+    if (!recorded.has('저녁') && hour >= 17) next = '저녁'
+    else if (!recorded.has('점심') && hour >= 11) next = '점심'
+    else if (!recorded.has('아침')) next = '아침'
+    else next = ALL_TIMES.find(t => !recorded.has(t)) || '저녁'
+
+    return { kind: 'partial', next }
+  }, [meals, today])
 
   const stats = useMemo(() => {
     const now = new Date()
@@ -351,25 +438,14 @@ export default function HomePage() {
       )}
 
       <div className={`pb-28 pt-5 ${searchOpen ? 'hidden' : ''}`}>
-        {/* 오늘 식사 기록 버튼 */}
+        {/* 오늘 기록 CTA — 기록 상태/끼니에 따라 문구·버튼 변화 */}
         <div className="px-4 mb-5">
-          <button
-            onClick={() => setTodayFormOpen(true)}
-            className="w-full flex items-center gap-3 bg-white border border-cream-200 rounded-2xl px-4 py-3 hover:bg-cream-50 transition-colors active:scale-[0.99] text-left shadow-sm"
-          >
-            <div className="w-9 h-9 bg-warm-brown/10 rounded-xl flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-warm-dark">오늘 식사 기록하기</p>
-              <p className="text-xs text-warm-light">{format(today, 'M월 d일 (eee)', { locale: ko })}</p>
-            </div>
-            <svg className="w-4 h-4 text-cream-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+          <TodayCTA
+            status={todayStatus}
+            dateLabel={format(today, 'M월 d일 (eee)', { locale: ko })}
+            onRecord={() => setTodayFormOpen(true)}
+            onViewCalendar={() => navigate('/calendar')}
+          />
         </div>
 
         {/* 통계 카드 */}
