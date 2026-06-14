@@ -97,10 +97,6 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
     d = addDays(d, 1)
   }
 
-  // 주(7일) 단위로 분할 — 기록 없는 주는 행 높이를 최소화
-  const weeks = []
-  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7))
-
   function getMealsForDay(date) {
     const dayMeals = meals.filter(m => isSameDay(new Date(m.date), date))
     return filter && filter !== '전체' ? dayMeals.filter(m => m.tag === filter) : dayMeals
@@ -194,97 +190,87 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
         ))}
       </div>
 
-      {/* 날짜 그리드 — 주 단위, 기록 없는 주는 얇게 */}
-      <div className="px-4 space-y-1">
-        {weeks.map((week, wi) => {
-          const weekHasRecord = week.some(day => getMealsForDay(day).length > 0)
+      {/* 날짜 그리드 */}
+      <div className="grid grid-cols-7 gap-1 px-4">
+        {days.map((day, idx) => {
+          const dayMeals = getMealsForDay(day)
+          const hasMeals = dayMeals.length > 0
+          const dateStr = format(day, 'yyyy-MM-dd')
+          const repMealId = repMeals[dateStr]
+          const repMeal = repMealId ? dayMeals.find(m => m.id === repMealId) : null
+          const displayMeal = repMeal || dayMeals.find(m => m.photos?.[0]) || dayMeals[0]
+          const thumbPhoto = displayMeal ? getThumbUrl(displayMeal.photos?.[0] || '') : ''
+          const displayTitle = displayMeal?.title || displayMeal?.restaurantName || '식사'
+          const inMonth = isSameMonth(day, current)
+          const today = isToday(day)
+          const dayOfWeek = idx % 7
 
           return (
-            <div key={wi} className="grid grid-cols-7 gap-1">
-              {week.map((day) => {
-                const inMonth = isSameMonth(day, current)
-                const today = isToday(day)
-
-                // 날짜 숫자 색상 (오늘 / 주말 / 평일)
-                const numClass = today
-                  ? 'bg-warm-brown text-white rounded-full w-5 h-5 flex items-center justify-center'
-                  : day.getDay() === 0
-                    ? 'text-rose-400'
-                    : day.getDay() === 6
-                      ? 'text-blue-400'
-                      : 'text-warm-dark'
-
-                // 기록 없는 주 → 얇은 행, 날짜 숫자만
-                if (!weekHasRecord) {
-                  return (
-                    <button
-                      key={day.toISOString()}
-                      onClick={() => onDayClick(day)}
-                      className={`h-8 rounded-lg flex items-center justify-center transition-all active:scale-95 ${!inMonth ? 'opacity-30' : ''}`}
-                    >
-                      <span className={`text-xs ${numClass}`}>{format(day, 'd')}</span>
-                    </button>
-                  )
-                }
-
-                const dayMeals = getMealsForDay(day)
-                const hasMeals = dayMeals.length > 0
-                const dateStr = format(day, 'yyyy-MM-dd')
-                const repMealId = repMeals[dateStr]
-                const repMeal = repMealId ? dayMeals.find(m => m.id === repMealId) : null
-                const displayMeal = repMeal || dayMeals.find(m => m.photos?.[0]) || dayMeals[0]
-                const thumbPhoto = displayMeal ? getThumbUrl(displayMeal.photos?.[0] || '') : ''
-                const displayTitle = displayMeal?.title || displayMeal?.restaurantName || '식사'
-
-                return (
-                  <button
-                    key={day.toISOString()}
-                    onClick={() => onDayClick(day)}
+            <button
+              key={day.toISOString()}
+              onClick={() => onDayClick(day)}
+              className={`
+                relative rounded-2xl overflow-hidden transition-all active:scale-95
+                ${inMonth ? '' : 'opacity-25'}
+                ${hasMeals ? 'h-[96px]' : 'h-[56px]'}
+                ${today && !hasMeals ? 'ring-1 ring-warm-brown/40 bg-warm-brown/5' : ''}
+                ${!hasMeals ? 'hover:bg-cream-100' : ''}
+              `}
+            >
+              {/* 게시글 수 배지 */}
+              {hasMeals && dayMeals.length > 1 && (
+                <div className="absolute top-1 right-1 bg-warm-brown text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center z-20 leading-none">
+                  {dayMeals.length}
+                </div>
+              )}
+              {/* 위시리스트 방문 점 */}
+              {dayMeals.some(m => m.fromWishlist) && (
+                <div className="absolute top-1 left-1 w-2 h-2 rounded-full bg-rose-400 z-20 shadow-sm" />
+              )}
+              {thumbPhoto && (
+                <div className="absolute inset-0">
+                  <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
+                  <div className="absolute inset-0 bg-black/25" />
+                </div>
+              )}
+              {hasMeals && !thumbPhoto && (
+                <div className="absolute inset-0 bg-cream-200" />
+              )}
+              <div className="relative z-10 p-1.5">
+                <span
+                  className={`
+                    text-xs font-semibold block text-center leading-5 w-5 h-5 mx-auto rounded-full
+                    ${today ? 'bg-warm-brown text-white' : ''}
+                    ${!today && thumbPhoto ? 'text-white' : ''}
+                    ${!today && !thumbPhoto && hasMeals ? 'text-warm-dark' : ''}
+                    ${!today && !hasMeals && dayOfWeek === 0 ? 'text-rose-400' : ''}
+                    ${!today && !hasMeals && dayOfWeek === 6 ? 'text-blue-400' : ''}
+                    ${!today && !hasMeals && dayOfWeek !== 0 && dayOfWeek !== 6 ? 'text-warm-dark' : ''}
+                  `}
+                >
+                  {format(day, 'd')}
+                </span>
+              </div>
+              {hasMeals && (
+                <div className="relative z-10 px-1.5 pb-1.5">
+                  <span
                     className={`
-                      relative aspect-[3/4] rounded-lg overflow-hidden transition-all active:scale-95
-                      ${!inMonth ? 'opacity-30' : ''}
-                      ${today && hasMeals ? 'ring-2 ring-warm-brown ring-inset' : ''}
+                      text-[9px] font-medium px-1 py-0.5 rounded-lg w-full
+                      ${thumbPhoto ? 'bg-white/30 text-white' : 'bg-warm-brown/20 text-warm-brown'}
                     `}
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      wordBreak: 'break-all',
+                    }}
                   >
-                    {hasMeals ? (
-                      <>
-                        {/* 사진 배경 + 하단 그라데이션 (없으면 베이지) */}
-                        {thumbPhoto ? (
-                          <>
-                            <div className="absolute inset-0">
-                              <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
-                            </div>
-                            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-                          </>
-                        ) : (
-                          <div className="absolute inset-0 bg-cream-200" />
-                        )}
-                        {/* 여러 끼니 뱃지 (좌상단) — 없으면 위시리스트 방문 점 */}
-                        {dayMeals.length > 1 ? (
-                          <span className="absolute top-0.5 left-1 bg-warm-brown/80 text-white text-[9px] font-bold px-1 py-0.5 rounded-full leading-none z-20">
-                            {dayMeals.length}
-                          </span>
-                        ) : dayMeals.some(m => m.fromWishlist) && (
-                          <span className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-rose-400 z-20 shadow-sm" />
-                        )}
-                        {/* 날짜 숫자 (우상단) */}
-                        <span className={`absolute top-0.5 right-1 text-[11px] font-semibold z-10 drop-shadow ${thumbPhoto ? 'text-white' : 'text-warm-dark'}`}>
-                          {format(day, 'd')}
-                        </span>
-                        {/* 제목 (하단, 1줄 — 말줄임 없이 최대한 노출) */}
-                        <span className={`absolute bottom-1 left-1 right-1 text-[10px] font-medium leading-tight whitespace-nowrap overflow-hidden z-10 ${thumbPhoto ? 'text-white' : 'text-warm-brown'}`}>
-                          {displayTitle}
-                        </span>
-                      </>
-                    ) : (
-                      <div className="absolute inset-0 bg-cream-50 flex items-center justify-center">
-                        <span className={`text-xs ${numClass}`}>{format(day, 'd')}</span>
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+                    {displayTitle}
+                  </span>
+                </div>
+              )}
+            </button>
           )
         })}
       </div>
