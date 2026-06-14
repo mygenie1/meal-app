@@ -59,10 +59,32 @@ function ConnectErrorBanner({ message, onRetry, onDismiss }) {
   )
 }
 
+function UpdateBanner({ onReload }) {
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[90] max-w-lg mx-auto px-0 pointer-events-none">
+      <div className="bg-warm-brown text-white px-4 py-3 flex items-center justify-between shadow-lg pointer-events-auto">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span className="text-sm font-medium">새 버전이 있어요</span>
+        </div>
+        <button
+          onClick={onReload}
+          className="text-sm font-semibold underline underline-offset-2 active:opacity-75 transition-opacity"
+        >
+          새로고침
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function AppContent() {
   const { user, authLoading, loading, loadError, retryAttempt, reload } = useApp()
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
   const [errorDismissed, setErrorDismissed] = useState(false)
+  const [updateReady, setUpdateReady] = useState(false)
 
   useEffect(() => {
     const goOnline  = () => setIsOffline(false)
@@ -80,23 +102,28 @@ function AppContent() {
     if (loadError) setErrorDismissed(false)
   }, [loadError])
 
-  // Service Worker 자동 업데이트 (autoUpdate)
-  // 새 SW가 control을 잡으면 한 번만 reload 해서 최신 빌드를 적용한다.
-  // 최초 설치(첫 controller 등록)는 reload 대상이 아니므로 가드한다.
+  // Service Worker 업데이트 감지 (배너 방식)
+  // 새 SW가 control을 잡으면(controllerchange) 자동 reload 대신 배너만 표시한다.
+  // 최초 설치(첫 controller 등록)는 업데이트가 아니므로 가드한다.
+  // sessionStorage 플래그로 같은 세션에서 배너가 다시 뜨는 것을 방지(새로고침 후 재표시 버그 수정).
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
 
-    let reloaded = false
     const isFirstController = !navigator.serviceWorker.controller
 
+    const triggerBanner = () => {
+      if (sessionStorage.getItem('update_banner_shown')) return
+      sessionStorage.setItem('update_banner_shown', 'true')
+      setUpdateReady(true)
+    }
+
     const handleControllerChange = () => {
-      if (isFirstController || reloaded) return
-      reloaded = true
-      window.location.reload()
+      if (isFirstController) return
+      triggerBanner()
     }
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange)
 
-    // 포그라운드 복귀 시 업데이트 체크 → 새 SW가 있으면 위 핸들러가 reload
+    // 포그라운드 복귀 시 업데이트 체크 → 새 SW가 control을 잡으면 위 핸들러가 배너 표시
     const handleVisibility = () => {
       if (document.visibilityState !== 'visible') return
       navigator.serviceWorker.getRegistration()
@@ -110,6 +137,12 @@ function AppContent() {
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [])
+
+  // 배너 "새로고침" 클릭 시에만 reload
+  const handleUpdate = () => {
+    setUpdateReady(false)
+    window.location.reload()
+  }
 
   if (isOffline) return <OfflineBanner />
 
@@ -145,6 +178,7 @@ function AppContent() {
 
   return (
     <div className="min-h-svh max-w-lg mx-auto flex flex-col bg-cream-50">
+      {updateReady && <UpdateBanner onReload={handleUpdate} />}
       {loadError && !errorDismissed && (
         <ConnectErrorBanner
           message={loadError}
