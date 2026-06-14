@@ -119,10 +119,14 @@ function CommentItem({ comment, currentUserId, onDelete }) {
 
 // ── RecordedPlaceCard (기록한 맛집 목록) ──────────────────────────
 function RecordedPlaceCard({ meal, onClick, selected }) {
-  const { ratingsMap } = useApp()
-  const photoEntry = meal.photos?.[0] || meal.photo || ''
-  const thumb = getThumbUrl(photoEntry)       // 작은 썸네일 URL (수십 KB)
+  const { ratingsMap, currentSpace } = useApp()
+  // 핀(pins) 스냅샷은 사진 lazy 로드 전에 캡처돼 photos가 비어있을 수 있음.
+  // 최신 meal을 조회해 썸네일을 반영(새로고침 없이도 뜨도록).
+  const live = currentSpace?.meals.find(m => m.id === meal.id) ?? meal
+  const photoEntry = live.photos?.[0] || live.photo || ''
+  const thumb = getThumbUrl(photoEntry)        // 작은 썸네일 URL (수십 KB)
   const original = getOriginalUrl(photoEntry)  // 썸네일 로드 실패 시 폴백용 원본
+  const src = thumb || original
   const name = meal.restaurantName || meal.title || '식사 기록'
   const mealRatings = ratingsMap?.[meal.id] || []
   const avgRating = mealRatings.length > 0
@@ -167,15 +171,20 @@ function RecordedPlaceCard({ meal, onClick, selected }) {
           <span className="text-[10px] text-cream-400">{meal.date}</span>
         </div>
       </div>
-      {thumb ? (
+      {src ? (
         <img
-          src={thumb}
+          key={src}
+          src={src}
           alt=""
           loading="lazy"
           onError={(e) => { if (original && e.currentTarget.src !== original) e.currentTarget.src = original }}
           className="w-16 h-16 rounded-xl object-cover shrink-0"
         />
+      ) : !live.photosLoaded ? (
+        // 사진 로딩 중 — shimmer 스켈레톤
+        <div className="w-16 h-16 rounded-xl bg-cream-200 animate-pulse shrink-0" />
       ) : (
+        // 로드 완료했지만 사진 없음 — 아이콘 placeholder
         <div className="w-16 h-16 rounded-xl bg-cream-100 shrink-0 flex items-center justify-center">
           <svg className="w-6 h-6 text-cream-300" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
