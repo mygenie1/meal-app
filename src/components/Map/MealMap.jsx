@@ -609,6 +609,9 @@ export default function MealMap({ onViewMeal, onTabChange }) {
   const [wishFlyTarget, setWishFlyTarget] = useState(null)
   const wishUserOverlayRef = useRef(null)
   const [wishLocating, setWishLocating] = useState(false)
+  const [visibleWishIds, setVisibleWishIds] = useState(null) // null = 전체 표시 (지도 미초기화 시)
+  const wishlistWithCoordsRef = useRef([])
+  const wishMapContainerRef = useRef(null)
 
   // ── 근처 알림 ─────────────────────────────────────────────────
   const [nearbyWish, setNearbyWish] = useState(null)
@@ -745,7 +748,7 @@ export default function MealMap({ onViewMeal, onTabChange }) {
         const center = firstItem
           ? new window.kakao.maps.LatLng(firstItem.lat, firstItem.lng)
           : new window.kakao.maps.LatLng(SEOUL.lat, SEOUL.lng)
-        const map = new window.kakao.maps.Map(wishMapNode, { center, level: 5 })
+        const map = new window.kakao.maps.Map(wishMapNode, { center, level: 6 })
         wishKakaoMapRef.current = map
         setWishMapReady(true)
       } catch (e) {
@@ -792,18 +795,50 @@ export default function MealMap({ onViewMeal, onTabChange }) {
       overlay.setMap(wishKakaoMapRef.current)
       wishOverlaysRef.current.push(overlay)
     })
-
-    if (wishlistWithCoords.length > 0 && wishKakaoMapRef.current) {
-      if (wishlistWithCoords.length === 1) {
-        wishKakaoMapRef.current.setCenter(new window.kakao.maps.LatLng(wishlistWithCoords[0].lat, wishlistWithCoords[0].lng))
-        wishKakaoMapRef.current.setLevel(5)
-      } else {
-        const bounds = new window.kakao.maps.LatLngBounds()
-        wishlistWithCoords.forEach(w => bounds.extend(new window.kakao.maps.LatLng(w.lat, w.lng)))
-        wishKakaoMapRef.current.setBounds(bounds, 60)
-      }
-    }
   }, [wishlistWithCoords, wishMapReady, highlightedWishId])
+
+  // ── 가고 싶은 곳 초기 bounds (하이라이트 변경 시엔 실행 안 됨) ──────
+  useEffect(() => {
+    if (!wishMapReady || !wishKakaoMapRef.current || wishlistWithCoords.length === 0) return
+    if (wishlistWithCoords.length === 1) {
+      wishKakaoMapRef.current.setCenter(new window.kakao.maps.LatLng(wishlistWithCoords[0].lat, wishlistWithCoords[0].lng))
+      wishKakaoMapRef.current.setLevel(6)
+    } else {
+      const bounds = new window.kakao.maps.LatLngBounds()
+      wishlistWithCoords.forEach(w => bounds.extend(new window.kakao.maps.LatLng(w.lat, w.lng)))
+      wishKakaoMapRef.current.setBounds(bounds, 60)
+    }
+  }, [wishlistWithCoords, wishMapReady])
+
+  // ── 가고 싶은 곳 뷰포트 필터 (wishlist 변경 시 즉시 갱신 + ref 업데이트) ──
+  useEffect(() => {
+    wishlistWithCoordsRef.current = wishlistWithCoords
+    if (!wishMapReady || !wishKakaoMapRef.current) return
+    const bounds = wishKakaoMapRef.current.getBounds()
+    if (!bounds) return
+    setVisibleWishIds(new Set(
+      wishlistWithCoords
+        .filter(w => bounds.contain(new window.kakao.maps.LatLng(w.lat, w.lng)))
+        .map(w => w.id)
+    ))
+  }, [wishlistWithCoords, wishMapReady])
+
+  // ── 가고 싶은 곳 idle 이벤트 → 뷰포트 목록 갱신 ───────────────────
+  useEffect(() => {
+    if (!wishMapReady || !wishKakaoMapRef.current) return
+    const map = wishKakaoMapRef.current
+    const handleIdle = () => {
+      const bounds = map.getBounds()
+      if (!bounds) return
+      setVisibleWishIds(new Set(
+        wishlistWithCoordsRef.current
+          .filter(w => w.lat && w.lng && bounds.contain(new window.kakao.maps.LatLng(w.lat, w.lng)))
+          .map(w => w.id)
+      ))
+    }
+    window.kakao.maps.event.addListener(map, 'idle', handleIdle)
+    return () => { window.kakao.maps.event.removeListener(map, 'idle', handleIdle) }
+  }, [wishMapReady])
 
   // ── 맛집 마커 갱신 (fitBounds 제거) ──────────────────────────
   useEffect(() => {
@@ -1031,7 +1066,14 @@ export default function MealMap({ onViewMeal, onTabChange }) {
 
   function handleViewOnMap(wish) {
     setHighlightedWishId(wish.id)
-    setWishFlyTarget([wish.lat, wish.lng])
+    if (wishKakaoMapRef.current) {
+      wishKakaoMapRef.current.panTo(new window.kakao.maps.LatLng(wish.lat, wish.lng))
+      wishKakaoMapRef.current.setLevel(4)
+    }
+    // 지도가 화면에 보이도록 스크롤
+    if (wishMapContainerRef.current) {
+      wishMapContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
   }
 
   async function handleVisitSubmit(mealData) {
@@ -1208,7 +1250,7 @@ export default function MealMap({ onViewMeal, onTabChange }) {
         <>
           {/* 위시리스트 지도 */}
           {wishlistWithCoords.length > 0 && (
-            <div className="shrink-0 px-4 pb-2">
+            <div ref={wishMapContainerRef} className="shrink-0 px-4 pb-2">
               <div className="relative rounded-2xl shadow-sm overflow-hidden" style={{ height: '38vh', minHeight: 220 }}>
                 <div ref={setWishMapNodeRef} style={{ width: '100%', height: '100%' }} />
                 {!wishMapReady && !wishMapFailed && (
@@ -1250,28 +1292,39 @@ export default function MealMap({ onViewMeal, onTabChange }) {
               가고 싶은 곳 추가
             </button>
 
-            {unvisited.length > 0 ? (
-              <div className="space-y-3 mb-6">
-                {unvisited.map(item => (
-                  <WishListCard key={item.id} item={item}
-                    highlighted={item.id === highlightedWishId}
-                    onViewDetail={() => setViewingWish(item)}
-                    onVisit={e => { e?.stopPropagation(); setVisitingWish(item) }}
-                    onViewOnMap={item.lat && item.lng ? (e => { e?.stopPropagation(); handleViewOnMap(item) }) : null}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="py-10 text-center mb-6">
-                <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-rose-300" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                  </svg>
+            {(() => {
+              // 좌표 있는 항목은 현재 지도 뷰포트 기준으로 필터링
+              const displayUnvisited = visibleWishIds === null
+                ? unvisited
+                : unvisited.filter(w => !w.lat || !w.lng || visibleWishIds.has(w.id))
+              return unvisited.length === 0 ? (
+                <div className="py-10 text-center mb-6">
+                  <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-rose-300" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-warm-dark mb-1">아직 가고 싶은 곳이 없어요</p>
+                  <p className="text-xs text-warm-light">위 버튼으로 가고 싶은 장소를 추가해보세요</p>
                 </div>
-                <p className="text-sm font-medium text-warm-dark mb-1">아직 가고 싶은 곳이 없어요</p>
-                <p className="text-xs text-warm-light">위 버튼으로 가고 싶은 장소를 추가해보세요</p>
-              </div>
-            )}
+              ) : displayUnvisited.length === 0 ? (
+                <div className="py-8 text-center mb-6">
+                  <p className="text-sm font-medium text-warm-dark mb-1">이 지역에 등록된 장소가 없어요</p>
+                  <p className="text-xs text-warm-light">지도를 이동하거나 축소하면 다른 장소가 보여요</p>
+                </div>
+              ) : (
+                <div className="space-y-3 mb-6">
+                  {displayUnvisited.map(item => (
+                    <WishListCard key={item.id} item={item}
+                      highlighted={item.id === highlightedWishId}
+                      onViewDetail={() => setViewingWish(item)}
+                      onVisit={e => { e?.stopPropagation(); setVisitingWish(item) }}
+                      onViewOnMap={item.lat && item.lng ? (e => { e?.stopPropagation(); handleViewOnMap(item) }) : null}
+                    />
+                  ))}
+                </div>
+              )
+            })()}
 
             {visited.length > 0 && (
               <div>
