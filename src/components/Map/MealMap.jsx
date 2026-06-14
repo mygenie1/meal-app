@@ -1080,8 +1080,12 @@ export default function MealMap({ onViewMeal, onTabChange }) {
       el.addEventListener('click', () => {
         setSelectedCluster(cluster)
         if (kakaoMapRef.current) {
-          // setLevel 먼저(동기/즉시) → 그 다음 panTo(비동기 애니메이션). 순서 바뀌면 panTo가 취소됨
-          kakaoMapRef.current.setLevel(3)
+          // 핀 클릭 시 현재 zoom level 유지하며 위치만 이동.
+          // 단, 현재 화면이 너무 넓으면(level 6 이상) level 5로만 좁혀줌.
+          // (setLevel은 동기/즉시 → panTo 비동기 애니메이션보다 먼저 호출해야 취소되지 않음)
+          if (kakaoMapRef.current.getLevel() > 5) {
+            kakaoMapRef.current.setLevel(5)
+          }
           kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(cluster.coords[0], cluster.coords[1]))
         }
       })
