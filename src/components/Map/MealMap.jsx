@@ -1067,8 +1067,10 @@ export default function MealMap({ onViewMeal, onTabChange }) {
   function handleViewOnMap(wish) {
     setHighlightedWishId(wish.id)
     if (wishKakaoMapRef.current) {
-      wishKakaoMapRef.current.panTo(new window.kakao.maps.LatLng(wish.lat, wish.lng))
+      // setLevel 먼저(동기/즉시) → 그 다음 panTo(비동기 애니메이션)
+      // panTo 후 setLevel 호출 시 줌 변경이 진행중 panTo 애니메이션을 취소하므로 순서 중요
       wishKakaoMapRef.current.setLevel(4)
+      wishKakaoMapRef.current.panTo(new window.kakao.maps.LatLng(wish.lat, wish.lng))
     }
     // 지도가 화면에 보이도록 스크롤
     if (wishMapContainerRef.current) {
