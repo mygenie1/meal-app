@@ -102,12 +102,33 @@ function AppContent() {
     if (loadError) setErrorDismissed(false)
   }, [loadError])
 
-  // Service Worker 업데이트 감지
+  // Service Worker 업데이트 감지 (prompt 방식: waiting SW가 생기면 배너)
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
+    let cancelled = false
 
-    // 첫 로드 시 controller 없음 → 이후 controllerchange는 업데이트 의미
-    let isFirstController = !navigator.serviceWorker.controller
+    // 같은 세션에서는 배너를 한 번만 표시 (reload 후 재표시 방지)
+    const triggerBanner = () => {
+      if (sessionStorage.getItem('update_banner_shown')) return
+      sessionStorage.setItem('update_banner_shown', 'true')
+      setUpdateReady(true)
+    }
+
+    // 설치 완료된 새 SW + 기존 controller 존재 → 진짜 업데이트
+    const watchInstalling = (sw) => {
+      if (!sw) return
+      sw.addEventListener('statechange', () => {
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) triggerBanner()
+      })
+    }
+
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (!reg || cancelled) return
+      // 이미 대기 중인 SW가 있으면 즉시 배너
+      if (reg.waiting && navigator.serviceWorker.controller) triggerBanner()
+      // 새 SW가 설치되기 시작하면 감지
+      reg.addEventListener('updatefound', () => watchInstalling(reg.installing))
+    }).catch(() => {})
 
     // 포그라운드 복귀 시 업데이트 체크
     const handleVisibility = () => {
@@ -118,18 +139,30 @@ function AppContent() {
     }
     document.addEventListener('visibilitychange', handleVisibility)
 
-    // 새 SW가 skipWaiting 후 control 획득 → 배너 표시
-    const handleControllerChange = () => {
-      if (isFirstController) { isFirstController = false; return }
-      setUpdateReady(true)
-    }
-    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange)
-
     return () => {
+      cancelled = true
       document.removeEventListener('visibilitychange', handleVisibility)
-      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange)
     }
   }, [])
+
+  // 배너 "새로고침" 클릭: waiting SW 교체 후 1회 reload
+  const handleUpdate = async () => {
+    setUpdateReady(false)
+    try {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (reg?.waiting) {
+        // 새 SW가 control을 잡으면(controllerchange) reload — postMessage보다 먼저 등록
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          window.location.reload()
+        }, { once: true })
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+      } else {
+        window.location.reload()
+      }
+    } catch {
+      window.location.reload()
+    }
+  }
 
   if (isOffline) return <OfflineBanner />
 
@@ -165,7 +198,7 @@ function AppContent() {
 
   return (
     <div className="min-h-svh max-w-lg mx-auto flex flex-col bg-cream-50">
-      {updateReady && <UpdateBanner onReload={() => window.location.reload()} />}
+      {updateReady && <UpdateBanner onReload={handleUpdate} />}
       {loadError && !errorDismissed && (
         <ConnectErrorBanner
           message={loadError}
