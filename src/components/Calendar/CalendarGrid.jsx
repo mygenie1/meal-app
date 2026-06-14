@@ -190,9 +190,9 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
         ))}
       </div>
 
-      {/* 날짜 그리드 */}
+      {/* 날짜 그리드 — 모든 셀 고정 정사각형 */}
       <div className="grid grid-cols-7 gap-1 px-4">
-        {days.map((day, idx) => {
+        {days.map((day) => {
           const dayMeals = getMealsForDay(day)
           const hasMeals = dayMeals.length > 0
           const dateStr = format(day, 'yyyy-MM-dd')
@@ -200,73 +200,49 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
           const repMeal = repMealId ? dayMeals.find(m => m.id === repMealId) : null
           const displayMeal = repMeal || dayMeals.find(m => m.photos?.[0]) || dayMeals[0]
           const thumbPhoto = displayMeal ? getThumbUrl(displayMeal.photos?.[0] || '') : ''
-          const displayTitle = displayMeal?.title || displayMeal?.restaurantName || '식사'
           const inMonth = isSameMonth(day, current)
           const today = isToday(day)
-          const dayOfWeek = idx % 7
 
           return (
             <button
               key={day.toISOString()}
               onClick={() => onDayClick(day)}
               className={`
-                relative rounded-2xl overflow-hidden transition-all active:scale-95
-                ${inMonth ? '' : 'opacity-25'}
-                ${hasMeals ? 'h-[96px]' : 'h-[56px]'}
-                ${today && !hasMeals ? 'ring-1 ring-warm-brown/40 bg-warm-brown/5' : ''}
-                ${!hasMeals ? 'hover:bg-cream-100' : ''}
+                relative aspect-square rounded-lg overflow-hidden transition-all active:scale-95
+                ${!inMonth ? 'opacity-30' : ''}
+                ${today && hasMeals ? 'ring-2 ring-warm-brown ring-inset' : ''}
               `}
             >
-              {/* 게시글 수 배지 */}
-              {hasMeals && dayMeals.length > 1 && (
-                <div className="absolute top-1 right-1 bg-warm-brown text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center z-20 leading-none">
-                  {dayMeals.length}
-                </div>
-              )}
-              {/* 위시리스트 방문 점 */}
-              {dayMeals.some(m => m.fromWishlist) && (
-                <div className="absolute top-1 left-1 w-2 h-2 rounded-full bg-rose-400 z-20 shadow-sm" />
-              )}
-              {thumbPhoto && (
-                <div className="absolute inset-0">
-                  <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
-                  <div className="absolute inset-0 bg-black/25" />
-                </div>
-              )}
-              {hasMeals && !thumbPhoto && (
-                <div className="absolute inset-0 bg-cream-200" />
-              )}
-              <div className="relative z-10 p-1.5">
-                <span
-                  className={`
-                    text-xs font-semibold block text-center leading-5 w-5 h-5 mx-auto rounded-full
-                    ${today ? 'bg-warm-brown text-white' : ''}
-                    ${!today && thumbPhoto ? 'text-white' : ''}
-                    ${!today && !thumbPhoto && hasMeals ? 'text-warm-dark' : ''}
-                    ${!today && !hasMeals && dayOfWeek === 0 ? 'text-rose-400' : ''}
-                    ${!today && !hasMeals && dayOfWeek === 6 ? 'text-blue-400' : ''}
-                    ${!today && !hasMeals && dayOfWeek !== 0 && dayOfWeek !== 6 ? 'text-warm-dark' : ''}
-                  `}
-                >
-                  {format(day, 'd')}
-                </span>
-              </div>
-              {hasMeals && (
-                <div className="relative z-10 px-1.5 pb-1.5">
-                  <span
-                    className={`
-                      text-[9px] font-medium px-1 py-0.5 rounded-lg w-full
-                      ${thumbPhoto ? 'bg-white/30 text-white' : 'bg-warm-brown/20 text-warm-brown'}
-                    `}
-                    style={{
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {displayTitle}
+              {hasMeals ? (
+                <>
+                  {/* 사진 배경 (없으면 베이지) */}
+                  {thumbPhoto ? (
+                    <div className="absolute inset-0">
+                      <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
+                      <div className="absolute inset-0 bg-black/20" />
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 bg-cream-200" />
+                  )}
+                  {/* 위시리스트 방문 점 */}
+                  {dayMeals.some(m => m.fromWishlist) && (
+                    <span className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-rose-400 z-20 shadow-sm" />
+                  )}
+                  {/* 날짜 숫자 (우상단) */}
+                  <span className={`absolute top-0.5 right-1 text-[10px] font-medium z-10 ${thumbPhoto ? 'text-white drop-shadow-sm' : 'text-warm-dark'}`}>
+                    {format(day, 'd')}
+                  </span>
+                  {/* 여러 끼니 기록 — 우하단 숫자 뱃지 */}
+                  {dayMeals.length > 1 && (
+                    <span className="absolute bottom-0.5 right-0.5 bg-warm-brown text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center z-20 leading-none">
+                      {dayMeals.length}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <div className="absolute inset-0 bg-cream-50 flex items-center justify-center">
+                  <span className={`text-xs ${today ? 'bg-warm-brown text-white rounded-full w-5 h-5 flex items-center justify-center' : 'text-warm-dark'}`}>
+                    {format(day, 'd')}
                   </span>
                 </div>
               )}
