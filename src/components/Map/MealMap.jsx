@@ -897,6 +897,7 @@ export default function MealMap({ onViewMeal, onTabChange }) {
   const [loading, setLoading] = useState(false)
   const [activeFilters, setActiveFilters] = useState(new Set(['전체']))
   const [selectedCluster, setSelectedCluster] = useState(null)
+  const [selectedMeal, setSelectedMeal] = useState(null)
   const [userLocation, setUserLocation] = useState(null)
   const [flyTarget, setFlyTarget] = useState(null)
   const [locating, setLocating] = useState(false)
@@ -1159,8 +1160,10 @@ export default function MealMap({ onViewMeal, onTabChange }) {
       const isSelected = key === selectedClusterKey
       const el = document.createElement('div')
       el.innerHTML = makePinHTML(TAG_COLORS[cluster.meals[0].tag] || '#a07850', cluster.meals.length, isSelected)
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation() // 지도 빈 곳 클릭(닫기) 핸들러로 전파 방지
         setSelectedCluster(cluster)
+        setSelectedMeal(cluster.meals[0]) // 하단 미니 카드 표시
         if (kakaoMapRef.current) {
           // 핀 클릭 시 현재 zoom level 유지하며 위치만 이동.
           // 단, 현재 화면이 너무 넓으면(level 6 이상) level 5로만 좁혀줌.
@@ -1205,6 +1208,26 @@ export default function MealMap({ onViewMeal, onTabChange }) {
     kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(flyTarget[0], flyTarget[1]))
     setFlyTarget(null)
   }, [flyTarget, mapReady])
+
+  // ── 지도 빈 곳 클릭 → 미니 카드 닫기 ──────────────────────────
+  useEffect(() => {
+    if (!mapReady || !kakaoMapRef.current || !window.kakao?.maps) return
+    const map = kakaoMapRef.current
+    const handler = () => { setSelectedMeal(null); setSelectedCluster(null) }
+    window.kakao.maps.event.addListener(map, 'click', handler)
+    return () => {
+      try { window.kakao.maps.event.removeListener(map, 'click', handler) } catch {}
+    }
+  }, [mapReady])
+
+  // 카드/핀 선택 → 미니 카드 표시 + 지도 이동 (setLevel 먼저, 그 다음 panTo)
+  function handleSelectMeal(meal, coords) {
+    setSelectedMeal(meal)
+    if (coords && kakaoMapRef.current) {
+      if (kakaoMapRef.current.getLevel() > 5) kakaoMapRef.current.setLevel(5)
+      kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(coords[0], coords[1]))
+    }
+  }
 
   // ── 가고 싶은 곳 지도 내 위치 마커 ──────────────────────────────
   useEffect(() => {
@@ -1565,7 +1588,8 @@ export default function MealMap({ onViewMeal, onTabChange }) {
 
           {/* 스크롤 가능 영역 — 게시글 목록 */}
           <div className="flex-1 overflow-y-auto px-4 pt-3 pb-20 border-t border-cream-200">
-            {selectedCluster && (
+            {/* 같은 위치에 여러 기록이 있을 때만 선택용 리스트 노출 (단일 기록은 미니 카드로 충분) */}
+            {selectedCluster && selectedCluster.meals.length > 1 && (
               <div className="bg-white rounded-2xl border border-cream-200 p-4 mb-3">
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -1593,7 +1617,7 @@ export default function MealMap({ onViewMeal, onTabChange }) {
                     const liveMeal = currentSpace?.meals.find(m => m.id === meal.id) ?? meal
                     return (
                       <MealPinCard key={meal.id} meal={meal} liveMeal={liveMeal}
-                        onClick={() => onViewMeal?.(liveMeal)}
+                        onClick={() => handleSelectMeal(liveMeal, selectedCluster.coords)}
                       />
                     )
                   })}
@@ -1603,15 +1627,14 @@ export default function MealMap({ onViewMeal, onTabChange }) {
             {clusters.length > 0 && (() => {
               const recorded = [...filteredPins]
                 .sort((a, b) => new Date(b.meal.date) - new Date(a.meal.date))
-                .map(p => p.meal)
               return (
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="text-sm font-semibold text-warm-dark">기록한 맛집</h3>
                     <span className="text-xs text-cream-400">{recorded.length}곳</span>
                   </div>
-                  {recorded.map(meal => (
-                    <RecordedPlaceCard key={meal.id} meal={meal} onClick={() => onViewMeal?.(meal)} />
+                  {recorded.map(({ meal, coords }) => (
+                    <RecordedPlaceCard key={meal.id} meal={meal} onClick={() => handleSelectMeal(meal, coords)} />
                   ))}
                 </div>
               )
@@ -1834,6 +1857,74 @@ export default function MealMap({ onViewMeal, onTabChange }) {
           </div>
         </>
       )}
+
+      {/* ── 맛집 지도: 하단 미니 카드 (핀/카드 선택 시 슬라이드업) ── */}
+      {activeTab === 'map' && selectedMeal && (() => {
+        const live = currentSpace?.meals.find(m => m.id === selectedMeal.id) ?? selectedMeal
+        const thumb = getThumbUrl(live.photos?.[0] || live.photo || '')
+        const name = live.restaurantName || live.title || '식사 기록'
+        return (
+          <div key={live.id} className="fixed inset-x-0 bottom-20 z-40 max-w-lg mx-auto px-4 animate-slide-up">
+            <div className="bg-white rounded-2xl border border-cream-200 shadow-md">
+              <div className="flex gap-3 p-3">
+                {/* 사진 썸네일 */}
+                <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-cream-100 flex items-center justify-center">
+                  {thumb ? (
+                    <img src={thumb} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <svg className="w-6 h-6 text-cream-300" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
+                </div>
+                {/* 정보 */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-warm-dark text-sm truncate">{name}</h3>
+                    <button
+                      onClick={() => setSelectedMeal(null)}
+                      className="text-cream-400 hover:text-warm-light shrink-0 -mr-0.5 -mt-0.5 p-0.5"
+                      aria-label="닫기"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {live.tag && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-warm-dark"
+                        style={{ background: (TAG_COLORS[live.tag] || '#e5ddd5') + '66' }}>
+                        {live.tag}
+                      </span>
+                    )}
+                    <span className="text-xs text-cream-400">{live.date}</span>
+                  </div>
+                  {live.location && (
+                    <p className="text-xs text-cream-400 mt-0.5 flex items-center gap-1">
+                      <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
+                        <circle cx="12" cy="8" r="2" />
+                      </svg>
+                      <span className="truncate">{live.location}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+              {/* 자세히 보기 */}
+              <div className="px-3 pb-3">
+                <button
+                  onClick={() => onViewMeal?.(live)}
+                  className="w-full bg-warm-brown text-white rounded-xl py-2 text-sm font-medium hover:bg-warm-dark transition-colors active:scale-[0.98]"
+                >
+                  자세히 보기
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── 모달: 가고 싶은 곳 상세 ── */}
       {viewingWish && (
