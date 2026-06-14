@@ -16,6 +16,8 @@ const TYPE_LABEL = {
   new_meal: '새 기록',
   new_comment: '댓글',
   new_rating: '별점',
+  new_wishlist: '가고싶은 곳',
+  wishlist_interest: '가고싶어요',
   comment: '댓글',   // 레거시 호환
   rating: '별점',    // 레거시 호환
 }

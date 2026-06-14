@@ -1264,15 +1264,37 @@ export default function MealMap({ onViewMeal, onTabChange }) {
     const newItem = await addWishlistItem({ name: addForm.name.trim(), memo: addForm.memo.trim(), location: addForm.location.trim(), lat, lng, moodTags: addForm.moodTags, photo: photoUrl })
     if (newItem?.id) {
       try { await addWishlistInterest(newItem.id) } catch {}
+      // 같은 스페이스 다른 멤버들에게 알림 (메인 기능과 분리: try/catch)
+      try {
+        const { data: members } = await supabase
+          .from('space_members')
+          .select('user_id')
+          .eq('space_id', currentSpace?.id)
+          .neq('user_id', user?.id)
+        if (members?.length > 0) {
+          const fromUser = buildFromUser(user)
+          const nick = user?.user_metadata?.name || user?.user_metadata?.full_name || '누군가'
+          await Promise.all(members.map(m => sendNotification({
+            toUserId: m.user_id,
+            spaceId: currentSpace?.id,
+            fromUser,
+            type: 'new_wishlist',
+            message: `${nick}님이 가고 싶은 곳을 추가했어요: ${newItem.name}`,
+          })))
+        }
+      } catch {}
     }
     setShowAddModal(false)
     setSavingAdd(false)
   }
 
   function handleOpenEdit(item) {
-    setEditingWish(item)
+    // 폼 데이터는 즉시 채우되, 모달 오픈은 한 틱 늦춘다.
+    // 상세 모달이 닫히면서 Modal이 호출하는 history.back()의 popstate가
+    // 곧바로 열리는 수정 모달의 핸들러에 잡혀 모달이 즉시 닫히는 race를 피하기 위함.
     setEditForm({ name: item.name || '', location: item.location || '', memo: item.memo || '', moodTags: item.moodTags || [] })
     setEditPhotoPreview(item.photo || '')
+    setTimeout(() => setEditingWish(item), 300)
   }
 
   async function handleSaveEdit(e) {

@@ -309,7 +309,10 @@ export function AppProvider({ children }) {
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
         ({ new: newRow }) => {
           if (!destroyed && newRow?.user_id === user.id) {
-            setNotifications(prev => [newRow, ...prev].slice(0, 50))
+            // 같은 알림이 두 번 전달되는 경우 중복 추가 방지 (id 기준)
+            setNotifications(prev =>
+              prev.find(n => n.id === newRow.id) ? prev : [newRow, ...prev].slice(0, 50)
+            )
           }
         }
       )
