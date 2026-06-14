@@ -241,7 +241,15 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
                 </>
               ) : (
                 <div className="absolute inset-0 bg-cream-50 flex items-center justify-center">
-                  <span className={`text-xs ${today ? 'bg-warm-brown text-white rounded-full w-5 h-5 flex items-center justify-center' : 'text-warm-dark'}`}>
+                  <span className={`text-xs ${
+                    today
+                      ? 'bg-warm-brown text-white rounded-full w-5 h-5 flex items-center justify-center'
+                      : day.getDay() === 0
+                        ? 'text-rose-400'
+                        : day.getDay() === 6
+                          ? 'text-blue-400'
+                          : 'text-warm-dark'
+                  }`}>
                     {format(day, 'd')}
                   </span>
                 </div>
