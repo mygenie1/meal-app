@@ -42,6 +42,10 @@ export default defineConfig({
         // SPA: 오프라인에서도 라우팅 유지
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/offline\.html/],
+        // 새 SW가 즉시 대기 없이 활성화 → controllerchange 이벤트로 감지
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
       },
       devOptions: {
         // 개발 중 서비스워커 비활성화 (캐싱이 개발을 방해하지 않게)

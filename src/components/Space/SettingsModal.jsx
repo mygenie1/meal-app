@@ -16,6 +16,9 @@ export default function SettingsModal({ isOpen, onClose }) {
   const [photoError, setPhotoError] = useState('')
   const photoInputRef = useRef(null)
 
+  // 앱 업데이트
+  const [checking, setChecking] = useState(false)
+
   // 회원 탈퇴
   const [deleteStep, setDeleteStep] = useState('idle') // idle | confirm1 | confirm2
   const [deleteInput, setDeleteInput] = useState('')
@@ -96,6 +99,18 @@ export default function SettingsModal({ isOpen, onClose }) {
       setPhotoUploading(false)
       if (photoInputRef.current) photoInputRef.current.value = ''
     }
+  }
+
+  // 앱 업데이트: 캐시 삭제 후 새로고침
+  async function handleCheckUpdate() {
+    setChecking(true)
+    try {
+      const keys = await caches.keys()
+      await Promise.all(keys.map(k => caches.delete(k)))
+      const reg = await navigator.serviceWorker?.getRegistration()
+      if (reg) await reg.update().catch(() => {})
+    } catch {}
+    window.location.reload()
   }
 
   // 회원 탈퇴 확정
@@ -315,6 +330,28 @@ export default function SettingsModal({ isOpen, onClose }) {
                   aria-pressed={notifEnabled}
                 >
                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${notifEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
+              {/* 앱 업데이트 확인 */}
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <div className="flex items-center gap-3">
+                  <svg className={`w-4 h-4 shrink-0 ${checking ? 'text-warm-brown' : 'text-cream-400'}`} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <p className="text-sm text-warm-dark">앱 업데이트 확인</p>
+                </div>
+                <button
+                  onClick={handleCheckUpdate}
+                  disabled={checking}
+                  className="text-xs text-warm-brown font-medium disabled:opacity-50 flex items-center gap-1.5 active:scale-95 transition-all"
+                >
+                  {checking ? (
+                    <>
+                      <span className="w-3 h-3 border border-warm-brown border-t-transparent rounded-full animate-spin" />
+                      확인 중...
+                    </>
+                  ) : '업데이트 확인'}
                 </button>
               </div>
 

@@ -68,6 +68,13 @@ body {
   display: none;
 }
 
+/* ── iOS Safari: 입력창 자동 확대 방지 ──────────────────────── */
+/* font-size < 16px인 input에 포커스 시 Safari가 자동 줌 발생.
+   !important로 Tailwind text-sm(14px) 오버라이드. */
+input, textarea, select {
+  font-size: 16px !important;
+}
+
 /* ── iOS Safe Area ─────────────────────────── */
 /* 노치 / 다이나믹 아일랜드 대응: 모든 sticky 헤더에 자동 적용 */
 header.sticky {
