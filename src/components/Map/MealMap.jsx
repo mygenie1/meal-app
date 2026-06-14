@@ -900,10 +900,10 @@ function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail, i
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────
-export default function MealMap({ onViewMeal, onTabChange }) {
+export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRandom }) {
   const { currentSpace, addMeal, addWishlistItem, updateWishlistItem, deleteWishlistItem, cacheGeocoords, loadMealPhotos, user, wishlistInterestsMap, addWishlistInterest, removeWishlistInterest } = useApp()
 
-  const [activeTab, setActiveTab] = useState('map')
+  const [activeTab, setActiveTab] = useState(initialTab === 'wishlist' ? 'wishlist' : 'map')
 
   // ── 맛집 지도 ─────────────────────────────────────────────────
   const [mapContainer, setMapContainer] = useState(null)
@@ -981,6 +981,18 @@ export default function MealMap({ onViewMeal, onTabChange }) {
     }
     window.addEventListener('popstate', openPendingEdit)
     return () => window.removeEventListener('popstate', openPendingEdit)
+  }, [])
+
+  // 홈 "오늘 어디가지?" → 가고싶은곳 탭 + 랜덤 추천 자동 실행 (마운트 1회)
+  useEffect(() => {
+    if (initialTab === 'wishlist') {
+      onTabChange?.('wishlist')
+      if (wishRandom) {
+        const t = setTimeout(() => handleRandomPick(), 300)
+        return () => clearTimeout(t)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── 파생 상태 ─────────────────────────────────────────────────

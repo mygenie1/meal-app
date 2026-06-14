@@ -1,10 +1,13 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import MealMap from '../components/Map/MealMap'
 import MealDetailModal from '../components/MealRecord/MealDetailModal'
 
 export default function MapPage() {
+  const { state } = useLocation()
+  const wantWishTab = state?.tab === 'wish'
   const [viewingMeal, setViewingMeal] = useState(null)
-  const [isWishTab, setIsWishTab] = useState(false)
+  const [isWishTab, setIsWishTab] = useState(wantWishTab)
 
   return (
     <div className={`flex flex-col ${isWishTab ? '' : 'h-screen'}`}>
@@ -25,6 +28,8 @@ export default function MapPage() {
         <MealMap
           onViewMeal={setViewingMeal}
           onTabChange={tab => setIsWishTab(tab === 'wishlist')}
+          initialTab={wantWishTab ? 'wishlist' : undefined}
+          wishRandom={!!(wantWishTab && state?.random)}
         />
       </div>
       {viewingMeal && (

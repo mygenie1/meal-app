@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { format, isSameMonth, parseISO, subMonths, startOfMonth } from 'date-fns'
+import { format, isSameMonth, parseISO, subMonths, startOfMonth, differenceInDays } from 'date-fns'
 import { ko, enUS } from 'date-fns/locale'
 import { useApp } from '../context/AppContext'
 import { useNavigate } from 'react-router-dom'
@@ -205,6 +205,32 @@ export default function HomePage() {
   const today = useMemo(() => new Date(), [])
 
   const meals = currentSpace?.meals || []
+  const wishlist = currentSpace?.wishlist || []
+
+  // 추억 카드 — 오늘 날짜(월-일)와 같은 과거 기록, 없으면 30~90일 사이 랜덤 1개
+  const memoryCard = useMemo(() => {
+    const todayMD = format(today, 'MM-dd')
+    const thisYear = format(today, 'yyyy')
+    const memoryMeal = meals.find(m =>
+      m.date && m.date.slice(5) === todayMD && m.date.slice(0, 4) !== thisYear
+    )
+    if (memoryMeal) return { meal: memoryMeal, isMemory: true }
+    const range = meals.filter(m => {
+      if (!m.date) return false
+      try { const diff = differenceInDays(today, parseISO(m.date)); return diff >= 30 && diff <= 90 } catch { return false }
+    })
+    const fallbackMeal = range.length > 0 ? range[Math.floor(Math.random() * range.length)] : null
+    return { meal: fallbackMeal, isMemory: false }
+  }, [meals, today])
+
+  // 오늘 어디가지? — 미방문 위시리스트
+  const unvisitedWishes = useMemo(() => wishlist.filter(w => !w.visited), [wishlist])
+
+  // 추억 카드 사진 lazy 로드
+  useEffect(() => {
+    const m = memoryCard.meal
+    if (m && !m.photosLoaded) loadMealPhotos(m.id)
+  }, [memoryCard.meal?.id])
   const nickname = user?.user_metadata?.name || user?.user_metadata?.full_name || '식탁'
   const avatarUrl = user?.user_metadata?.avatar_url
 
@@ -616,6 +642,96 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+
+        {/* 추억 카드 */}
+        {memoryCard.meal && (() => {
+          const dm = memoryCard.meal
+          const photo = getThumbUrl(dm.photos?.[0] || '')
+          let daysAgo = 0
+          try { daysAgo = differenceInDays(today, parseISO(dm.date)) } catch {}
+          let dateLabel = dm.date
+          try { dateLabel = format(parseISO(dm.date), 'yyyy년 M월 d일') } catch {}
+          return (
+            <div className="px-4 mb-6">
+              <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden shadow-sm">
+                {photo && (
+                  <div className="relative h-32">
+                    <img src={photo} alt="" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    <span className="absolute top-3 left-3 inline-flex items-center gap-1 bg-warm-brown text-white text-xs px-2 py-1 rounded-full font-medium">
+                      {memoryCard.isMemory ? (
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                          <circle cx="12" cy="12" r="9" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
+                        </svg>
+                      )}
+                      {memoryCard.isMemory ? '오늘의 추억' : '지난 식탁'}
+                    </span>
+                  </div>
+                )}
+                <div className="p-4">
+                  <p className="text-xs text-cream-400 mb-1">
+                    {dateLabel}{memoryCard.isMemory && ` · ${daysAgo}일 전`}
+                  </p>
+                  <h3 className="font-semibold text-warm-dark">
+                    {dm.title || dm.restaurantName || '기록된 식탁'}
+                  </h3>
+                  {dm.review && (
+                    <p className="text-sm text-warm-light mt-1 line-clamp-1 break-words">{dm.review}</p>
+                  )}
+                  <button
+                    onClick={() => setSelectedMeal(dm)}
+                    className="mt-3 text-sm text-warm-brown font-medium flex items-center gap-1 active:opacity-70 transition-opacity"
+                  >
+                    다시 보기
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* 오늘 어디가지? 카드 */}
+        {unvisitedWishes.length > 0 && (
+          <div className="px-4 mb-6">
+            <div className="bg-white rounded-2xl border border-cream-200 p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="18" height="18" rx="4" />
+                    <circle cx="8.5" cy="8.5" r="1.1" fill="currentColor" stroke="none" />
+                    <circle cx="15.5" cy="8.5" r="1.1" fill="currentColor" stroke="none" />
+                    <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
+                    <circle cx="8.5" cy="15.5" r="1.1" fill="currentColor" stroke="none" />
+                    <circle cx="15.5" cy="15.5" r="1.1" fill="currentColor" stroke="none" />
+                  </svg>
+                  <span className="font-semibold text-warm-dark">오늘 어디 가지?</span>
+                </div>
+                <span className="text-xs text-cream-400">{unvisitedWishes.length}곳 저장됨</span>
+              </div>
+              <p className="text-sm text-warm-light mb-3">가고 싶은 곳 중 하나를 골라볼까요?</p>
+              <button
+                onClick={() => navigate('/map', { state: { tab: 'wish', random: true } })}
+                className="w-full bg-warm-brown text-white rounded-xl py-2.5 text-sm font-medium flex items-center justify-center gap-2 hover:bg-warm-dark transition-colors active:scale-[0.99]"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="4" />
+                  <circle cx="8.5" cy="8.5" r="1.1" fill="currentColor" stroke="none" />
+                  <circle cx="15.5" cy="15.5" r="1.1" fill="currentColor" stroke="none" />
+                  <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
+                </svg>
+                하나 골라줘
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* RECENT 헤더 */}
         <div className="flex items-center justify-between px-4 mb-3">
