@@ -1,13 +1,13 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { format, isSameMonth, parseISO } from 'date-fns'
-import { ko } from 'date-fns/locale'
+import { format, isSameMonth, parseISO, subMonths, startOfMonth } from 'date-fns'
+import { ko, enUS } from 'date-fns/locale'
 import { useApp } from '../context/AppContext'
 import { useNavigate } from 'react-router-dom'
 import MealDetailModal from '../components/MealRecord/MealDetailModal'
 import Modal from '../components/common/Modal'
 import DayDetail from '../components/MealRecord/DayDetail'
-import PhotoGallery from '../components/common/PhotoGallery'
-import { getOriginalUrl } from '../lib/uploadPhoto'
+import LazyImage from '../components/common/LazyImage'
+import { getOriginalUrl, getThumbUrl } from '../lib/uploadPhoto'
 import AuthorBadge from '../components/common/AuthorBadge'
 import { linkify } from '../lib/linkify'
 import NotificationPanel, { NotificationBell } from '../components/common/NotificationPanel'
@@ -19,12 +19,14 @@ const TAG_STYLES = {
   '배달': 'bg-blue-50 text-blue-700',
 }
 
+// 태그 비율 바 색상
 const TAG_BG = {
   '집밥': '#86efac',
   '외식': '#fcd34d',
   '카페': '#f9a8d4',
   '배달': '#93c5fd',
 }
+const TAG_ORDER = ['집밥', '외식', '카페', '배달']
 
 const PAGE_SIZE = 20
 
@@ -44,82 +46,22 @@ function avgRatingOf(ratingsMap, meal) {
   return meal.rating || 0
 }
 
-function FeedCard({ meal, onClick }) {
-  const { ratingsMap } = useApp()
-  const dateObj = parseISO(meal.date)
-  const title = meal.title || meal.restaurantName || '식사 기록'
-  const photos = (meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : []))
-    .map(p => getOriginalUrl(p))
-    .filter(Boolean)
-  const showPhotos = meal.photosLoaded && photos.length > 0
-  const mealRatings = ratingsMap?.[meal.id] || []
-  const avgRating = mealRatings.length > 0
-    ? Math.floor(mealRatings.reduce((s, r) => s + r.rating, 0) / mealRatings.length)
-    : meal.rating || 0
-  const ratingCount = mealRatings.length
+function photoArrOf(meal) {
+  return meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : [])
+}
 
+// 포크+스푼 로고
+function ForkSpoonIcon({ className }) {
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left bg-white rounded-2xl border border-cream-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
-    >
-      {showPhotos && <PhotoGallery photos={photos} maxHeight={200} disableFullscreen />}
-      <div className="px-4 py-3">
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <p className="font-semibold text-warm-dark text-base leading-snug">{title}</p>
-          <div className="flex items-center gap-1 shrink-0">
-            {meal.mealTime && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cream-200 text-warm-light font-medium">
-                {meal.mealTime}
-              </span>
-            )}
-            {meal.tag && (
-              <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${TAG_STYLES[meal.tag] || 'bg-cream-100 text-warm-light'}`}>
-                {meal.tag}
-              </span>
-            )}
-          </div>
-        </div>
-        {meal.title && meal.restaurantName && (
-          <p className="text-xs text-warm-light mb-1 truncate">{meal.restaurantName}</p>
-        )}
-        <div className="flex items-center gap-2 flex-wrap">
-          {meal.fromWishlist && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-400 font-medium border border-rose-100 flex items-center gap-0.5 shrink-0">
-              <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-              </svg>
-              가고 싶었던 곳
-            </span>
-          )}
-          <p className="text-xs text-cream-400">
-            {format(dateObj, 'yyyy.M.d (eee)', { locale: ko })}
-          </p>
-          {avgRating > 0 && (
-            <div className="flex items-center gap-1">
-              <div className="flex gap-0.5">
-                {[1,2,3,4,5].map(i => (
-                  <span key={i} className={`text-sm leading-none ${i <= avgRating ? 'star-filled' : 'star-empty'}`}>★</span>
-                ))}
-              </div>
-              {ratingCount >= 2 && (
-                <span className="text-[10px] text-cream-400">{ratingCount}명</span>
-              )}
-            </div>
-          )}
-        </div>
-        {meal.review && (
-          <p className="text-xs text-warm-light mt-1.5 line-clamp-2 leading-relaxed break-words">
-            {linkify(meal.review)}
-          </p>
-        )}
-        <AuthorBadge meal={meal} className="mt-2" />
-      </div>
-    </button>
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 2v6a2 2 0 0 0 2 2v12M9 2v6a2 2 0 0 1-2 2" />
+      <path d="M16 2c-1.7 0-3 1.8-3 4s1.3 4 3 4 3-1.8 3-4-1.3-4-3-4zM16 10v12" />
+    </svg>
   )
 }
 
-// 포크+나이프 아이콘 (기록 유도용)
+// 포크+나이프 아이콘 (사진 없는 카드/빈 상태)
 function UtensilsIcon({ className }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
@@ -128,65 +70,126 @@ function UtensilsIcon({ className }) {
   )
 }
 
-// 하트 아이콘 (완료 메시지용)
-function HeartIcon({ className }) {
+// 리포트 헤더 장식 (반짝이)
+function SparkleIcon({ className }) {
   return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M12 2l1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7z" />
     </svg>
   )
 }
 
-// 오늘 기록 상태별 CTA 카드
-function TodayCTA({ status, dateLabel, onRecord, onViewCalendar }) {
-  let title, subtitle, icon, button
-  if (status.kind === 'empty') {
-    icon = <UtensilsIcon className="w-5 h-5 text-warm-brown" />
-    title = '오늘의 식탁은 아직 비어있어요'
-    subtitle = '사진 한 장으로 오늘 먹은 한 끼를 남겨보세요.'
-    button = { label: '오늘 식사 기록하기', onClick: onRecord }
-  } else if (status.kind === 'partial') {
-    icon = <UtensilsIcon className="w-5 h-5 text-warm-brown" />
-    title = '오늘의 식탁이 기록됐어요 🍽️'
-    subtitle = `${status.next}도 함께 남겨볼까요?`
-    button = { label: '한 끼 더 기록하기', onClick: onRecord }
-  } else {
-    icon = <HeartIcon className="w-5 h-5 text-warm-brown" />
-    title = '오늘 하루 식탁이 모두 기록됐어요'
-    subtitle = '오늘도 함께한 식사를 남겨줘서 고마워요 🧡'
-    button = { label: '달력에서 보기', onClick: onViewCalendar, secondary: true }
-  }
+function PinIcon({ className }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
+      <circle cx="12" cy="8" r="2" />
+    </svg>
+  )
+}
+
+// ── RECENT 피드 카드 ──────────────────────────────────────────────────
+function FeedCard({ meal, onClick }) {
+  const { ratingsMap } = useApp()
+  const dateObj = parseISO(meal.date)
+  const title = meal.title || meal.restaurantName || '식사 기록'
+  const cover = meal.photosLoaded
+    ? (photoArrOf(meal).map(getOriginalUrl).find(Boolean) || '')
+    : ''
+  const mealRatings = ratingsMap?.[meal.id] || []
+  const avgRating = mealRatings.length > 0
+    ? Math.floor(mealRatings.reduce((s, r) => s + r.rating, 0) / mealRatings.length)
+    : meal.rating || 0
+  const ratingCount = mealRatings.length
+  const subPlace = meal.title && meal.restaurantName ? meal.restaurantName : null
+  const tagLine = [meal.mealTime, meal.tag].filter(Boolean).join(' · ')
 
   return (
-    <div className="bg-cream-100 rounded-2xl px-4 py-4">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 bg-warm-brown/10 rounded-xl flex items-center justify-center shrink-0">
-          {icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-warm-dark">{title}</p>
-          <p className="text-xs text-warm-light mt-1 leading-relaxed">{subtitle}</p>
-          <p className="text-[11px] text-cream-400 mt-1">{dateLabel}</p>
-        </div>
+    <button
+      onClick={onClick}
+      className="w-full text-left bg-white rounded-2xl border border-cream-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
+    >
+      {/* 4:3 풀블리드 사진 */}
+      <div className="relative w-full aspect-[4/3] bg-cream-100">
+        {cover ? (
+          <LazyImage src={cover} className="w-full h-full" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <UtensilsIcon className="w-8 h-8 text-cream-300" />
+          </div>
+        )}
+
+        {/* 날짜칩 (좌상단) */}
+        <span className="absolute top-2.5 left-2.5 text-[11px] font-medium text-warm-dark bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full shadow-sm">
+          {format(dateObj, 'M.d eee', { locale: ko })}
+        </span>
+
+        {/* 끼니·태그 pill (우상단) */}
+        {tagLine && (
+          <span className="absolute top-2.5 right-2.5 text-[11px] font-medium text-warm-brown bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full shadow-sm">
+            {tagLine}
+          </span>
+        )}
+
+        {/* 가고 싶었던 곳 (좌하단) */}
+        {meal.fromWishlist && (
+          <span className="absolute bottom-2.5 left-2.5 text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/90 text-white font-medium flex items-center gap-0.5">
+            <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+            가고 싶었던 곳
+          </span>
+        )}
       </div>
-      {button && (
-        <button
-          onClick={button.onClick}
-          className={`w-full mt-3 py-2.5 rounded-2xl text-sm font-medium active:scale-[0.98] transition-all ${
-            button.secondary
-              ? 'border border-cream-300 text-warm-brown hover:bg-cream-200'
-              : 'bg-warm-brown text-white hover:bg-warm-dark'
-          }`}
-        >
-          {button.label}
-        </button>
-      )}
+
+      {/* 하단 정보 */}
+      <div className="px-4 py-3">
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-semibold text-warm-dark text-base leading-snug truncate">{title}</p>
+          {avgRating > 0 && (
+            <div className="flex items-center gap-1 shrink-0 mt-0.5">
+              <span className="star-filled text-sm leading-none">★</span>
+              <span className="text-xs font-semibold text-warm-dark leading-none">{avgRating}</span>
+              {ratingCount >= 2 && <span className="text-[10px] text-cream-400 leading-none">·{ratingCount}</span>}
+            </div>
+          )}
+        </div>
+
+        {subPlace && (
+          <p className="text-xs text-warm-light mt-0.5 truncate">{subPlace}</p>
+        )}
+
+        {meal.location && (
+          <p className="text-xs text-warm-light mt-1 flex items-center gap-1">
+            <PinIcon className="w-3 h-3 shrink-0" />
+            <span className="truncate">{meal.location}</span>
+          </p>
+        )}
+
+        {meal.review && (
+          <p className="text-xs text-warm-light mt-1.5 line-clamp-1 leading-relaxed break-words">
+            {linkify(meal.review)}
+          </p>
+        )}
+
+        <AuthorBadge meal={meal} className="mt-2" />
+      </div>
+    </button>
+  )
+}
+
+// ── 서브 스탯 (리포트 카드 하단) ──────────────────────────────────────
+function SubStat({ value, label }) {
+  return (
+    <div className="flex-1 text-center">
+      <p className="text-base font-bold text-warm-dark leading-none">{value}</p>
+      <p className="text-[11px] text-warm-light mt-1">{label}</p>
     </div>
   )
 }
 
 export default function HomePage() {
-  const { currentSpace, spaces, loadMealPhotos, ratingsMap } = useApp()
+  const { currentSpace, spaces, loadMealPhotos, ratingsMap, user } = useApp()
   const navigate = useNavigate()
   const [selectedMeal, setSelectedMeal] = useState(null)
   const [todayFormOpen, setTodayFormOpen] = useState(false)
@@ -202,8 +205,10 @@ export default function HomePage() {
   const today = useMemo(() => new Date(), [])
 
   const meals = currentSpace?.meals || []
+  const nickname = user?.user_metadata?.name || user?.user_metadata?.full_name || '식탁'
+  const avatarUrl = user?.user_metadata?.avatar_url
 
-  // 오늘 기록 상태 — CTA 카드 문구/버튼 분기
+  // 오늘 기록 상태 — Hero 문구/버튼 분기
   const todayStatus = useMemo(() => {
     const todayStr = format(today, 'yyyy-MM-dd')
     const todayMeals = meals.filter(m => m.date === todayStr)
@@ -213,7 +218,6 @@ export default function HomePage() {
     if (todayMeals.length === 0) return { kind: 'empty' }
     if (ALL_TIMES.every(t => recorded.has(t))) return { kind: 'all' }
 
-    // 현재 시각 기준 가장 가까운 미기록 끼니 (시간대 게이트 → 폴백: 가장 이른 미기록)
     const hour = today.getHours()
     let next = null
     if (!recorded.has('저녁') && hour >= 17) next = '저녁'
@@ -224,31 +228,63 @@ export default function HomePage() {
     return { kind: 'partial', next }
   }, [meals, today])
 
-  const stats = useMemo(() => {
-    const now = new Date()
-    const totalCount = meals.length
-    const thisMonthCount = meals.filter(m => {
-      try { return isSameMonth(parseISO(m.date), now) } catch { return false }
+  // 이번 달 식탁 리포트 데이터
+  const report = useMemo(() => {
+    const monthStart = startOfMonth(today)
+    const lastMonth = subMonths(today, 1)
+
+    const thisMonthMeals = meals.filter(m => {
+      try { return isSameMonth(parseISO(m.date), today) } catch { return false }
+    })
+    const lastMonthCount = meals.filter(m => {
+      try { return isSameMonth(parseISO(m.date), lastMonth) } catch { return false }
     }).length
 
-    const restaurantCounts = {}
-    meals.forEach(m => {
-      if (m.restaurantName) restaurantCounts[m.restaurantName] = (restaurantCounts[m.restaurantName] || 0) + 1
-    })
-    const topRestaurants = Object.entries(restaurantCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
+    const thisMonthCount = thisMonthMeals.length
+    const diff = thisMonthCount - lastMonthCount
 
+    // 태그 비율
     const tagCounts = {}
+    thisMonthMeals.forEach(m => { if (m.tag) tagCounts[m.tag] = (tagCounts[m.tag] || 0) + 1 })
+    const tagTotal = Object.values(tagCounts).reduce((s, n) => s + n, 0)
+    const tagSegments = TAG_ORDER
+      .filter(t => tagCounts[t])
+      .map(t => ({ tag: t, pct: Math.round((tagCounts[t] / tagTotal) * 100) }))
+
+    // 새로운 맛집 — 이번 달 처음 등장한 restaurant_name
+    const prevNames = new Set()
     meals.forEach(m => {
-      if (m.tag) tagCounts[m.tag] = (tagCounts[m.tag] || 0) + 1
+      if (m.restaurantName) {
+        try { if (parseISO(m.date) < monthStart) prevNames.add(m.restaurantName) } catch {}
+      }
     })
-    const topTagEntry = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])[0] || null
+    const newNames = new Set()
+    thisMonthMeals.forEach(m => {
+      if (m.restaurantName && !prevNames.has(m.restaurantName)) newNames.add(m.restaurantName)
+    })
 
-    const fiveStarCount = meals.filter(m => avgRatingOf(ratingsMap, m) === 5).length
+    // 평균 별점 (이번 달)
+    let sum = 0, cnt = 0
+    thisMonthMeals.forEach(m => {
+      const rs = ratingsMap?.[m.id] || []
+      if (rs.length > 0) rs.forEach(r => { sum += r.rating; cnt++ })
+      else if (m.rating) { sum += m.rating; cnt++ }
+    })
+    const avgRating = cnt > 0 ? (sum / cnt).toFixed(1) : '–'
 
-    return { totalCount, thisMonthCount, topRestaurants, topTagEntry, fiveStarCount }
-  }, [meals, ratingsMap])
+    // 기록한 날 (unique date)
+    const recordedDays = new Set(thisMonthMeals.map(m => m.date)).size
+
+    return {
+      thisMonthCount,
+      diff,
+      hasHistory: meals.length > thisMonthCount,
+      tagSegments,
+      newRestaurants: newNames.size,
+      avgRating,
+      recordedDays,
+    }
+  }, [meals, ratingsMap, today])
 
   const MEAL_TIME_ORDER = { 아침: 0, 점심: 1, 저녁: 2 }
   const sortedMeals = useMemo(
@@ -259,6 +295,16 @@ export default function HomePage() {
     }),
     [meals]
   )
+
+  // Hero 배경 음식 사진 — 가장 최근 로드된 썸네일
+  const heroPhoto = useMemo(() => {
+    for (const m of sortedMeals) {
+      if (!m.photosLoaded) continue
+      const u = photoArrOf(m).map(getThumbUrl).find(Boolean)
+      if (u) return u
+    }
+    return ''
+  }, [sortedMeals])
 
   const filteredMeals = useMemo(() => {
     return sortedMeals.filter(m => {
@@ -323,12 +369,107 @@ export default function HomePage() {
     return () => observer.disconnect()
   }, [hasMore, filteredMeals.length])
 
+  // Hero 문구/버튼 (상태별 — 기존 로직 유지)
+  const hero = useMemo(() => {
+    if (todayStatus.kind === 'all') {
+      return {
+        title: '오늘 식탁을 모두 기록했어요',
+        subtitle: '오늘도 함께한 식사 고마워요',
+        button: '달력에서 보기',
+        onClick: () => navigate('/calendar'),
+      }
+    }
+    if (todayStatus.kind === 'partial') {
+      return {
+        title: '한 끼 더 남겨볼까요?',
+        subtitle: `${todayStatus.next}도 함께 기록해보세요`,
+        button: '한 끼 더 기록하기',
+        onClick: () => setTodayFormOpen(true),
+      }
+    }
+    return {
+      title: '오늘의 식탁을 남겨볼까요?',
+      subtitle: '사진 한 장으로 오늘 먹은 한 끼를 남겨보세요',
+      button: '기록하기',
+      onClick: () => setTodayFormOpen(true),
+    }
+  }, [todayStatus, navigate])
+
+  const todayEnLabel = `${format(today, 'M.d')} ${format(today, 'EEE', { locale: enUS }).toUpperCase()}`
+
+  // ── 헤더 (로고 + 벨 + 아바타) ───────────────────────────────────────
+  const Header = (
+    <header className="sticky top-0 z-40 bg-cream-50/90 backdrop-blur-sm border-b border-cream-200 px-4 py-3">
+      {searchOpen ? (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setSearchOpen(false); setSearchQuery('') }}
+            className="p-1 -ml-1 text-warm-light hover:text-warm-brown transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="제목, 식당명, 한줄평, 메모 검색"
+            autoFocus
+            className="flex-1 bg-transparent text-sm text-warm-dark outline-none placeholder-cream-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-cream-400 hover:text-warm-light transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          {/* 로고 + 워드마크 */}
+          <div className="flex items-center gap-2">
+            <ForkSpoonIcon className="w-5 h-5 text-warm-brown" />
+            <h1 className="text-base font-bold text-warm-dark tracking-tight">식탁일기</h1>
+          </div>
+
+          {/* 우측: 검색 + 벨 + 아바타 */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="p-1.5 text-warm-light hover:text-warm-brown transition-colors"
+              aria-label="검색"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+            </button>
+            <NotificationBell onClick={() => setNotifOpen(true)} />
+            <button
+              onClick={() => navigate('/spaces')}
+              className="ml-0.5 w-8 h-8 rounded-full overflow-hidden bg-cream-200 border border-cream-300 flex items-center justify-center active:scale-95 transition-transform"
+              aria-label="프로필"
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xs font-bold text-warm-light">{nickname.charAt(0)}</span>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </header>
+  )
+
   if (spaces.length === 0) {
     return (
       <>
-        <header className="sticky top-0 z-40 bg-cream-50/90 backdrop-blur-sm border-b border-cream-200 px-4 py-3">
-          <h1 className="text-base font-semibold text-warm-dark">식탁 일기</h1>
-        </header>
+        {Header}
         <div className="flex flex-col items-center justify-center flex-1 text-center px-8 py-20">
           <div className="w-16 h-16 rounded-full bg-cream-200 flex items-center justify-center mb-5">
             <svg className="w-8 h-8 text-warm-light" fill="none" stroke="currentColor" strokeWidth="1.4" viewBox="0 0 24 24">
@@ -352,59 +493,7 @@ export default function HomePage() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-cream-50/90 backdrop-blur-sm border-b border-cream-200 px-4 py-3">
-        {searchOpen ? (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setSearchOpen(false); setSearchQuery('') }}
-              className="p-1 -ml-1 text-warm-light hover:text-warm-brown transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <input
-              ref={searchInputRef}
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="제목, 식당명, 한줄평, 메모 검색"
-              autoFocus
-              className="flex-1 bg-transparent text-sm text-warm-dark outline-none placeholder-cream-400"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="text-cream-400 hover:text-warm-light transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-between">
-            <h1 className="text-base font-semibold text-warm-dark">식탁 일기</h1>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSearchOpen(true)}
-                className="p-1.5 text-warm-light hover:text-warm-brown transition-colors"
-              >
-                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-                </svg>
-              </button>
-              <NotificationBell onClick={() => setNotifOpen(true)} />
-              <button
-                onClick={() => navigate('/spaces')}
-                className="text-xs text-warm-light bg-cream-200 px-3 py-1 rounded-full hover:bg-cream-300 transition-colors"
-              >
-                {currentSpace?.emoji} {currentSpace?.name}
-              </button>
-            </div>
-          </div>
-        )}
-      </header>
+      {Header}
 
       {/* 검색 결과 화면 */}
       {searchOpen && (
@@ -427,7 +516,7 @@ export default function HomePage() {
               <p className="text-xs text-warm-light mb-3">
                 <span className="font-medium text-warm-brown">"{searchQuery}"</span> 검색 결과 {searchResults.length}건
               </p>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {searchResults.map(meal => (
                   <FeedCard key={meal.id} meal={meal} onClick={() => setSelectedMeal(meal)} />
                 ))}
@@ -437,90 +526,109 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className={`pb-28 pt-5 ${searchOpen ? 'hidden' : ''}`}>
-        {/* 오늘 기록 CTA — 기록 상태/끼니에 따라 문구·버튼 변화 */}
-        <div className="px-4 mb-5">
-          <TodayCTA
-            status={todayStatus}
-            dateLabel={format(today, 'M월 d일 (eee)', { locale: ko })}
-            onRecord={() => setTodayFormOpen(true)}
-            onViewCalendar={() => navigate('/calendar')}
-          />
+      <div className={`pb-28 ${searchOpen ? 'hidden' : ''}`}>
+        {/* 날짜 + 인사 */}
+        <div className="px-4 pt-5 pb-3">
+          <p className="text-xs text-warm-light">
+            {format(today, 'yyyy년 M월 d일 EEEE', { locale: ko })}
+          </p>
+          <h2 className="text-xl font-bold text-warm-dark mt-1.5 leading-snug">
+            {nickname}님, 오늘은<br />어떤 식탁이었나요?
+          </h2>
         </div>
 
-        {/* 통계 카드 */}
-        <div className="flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-hide">
-          <div className="shrink-0 w-32 bg-white rounded-2xl border border-cream-200 px-4 py-4">
-            <p className="text-[11px] text-warm-light mb-1">함께한 식사</p>
-            <p className="text-3xl font-bold text-warm-dark leading-none">
-              {stats.totalCount}<span className="text-sm font-normal text-warm-light ml-0.5">번</span>
-            </p>
-          </div>
-          <div className="shrink-0 w-32 bg-white rounded-2xl border border-cream-200 px-4 py-4">
-            <p className="text-[11px] text-warm-light mb-1">이번 달</p>
-            <p className="text-3xl font-bold text-warm-dark leading-none">
-              {stats.thisMonthCount}<span className="text-sm font-normal text-warm-light ml-0.5">번</span>
-            </p>
-          </div>
-          <div className="shrink-0 w-44 bg-white rounded-2xl border border-cream-200 px-4 py-4">
-            <p className="text-[11px] text-warm-light mb-2">자주 찾은 곳</p>
-            {stats.topRestaurants.length > 0 ? (
-              <div className="space-y-1.5">
-                {stats.topRestaurants.map(([name, count], i) => (
-                  <div key={name} className="flex items-center justify-between gap-1">
-                    <span className="text-xs text-warm-dark truncate">
-                      <span className="text-cream-400 mr-1">{i + 1}.</span>{name}
-                    </span>
-                    <span className="text-[11px] text-cream-400 shrink-0">{count}회</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-cream-400">아직 없어요</p>
-            )}
-          </div>
-          <div className="shrink-0 w-36 bg-white rounded-2xl border border-cream-200 px-4 py-4">
-            <p className="text-[11px] text-warm-light mb-2">즐겨 먹는 것</p>
-            {stats.topTagEntry ? (
-              <div className="space-y-1">
-                <span
-                  className="inline-block text-xs px-2.5 py-1 rounded-full font-medium text-warm-dark"
-                  style={{ background: (TAG_BG[stats.topTagEntry[0]] || '#e5ddd5') + '55' }}
-                >
-                  {stats.topTagEntry[0]}
-                </span>
-                <p className="text-xs text-cream-400">{stats.topTagEntry[1]}번</p>
-              </div>
-            ) : (
-              <p className="text-xs text-cream-400">아직 없어요</p>
-            )}
-          </div>
-          <div className="shrink-0 w-36 bg-white rounded-2xl border border-cream-200 px-4 py-4">
-            <p className="text-[11px] text-warm-light mb-1">최애 맛집</p>
-            {stats.fiveStarCount > 0 ? (
+        {/* 히어로 CTA 카드 */}
+        <div className="px-4 mb-6">
+          <div className="relative overflow-hidden rounded-2xl bg-warm-brown text-white shadow-sm">
+            {heroPhoto && (
               <>
-                <p className="text-3xl font-bold text-warm-dark leading-none">
-                  {stats.fiveStarCount}<span className="text-sm font-normal text-warm-light ml-0.5">곳</span>
-                </p>
-                <div className="flex gap-0.5 mt-1.5">
-                  {[1,2,3,4,5].map(i => <span key={i} className="text-xs star-filled">★</span>)}
-                </div>
+                <img src={heroPhoto} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
+                <div className="absolute inset-0 bg-gradient-to-t from-warm-brown via-warm-brown/85 to-warm-brown/45" />
               </>
-            ) : (
-              <p className="text-xs text-cream-400">아직 없어요</p>
             )}
+            <div className="relative px-5 py-5">
+              <p className="text-[11px] font-semibold tracking-widest text-white/70">
+                TODAY · {todayEnLabel}
+              </p>
+              <p className="text-lg font-bold mt-2 leading-snug">{hero.title}</p>
+              <p className="text-xs text-white/75 mt-1 leading-relaxed">{hero.subtitle}</p>
+              <button
+                onClick={hero.onClick}
+                className="mt-4 inline-flex items-center gap-1 bg-white text-warm-brown text-sm font-semibold pl-3 pr-4 py-2 rounded-full active:scale-95 transition-transform shadow-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+                </svg>
+                {hero.button}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* 최근 기록 헤더 */}
-        <div className="flex items-center justify-between px-4 mt-7 mb-3">
-          <h2 className="text-sm font-semibold text-warm-dark">최근 기록</h2>
+        {/* 이번 달 식탁 리포트 */}
+        <div className="px-4 mb-7">
+          <div className="bg-white rounded-2xl border border-cream-200 shadow-sm px-5 py-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5">
+                <SparkleIcon className="w-4 h-4 text-warm-brown" />
+                <h3 className="text-sm font-semibold text-warm-dark">이번 달 식탁 리포트</h3>
+              </div>
+              <span className="text-xs text-cream-400">{format(today, 'yyyy.M', { locale: ko })}</span>
+            </div>
+
+            {/* 큰 숫자 + 지난달 대비 */}
+            <div className="flex items-end gap-2">
+              <p className="font-bold text-warm-dark leading-none" style={{ fontSize: '30px' }}>
+                {report.thisMonthCount}
+                <span className="text-base font-semibold text-warm-light ml-0.5">번</span>
+              </p>
+              {report.hasHistory && (
+                <span className="mb-1 text-[11px] font-semibold text-white bg-warm-brown px-2 py-0.5 rounded-full">
+                  지난달 {report.diff >= 0 ? '+' : ''}{report.diff}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-warm-light mt-1">이번 달 함께한 식사</p>
+
+            {/* 태그 비율 바 */}
+            {report.tagSegments.length > 0 ? (
+              <div className="mt-4">
+                <div className="flex h-2.5 rounded-full overflow-hidden bg-cream-100">
+                  {report.tagSegments.map(seg => (
+                    <div key={seg.tag} style={{ width: `${seg.pct}%`, background: TAG_BG[seg.tag] }} />
+                  ))}
+                </div>
+                <p className="text-[11px] text-warm-light mt-2">
+                  {report.tagSegments.map(seg => `${seg.tag} ${seg.pct}%`).join(' · ')}
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 h-2.5 rounded-full bg-cream-100" />
+            )}
+
+            {/* 서브 스탯 3개 */}
+            <div className="mt-5 flex items-stretch">
+              <SubStat value={`${report.newRestaurants}곳`} label="새로운 맛집" />
+              <div className="w-px bg-cream-200 mx-1" />
+              <SubStat value={report.avgRating} label="평균 별점" />
+              <div className="w-px bg-cream-200 mx-1" />
+              <SubStat value={`${report.recordedDays}일`} label="기록한 날" />
+            </div>
+          </div>
+        </div>
+
+        {/* RECENT 헤더 */}
+        <div className="flex items-center justify-between px-4 mb-3">
+          <div className="flex items-baseline gap-2">
+            <span className="text-[11px] font-bold tracking-widest text-warm-brown">RECENT</span>
+            <h2 className="text-sm font-semibold text-warm-dark">최근 식탁</h2>
+          </div>
           {sortedMeals.length > 0 && (
             <button
               onClick={() => navigate('/calendar')}
               className="text-xs text-warm-light hover:text-warm-brown transition-colors"
             >
-              달력 보기 →
+              전체보기 ›
             </button>
           )}
         </div>
@@ -567,7 +675,7 @@ export default function HomePage() {
         {/* 피드 */}
         {filteredMeals.length > 0 ? (
           <>
-            <div className="px-4 space-y-3">
+            <div className="px-4 space-y-4">
               {visibleMeals.map(meal => (
                 <FeedCard
                   key={meal.id}
