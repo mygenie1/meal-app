@@ -1257,8 +1257,7 @@ export default function MealMap({ onViewMeal, onTabChange }) {
     const lat = meal.lat ?? coords?.[0]
     const lng = meal.lng ?? coords?.[1]
     if (kakaoMapRef.current && lat && lng) {
-      // setLevel 먼저(동기) → panTo(비동기 애니메이션)
-      if (kakaoMapRef.current.getLevel() > 5) kakaoMapRef.current.setLevel(5)
+      // 배율(zoom level)은 유지하고 위치만 이동
       kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(lat, lng))
     }
     setTimeout(() => {
