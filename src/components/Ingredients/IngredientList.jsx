@@ -1,14 +1,63 @@
 import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
 
-function Section({ title, emoji, type, items, onAdd, onToggle, onDelete }) {
+function MinusIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
+    </svg>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+
+// 개수 스테퍼 — 원형 -/+ 버튼 + 가운데 숫자
+function QtyStepper({ quantity, onDecrement, onIncrement, minusAsDelete }) {
+  return (
+    <div className="flex items-center shrink-0">
+      <button
+        type="button"
+        onClick={onDecrement}
+        aria-label={minusAsDelete ? '삭제' : '개수 줄이기'}
+        className="w-7 h-7 rounded-full bg-cream-200 text-warm-brown flex items-center justify-center hover:bg-cream-300 active:scale-90 transition-all"
+      >
+        <MinusIcon />
+      </button>
+      <span className="w-8 text-center text-sm font-medium text-warm-dark tabular-nums">{quantity}</span>
+      <button
+        type="button"
+        onClick={onIncrement}
+        aria-label="개수 늘리기"
+        className="w-7 h-7 rounded-full bg-cream-200 text-warm-brown flex items-center justify-center hover:bg-cream-300 active:scale-90 transition-all"
+      >
+        <PlusIcon />
+      </button>
+    </div>
+  )
+}
+
+function Section({ title, emoji, type, items, onAdd, onToggle, onChangeQty, onDelete }) {
   const [input, setInput] = useState('')
+  const [qty, setQty] = useState(1)
 
   function handleAdd(e) {
     e.preventDefault()
     if (!input.trim()) return
-    onAdd(type, input.trim())
+    onAdd(type, input.trim(), qty)
     setInput('')
+    setQty(1)
+  }
+
+  // - 버튼: 1보다 크면 감소, 1이면 바로 삭제
+  function handleDecrement(item) {
+    if (item.quantity > 1) onChangeQty(type, item.id, item.quantity - 1)
+    else onDelete(type, item.id)
   }
 
   const pending = items.filter(i => !i.done)
@@ -26,38 +75,44 @@ function Section({ title, emoji, type, items, onAdd, onToggle, onDelete }) {
         )}
       </div>
 
-      {/* 입력 */}
-      <form onSubmit={handleAdd} className="flex gap-2 mb-3">
+      {/* 입력 — 재료명 + 개수 스테퍼 + 추가 */}
+      <form onSubmit={handleAdd} className="flex items-center gap-2 mb-3">
         <input
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder="추가하기"
-          className="flex-1 px-3 py-1.5 rounded-xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
+          className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
+        />
+        <QtyStepper
+          quantity={qty}
+          onDecrement={() => setQty(q => Math.max(1, q - 1))}
+          onIncrement={() => setQty(q => q + 1)}
         />
         <button
           type="submit"
-          className="px-3 py-1.5 rounded-xl bg-warm-brown text-white text-sm hover:bg-warm-dark transition-colors"
+          className="px-3 py-1.5 rounded-xl bg-warm-brown text-white text-sm hover:bg-warm-dark transition-colors shrink-0"
         >
-          +
+          추가
         </button>
       </form>
 
       {/* 미완료 목록 */}
       <div className="space-y-1.5">
         {pending.map(item => (
-          <div key={item.id} className="flex items-center gap-2 group">
+          <div key={item.id} className="flex items-center gap-2">
             <button
               onClick={() => onToggle(type, item.id)}
+              aria-label="완료 체크"
               className="w-5 h-5 rounded-md border-2 border-cream-300 hover:border-warm-brown transition-colors shrink-0 flex items-center justify-center"
             />
-            <span className="flex-1 text-sm text-warm-dark">{item.text}</span>
-            <button
-              onClick={() => onDelete(type, item.id)}
-              className="opacity-0 group-hover:opacity-100 text-xs text-cream-400 hover:text-red-400 transition-all"
-            >
-              ×
-            </button>
+            <span className="flex-1 min-w-0 text-sm text-warm-dark truncate">{item.text}</span>
+            <QtyStepper
+              quantity={item.quantity}
+              minusAsDelete={item.quantity <= 1}
+              onDecrement={() => handleDecrement(item)}
+              onIncrement={() => onChangeQty(type, item.id, item.quantity + 1)}
+            />
           </div>
         ))}
       </div>
@@ -66,19 +121,26 @@ function Section({ title, emoji, type, items, onAdd, onToggle, onDelete }) {
       {done.length > 0 && (
         <div className="mt-3 pt-3 border-t border-cream-100 space-y-1.5">
           {done.map(item => (
-            <div key={item.id} className="flex items-center gap-2 group">
+            <div key={item.id} className="flex items-center gap-2">
               <button
                 onClick={() => onToggle(type, item.id)}
+                aria-label="완료 해제"
                 className="w-5 h-5 rounded-md bg-warm-brown/20 border-2 border-warm-brown/30 transition-colors shrink-0 flex items-center justify-center"
               >
-                <span className="text-warm-brown text-xs font-bold">✓</span>
+                <svg className="w-3 h-3 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="2.4" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
               </button>
-              <span className="flex-1 text-sm text-cream-400 line-through">{item.text}</span>
+              <span className="flex-1 min-w-0 text-sm text-cream-400 line-through truncate">{item.text}</span>
+              <span className="text-xs text-cream-400 shrink-0">×{item.quantity}</span>
               <button
                 onClick={() => onDelete(type, item.id)}
-                className="opacity-0 group-hover:opacity-100 text-xs text-cream-400 hover:text-red-400 transition-all"
+                aria-label="삭제"
+                className="w-7 h-7 rounded-full text-cream-400 hover:text-red-400 hover:bg-cream-100 transition-all flex items-center justify-center shrink-0"
               >
-                ×
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
           ))}
@@ -93,7 +155,7 @@ function Section({ title, emoji, type, items, onAdd, onToggle, onDelete }) {
 }
 
 export default function IngredientList() {
-  const { currentSpace, addIngredient, toggleIngredient, deleteIngredient } = useApp()
+  const { currentSpace, addIngredient, toggleIngredient, updateIngredientQuantity, deleteIngredient } = useApp()
 
   if (!currentSpace) {
     return (
@@ -115,6 +177,7 @@ export default function IngredientList() {
         items={toBuy}
         onAdd={addIngredient}
         onToggle={toggleIngredient}
+        onChangeQty={updateIngredientQuantity}
         onDelete={deleteIngredient}
       />
       <Section
@@ -124,6 +187,7 @@ export default function IngredientList() {
         items={remaining}
         onAdd={addIngredient}
         onToggle={toggleIngredient}
+        onChangeQty={updateIngredientQuantity}
         onDelete={deleteIngredient}
       />
     </div>

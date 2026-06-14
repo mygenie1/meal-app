@@ -64,7 +64,8 @@ function mealToRow(data) {
 }
 
 function rowToIngredient(row) {
-  return { id: row.id, text: row.text, done: row.done }
+  // quantity가 NULL인 기존 데이터는 1로 표시 (하위 호환)
+  return { id: row.id, text: row.text, done: row.done, quantity: row.quantity ?? 1 }
 }
 
 function rowToWishlist(row) {
@@ -368,21 +369,12 @@ export function AppProvider({ children }) {
 
       if (error) throw new Error(error.message || 'spaces 조회 오류')
 
-      let spaceRows = spacesData || []
+      const spaceRows = spacesData || []
 
-      // RLS 마이그레이션 후 localStorage의 스페이스가 목록에 없으면:
-      // space_members에 추가 시도 → 성공하면 재로드 (NULL owner 기존 스페이스 복구)
-      const savedId = localStorage.getItem(SPACE_KEY)
-      const uid = currentUser?.id
-      if (savedId && uid && !spaceRows.find(s => s.id === savedId)) {
-        const { error: joinErr } = await supabase
-          .from('space_members')
-          .insert({ space_id: savedId, user_id: uid })
-        if (!joinErr) {
-          const { data: reloaded } = await supabase.from('spaces').select('*').order('created_at')
-          if (reloaded) spaceRows = reloaded
-        }
-      }
+      // 주의: 과거 여기에 "localStorage의 savedId가 목록에 없으면 space_members에 재가입"하는
+      // RLS 마이그레이션용 복구 로직이 있었으나, 사용자가 나간(삭제한) 스페이스를 boot 때마다
+      // 되살리는 버그(자동 재생성)의 원인이라 제거함. 멤버십 기반 조회 결과만 신뢰한다.
+      // 멤버가 아닌 savedId는 아래 currentSpaceId 폴백에서 자연스럽게 정리된다.
 
       const spaceList = spaceRows.map(s => ({
         id: s.id,
@@ -771,12 +763,13 @@ export function AppProvider({ children }) {
   }
 
   // 재료 추가
-  async function addIngredient(type, text) {
+  async function addIngredient(type, text, quantity = 1) {
     if (!currentSpaceId) return
 
+    const qty = Math.max(1, quantity || 1)
     const { data, error } = await supabase
       .from('ingredients')
-      .insert({ space_id: currentSpaceId, type, text, done: false })
+      .insert({ space_id: currentSpaceId, type, text, done: false, quantity: qty })
       .select()
       .single()
 
@@ -810,6 +803,31 @@ export function AppProvider({ children }) {
               ...s.ingredients,
               [type]: s.ingredients[type].map(i =>
                 i.id === itemId ? { ...i, done: !i.done } : i
+              ),
+            },
+          }
+        : s
+    ))
+  }
+
+  // 재료 개수 변경 (최소 1) — 0 이하로 줄이려면 호출 측에서 deleteIngredient 사용
+  async function updateIngredientQuantity(type, itemId, quantity) {
+    const qty = Math.max(1, quantity)
+    const { error } = await supabase
+      .from('ingredients')
+      .update({ quantity: qty })
+      .eq('id', itemId)
+
+    if (error) { console.error(error); return }
+
+    setSpaces(prev => prev.map(s =>
+      s.id === currentSpaceId
+        ? {
+            ...s,
+            ingredients: {
+              ...s.ingredients,
+              [type]: s.ingredients[type].map(i =>
+                i.id === itemId ? { ...i, quantity: qty } : i
               ),
             },
           }
@@ -1101,6 +1119,7 @@ export function AppProvider({ children }) {
         cacheGeocoords,
         addIngredient,
         toggleIngredient,
+        updateIngredientQuantity,
         deleteIngredient,
         addWishlistItem,
         updateWishlistItem,
