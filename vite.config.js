@@ -6,9 +6,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // prompt: 새 SW를 곧바로 활성화하지 않고 waiting 상태로 둔다.
-      // 사용자가 "새로고침" 배너를 눌렀을 때만 SKIP_WAITING 메시지로 교체 → 1회 reload.
-      registerType: 'prompt',
+      // autoUpdate: 새 SW가 즉시 활성화(skipWaiting)되고 클라이언트를 claim →
+      // controllerchange 발생 → App.jsx에서 자동 1회 reload로 최신 빌드 적용.
+      // (prompt 방식은 배너를 눌러야만 갱신돼 기기가 옛 캐시에 멈추는 문제가 있었음)
+      registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icon.svg'],
       manifest: {
         name: '식탁일기',
@@ -44,9 +45,8 @@ export default defineConfig({
         // SPA: 오프라인에서도 라우팅 유지
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/offline\.html/],
-        // 새 SW는 waiting 상태로 대기. 배너 클릭 시 SKIP_WAITING 메시지로 활성화.
-        // clientsClaim: 활성화되면 현재 페이지를 즉시 control → controllerchange 발생 → reload
-        skipWaiting: false,
+        // 새 SW 즉시 활성화 + 현재 페이지 control 획득 → controllerchange → 자동 reload
+        skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
       },

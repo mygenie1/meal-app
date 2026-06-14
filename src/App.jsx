@@ -59,32 +59,10 @@ function ConnectErrorBanner({ message, onRetry, onDismiss }) {
   )
 }
 
-function UpdateBanner({ onReload }) {
-  return (
-    <div className="fixed top-0 left-0 right-0 z-[90] max-w-lg mx-auto px-0 pointer-events-none">
-      <div className="bg-warm-brown text-white px-4 py-3 flex items-center justify-between shadow-lg pointer-events-auto">
-        <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span className="text-sm font-medium">새 버전이 있어요</span>
-        </div>
-        <button
-          onClick={onReload}
-          className="text-sm font-semibold underline underline-offset-2 active:opacity-75 transition-opacity"
-        >
-          새로고침
-        </button>
-      </div>
-    </div>
-  )
-}
-
 function AppContent() {
   const { user, authLoading, loading, loadError, retryAttempt, reload } = useApp()
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
   const [errorDismissed, setErrorDismissed] = useState(false)
-  const [updateReady, setUpdateReady] = useState(false)
 
   useEffect(() => {
     const goOnline  = () => setIsOffline(false)
@@ -102,35 +80,23 @@ function AppContent() {
     if (loadError) setErrorDismissed(false)
   }, [loadError])
 
-  // Service Worker 업데이트 감지 (prompt 방식: waiting SW가 생기면 배너)
+  // Service Worker 자동 업데이트 (autoUpdate)
+  // 새 SW가 control을 잡으면 한 번만 reload 해서 최신 빌드를 적용한다.
+  // 최초 설치(첫 controller 등록)는 reload 대상이 아니므로 가드한다.
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
-    let cancelled = false
 
-    // 같은 세션에서는 배너를 한 번만 표시 (reload 후 재표시 방지)
-    const triggerBanner = () => {
-      if (sessionStorage.getItem('update_banner_shown')) return
-      sessionStorage.setItem('update_banner_shown', 'true')
-      setUpdateReady(true)
+    let reloaded = false
+    const isFirstController = !navigator.serviceWorker.controller
+
+    const handleControllerChange = () => {
+      if (isFirstController || reloaded) return
+      reloaded = true
+      window.location.reload()
     }
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange)
 
-    // 설치 완료된 새 SW + 기존 controller 존재 → 진짜 업데이트
-    const watchInstalling = (sw) => {
-      if (!sw) return
-      sw.addEventListener('statechange', () => {
-        if (sw.state === 'installed' && navigator.serviceWorker.controller) triggerBanner()
-      })
-    }
-
-    navigator.serviceWorker.getRegistration().then(reg => {
-      if (!reg || cancelled) return
-      // 이미 대기 중인 SW가 있으면 즉시 배너
-      if (reg.waiting && navigator.serviceWorker.controller) triggerBanner()
-      // 새 SW가 설치되기 시작하면 감지
-      reg.addEventListener('updatefound', () => watchInstalling(reg.installing))
-    }).catch(() => {})
-
-    // 포그라운드 복귀 시 업데이트 체크
+    // 포그라운드 복귀 시 업데이트 체크 → 새 SW가 있으면 위 핸들러가 reload
     const handleVisibility = () => {
       if (document.visibilityState !== 'visible') return
       navigator.serviceWorker.getRegistration()
@@ -140,29 +106,10 @@ function AppContent() {
     document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {
-      cancelled = true
+      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [])
-
-  // 배너 "새로고침" 클릭: waiting SW 교체 후 1회 reload
-  const handleUpdate = async () => {
-    setUpdateReady(false)
-    try {
-      const reg = await navigator.serviceWorker.getRegistration()
-      if (reg?.waiting) {
-        // 새 SW가 control을 잡으면(controllerchange) reload — postMessage보다 먼저 등록
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          window.location.reload()
-        }, { once: true })
-        reg.waiting.postMessage({ type: 'SKIP_WAITING' })
-      } else {
-        window.location.reload()
-      }
-    } catch {
-      window.location.reload()
-    }
-  }
 
   if (isOffline) return <OfflineBanner />
 
@@ -198,7 +145,6 @@ function AppContent() {
 
   return (
     <div className="min-h-svh max-w-lg mx-auto flex flex-col bg-cream-50">
-      {updateReady && <UpdateBanner onReload={handleUpdate} />}
       {loadError && !errorDismissed && (
         <ConnectErrorBanner
           message={loadError}
