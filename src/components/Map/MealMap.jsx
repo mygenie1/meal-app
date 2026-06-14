@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useApp } from '../../context/AppContext'
 import { supabase } from '../../lib/supabase'
-import { getThumbUrl, uploadPhotoToStorage } from '../../lib/uploadPhoto'
+import { getThumbUrl, getOriginalUrl, uploadPhotoToStorage } from '../../lib/uploadPhoto'
 import Modal from '../common/Modal'
 import MealForm from '../MealRecord/MealForm'
 import FullscreenViewer from '../common/FullscreenViewer'
@@ -120,7 +120,9 @@ function CommentItem({ comment, currentUserId, onDelete }) {
 // ── RecordedPlaceCard (기록한 맛집 목록) ──────────────────────────
 function RecordedPlaceCard({ meal, onClick, selected }) {
   const { ratingsMap } = useApp()
-  const thumb = getThumbUrl(meal.photos?.[0] || meal.photo || '')
+  const photoEntry = meal.photos?.[0] || meal.photo || ''
+  const thumb = getThumbUrl(photoEntry)       // 작은 썸네일 URL (수십 KB)
+  const original = getOriginalUrl(photoEntry)  // 썸네일 로드 실패 시 폴백용 원본
   const name = meal.restaurantName || meal.title || '식사 기록'
   const mealRatings = ratingsMap?.[meal.id] || []
   const avgRating = mealRatings.length > 0
@@ -166,7 +168,13 @@ function RecordedPlaceCard({ meal, onClick, selected }) {
         </div>
       </div>
       {thumb ? (
-        <img src={thumb} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" />
+        <img
+          src={thumb}
+          alt=""
+          loading="lazy"
+          onError={(e) => { if (original && e.currentTarget.src !== original) e.currentTarget.src = original }}
+          className="w-16 h-16 rounded-xl object-cover shrink-0"
+        />
       ) : (
         <div className="w-16 h-16 rounded-xl bg-cream-100 shrink-0 flex items-center justify-center">
           <svg className="w-6 h-6 text-cream-300" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
