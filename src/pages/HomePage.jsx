@@ -178,13 +178,17 @@ function FeedCard({ meal, onClick }) {
   )
 }
 
-// ── 서브 스탯 (리포트 카드 하단) ──────────────────────────────────────
-function SubStat({ value, label }) {
+// ── 서브 스탯 (리포트 카드 하단, 클릭 시 목록 토글) ────────────────────
+function SubStat({ value, label, active, onClick }) {
   return (
-    <div className="flex-1 text-center">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex-1 text-center rounded-xl py-1.5 transition-colors ${active ? 'bg-cream-100' : 'hover:bg-cream-50'}`}
+    >
       <p className="text-base font-bold text-warm-dark leading-none">{value}</p>
       <p className="text-[11px] text-warm-light mt-1">{label}</p>
-    </div>
+    </button>
   )
 }
 
@@ -192,6 +196,7 @@ export default function HomePage() {
   const { currentSpace, spaces, loadMealPhotos, ratingsMap, user } = useApp()
   const navigate = useNavigate()
   const [selectedMeal, setSelectedMeal] = useState(null)
+  const [activeStatTab, setActiveStatTab] = useState(null) // null | 'newPlaces' | 'rating' | 'days'
   const [todayFormOpen, setTodayFormOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [ratingFilter, setRatingFilter] = useState('')
@@ -301,6 +306,34 @@ export default function HomePage() {
     // 기록한 날 (unique date)
     const recordedDays = new Set(thisMonthMeals.map(m => m.date)).size
 
+    // ── 통계 클릭용 목록 ──
+    // 새로운 맛집: 이번 달 처음 등장한 식당의 첫 기록
+    const seenNew = new Set()
+    const newPlaceMeals = []
+    thisMonthMeals.forEach(m => {
+      if (m.restaurantName && newNames.has(m.restaurantName) && !seenNew.has(m.restaurantName)) {
+        seenNew.add(m.restaurantName)
+        newPlaceMeals.push(m)
+      }
+    })
+    // 평균 별점: 별점 있는 기록을 높은 순으로
+    const ratingMeals = thisMonthMeals
+      .map(m => {
+        const rs = ratingsMap?.[m.id] || []
+        const r = rs.length > 0 ? Math.round(rs.reduce((s, x) => s + x.rating, 0) / rs.length) : (m.rating || 0)
+        return { meal: m, rating: r }
+      })
+      .filter(x => x.rating > 0)
+      .sort((a, b) => b.rating - a.rating)
+    // 기록한 날: 날짜별 그룹 (최신순)
+    const byDate = {}
+    thisMonthMeals.forEach(m => { if (m.date) (byDate[m.date] = byDate[m.date] || []).push(m) })
+    const dayGroups = Object.keys(byDate).sort((a, b) => b.localeCompare(a)).map(date => ({
+      date,
+      count: byDate[date].length,
+      rep: byDate[date][0],
+    }))
+
     return {
       thisMonthCount,
       diff,
@@ -309,6 +342,9 @@ export default function HomePage() {
       newRestaurants: newNames.size,
       avgRating,
       recordedDays,
+      newPlaceMeals,
+      ratingMeals,
+      dayGroups,
     }
   }, [meals, ratingsMap, today])
 
@@ -634,12 +670,73 @@ export default function HomePage() {
 
             {/* 서브 스탯 3개 */}
             <div className="mt-5 flex items-stretch">
-              <SubStat value={`${report.newRestaurants}곳`} label="새로운 맛집" />
+              <SubStat value={`${report.newRestaurants}곳`} label="새로운 맛집"
+                active={activeStatTab === 'newPlaces'}
+                onClick={() => setActiveStatTab(t => t === 'newPlaces' ? null : 'newPlaces')} />
               <div className="w-px bg-cream-200 mx-1" />
-              <SubStat value={report.avgRating} label="평균 별점" />
+              <SubStat value={report.avgRating} label="평균 별점"
+                active={activeStatTab === 'rating'}
+                onClick={() => setActiveStatTab(t => t === 'rating' ? null : 'rating')} />
               <div className="w-px bg-cream-200 mx-1" />
-              <SubStat value={`${report.recordedDays}일`} label="기록한 날" />
+              <SubStat value={`${report.recordedDays}일`} label="기록한 날"
+                active={activeStatTab === 'days'}
+                onClick={() => setActiveStatTab(t => t === 'days' ? null : 'days')} />
             </div>
+
+            {/* 통계 클릭 시 미니 목록 */}
+            {activeStatTab && (() => {
+              let rows = []
+              if (activeStatTab === 'newPlaces') {
+                rows = report.newPlaceMeals.map(m => ({
+                  key: m.id, meal: m,
+                  primary: m.restaurantName || m.title || '식사',
+                  sub: [m.date, m.tag].filter(Boolean).join(' · '),
+                }))
+              } else if (activeStatTab === 'rating') {
+                rows = report.ratingMeals.map(({ meal: m, rating }) => ({
+                  key: m.id, meal: m,
+                  primary: m.title || m.restaurantName || '식사',
+                  sub: [m.date, m.tag].filter(Boolean).join(' · '),
+                  rating,
+                }))
+              } else {
+                rows = report.dayGroups.map(g => ({
+                  key: g.date, meal: g.rep,
+                  primary: g.rep?.title || g.rep?.restaurantName || '식사',
+                  sub: `${g.date} · ${g.count}개 기록`,
+                }))
+              }
+              return (
+                <div className="mt-3 pt-3 border-t border-cream-200 space-y-1">
+                  {rows.length === 0 ? (
+                    <p className="text-xs text-cream-400 text-center py-2">기록이 없어요</p>
+                  ) : rows.map(row => (
+                    <div
+                      key={row.key}
+                      onClick={() => row.meal && setSelectedMeal(row.meal)}
+                      className="flex items-center justify-between gap-2 py-2 px-2 rounded-xl cursor-pointer active:bg-cream-50"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-warm-dark truncate">{row.primary}</p>
+                        <p className="text-xs text-cream-400 truncate">{row.sub}</p>
+                      </div>
+                      {activeStatTab === 'rating' && row.rating > 0 && (
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <span className="star-filled text-sm leading-none">★</span>
+                          <span className="text-xs font-semibold text-warm-dark">{row.rating}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setActiveStatTab(null)}
+                    className="w-full text-xs text-cream-400 pt-1 hover:text-warm-light transition-colors"
+                  >
+                    닫기
+                  </button>
+                </div>
+              )
+            })()}
           </div>
         </div>
 
@@ -674,9 +771,27 @@ export default function HomePage() {
                   </div>
                 )}
                 <div className="p-4">
-                  <p className="text-xs text-cream-400 mb-1">
-                    {dateLabel}{memoryCard.isMemory && ` · ${daysAgo}일 전`}
-                  </p>
+                  {/* 날짜 + 태그 */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-xs text-cream-400">
+                      {dateLabel}{memoryCard.isMemory && ` · ${daysAgo}일 전`}
+                    </p>
+                    {dm.tag && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TAG_STYLES[dm.tag] || 'bg-cream-100 text-warm-light'}`}>
+                        {dm.tag}
+                      </span>
+                    )}
+                  </div>
+                  {/* 장소 (외식/카페일 때) */}
+                  {(dm.tag === '외식' || dm.tag === '카페') && dm.location && (
+                    <p className="text-xs text-cream-400 mb-1 flex items-center gap-1">
+                      <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
+                        <circle cx="12" cy="8" r="2" />
+                      </svg>
+                      <span className="truncate">{dm.restaurantName || dm.location}</span>
+                    </p>
+                  )}
                   <h3 className="font-semibold text-warm-dark">
                     {dm.title || dm.restaurantName || '기록된 식탁'}
                   </h3>
