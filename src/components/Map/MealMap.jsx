@@ -545,7 +545,7 @@ function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail })
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────
-export default function MealMap({ onViewMeal }) {
+export default function MealMap({ onViewMeal, onTabChange }) {
   const { currentSpace, addMeal, addWishlistItem, updateWishlistItem, deleteWishlistItem, cacheGeocoords, loadMealPhotos } = useApp()
 
   const [activeTab, setActiveTab] = useState('map')
@@ -1013,19 +1013,19 @@ export default function MealMap({ onViewMeal }) {
 
   // ── 렌더 ──────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col">
+    <div className={`flex flex-col ${activeTab === 'map' ? 'h-full' : ''}`}>
 
       {/* 탭 바 */}
       <div className="shrink-0 px-4 pt-3 pb-2">
         <div className="flex gap-1 p-1 bg-cream-100 rounded-2xl">
           <button
-            onClick={() => setActiveTab('map')}
+            onClick={() => { setActiveTab('map'); onTabChange?.('map') }}
             className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'map' ? 'bg-white text-warm-dark shadow-sm' : 'text-warm-light hover:text-warm-brown'}`}
           >
             맛집 지도
           </button>
           <button
-            onClick={() => setActiveTab('wishlist')}
+            onClick={() => { setActiveTab('wishlist'); onTabChange?.('wishlist') }}
             className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'wishlist' ? 'bg-white text-warm-dark shadow-sm' : 'text-warm-light hover:text-warm-brown'}`}
           >
             가고 싶은 곳
@@ -1208,8 +1208,8 @@ export default function MealMap({ onViewMeal }) {
             </div>
           )}
 
-          {/* 스크롤 가능 영역 — 위시리스트 목록 */}
-          <div className="flex-1 overflow-y-auto px-4 pb-20 border-t border-cream-200">
+          {/* 위시리스트 목록 — 페이지 스크롤로 동작 */}
+          <div className="px-4 pt-3 pb-28 border-t border-cream-200">
             <button onClick={handleOpenAdd}
               className="w-full py-3 rounded-2xl border-2 border-dashed border-cream-300 text-warm-light text-sm font-medium hover:border-warm-brown hover:text-warm-brown transition-colors active:scale-[0.98] flex items-center justify-center gap-2 mb-3"
             >

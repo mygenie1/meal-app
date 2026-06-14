@@ -56,7 +56,7 @@ function FeedCard({ meal, onClick }) {
       onClick={onClick}
       className="w-full text-left bg-white rounded-2xl border border-cream-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
     >
-      {showPhotos && <PhotoGallery photos={photos} maxHeight={200} />}
+      {showPhotos && <PhotoGallery photos={photos} maxHeight={200} disableFullscreen />}
       <div className="px-4 py-3">
         <div className="flex items-start justify-between gap-2 mb-1">
           <p className="font-semibold text-warm-dark text-base leading-snug">{title}</p>
