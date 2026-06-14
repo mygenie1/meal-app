@@ -574,6 +574,148 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
   )
 }
 
+// ── RandomPickModal ────────────────────────────────────────────
+function RandomPickModal({ candidates, result, onClose, onRepick, onViewOnMap }) {
+  const [phase, setPhase] = useState('shuffle') // 'shuffle' | 'reveal'
+  const [slotName, setSlotName] = useState('')
+  const [revealed, setRevealed] = useState(false)
+
+  useEffect(() => {
+    if (!result) return
+    setPhase('shuffle')
+    setRevealed(false)
+    const names = candidates.map(c => c.name)
+    let idx = Math.floor(Math.random() * names.length)
+    setSlotName(names[idx % names.length])
+    const interval = setInterval(() => {
+      idx++
+      setSlotName(names[idx % names.length])
+    }, 80)
+    const timeout = setTimeout(() => {
+      clearInterval(interval)
+      setPhase('reveal')
+      requestAnimationFrame(() => requestAnimationFrame(() => setRevealed(true)))
+    }, 700)
+    return () => { clearInterval(interval); clearTimeout(timeout) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result?.id])
+
+  const catColor = result ? WISH_CATEGORY_COLORS[result.category] : null
+
+  if (!result) {
+    return (
+      <Modal isOpen onClose={onClose}>
+        <div className="py-8 flex flex-col items-center text-center">
+          <div className="w-16 h-16 rounded-full bg-cream-100 flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-cream-400" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+          </div>
+          <p className="text-base font-semibold text-warm-dark mb-2">아직 둘 다 가고싶어하는 곳이 없어요!</p>
+          <p className="text-sm text-warm-light leading-relaxed px-2">
+            위시리스트 장소에서<br />'나도 가고싶어요'를 눌러보세요
+          </p>
+          <button onClick={onClose}
+            className="mt-6 px-8 py-2.5 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors active:scale-95">
+            확인
+          </button>
+        </div>
+      </Modal>
+    )
+  }
+
+  return (
+    <Modal isOpen onClose={onClose}>
+      {phase === 'shuffle' ? (
+        <div className="py-10 flex flex-col items-center">
+          <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center mb-5">
+            <svg className="w-7 h-7 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+            </svg>
+          </div>
+          <p className="text-xs text-warm-light mb-3 tracking-wide">오늘 어디 갈까요?</p>
+          <div className="min-h-7 flex items-center justify-center px-6">
+            <p className="text-lg font-bold text-warm-dark text-center leading-snug">{slotName}</p>
+          </div>
+        </div>
+      ) : (
+        <div
+          className="transition-all duration-300"
+          style={{
+            opacity: revealed ? 1 : 0,
+            transform: revealed ? 'translateY(0) scale(1)' : 'translateY(6px) scale(0.97)',
+          }}
+        >
+          {/* 오늘의 추천 라벨 */}
+          <div className="text-center mb-4">
+            <span className="text-xs font-semibold text-warm-brown bg-amber-50 border border-amber-200/60 px-3 py-1 rounded-full">
+              오늘의 추천
+            </span>
+          </div>
+          {/* 사진 */}
+          {result.photo && (
+            <div className="-mx-5 -mt-1 mb-4">
+              <img src={result.photo} alt="" className="w-full h-44 object-cover" />
+            </div>
+          )}
+          {/* 장소명 + 카테고리 */}
+          <div className="flex items-start gap-2 mb-1.5">
+            <h2 className="text-xl font-bold text-warm-dark leading-tight flex-1">{result.name}</h2>
+            {result.category && catColor && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium text-warm-dark shrink-0 mt-1"
+                style={{ background: catColor }}>
+                {result.category}
+              </span>
+            )}
+          </div>
+          {/* 위치 */}
+          {result.location && (
+            <p className="text-xs text-warm-light flex items-center gap-1 mb-2">
+              <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
+                <circle cx="12" cy="8" r="2" />
+              </svg>
+              {result.location}
+            </p>
+          )}
+          {/* 분위기 태그 */}
+          {result.moodTags?.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap mb-2">
+              {result.moodTags.map(tag => (
+                <span key={tag} className="text-xs px-2.5 py-1 rounded-full bg-cream-100 text-warm-light border border-cream-200">{tag}</span>
+              ))}
+            </div>
+          )}
+          {/* 메모 */}
+          {result.memo && (
+            <p className="text-sm text-warm-light leading-relaxed mb-1">{result.memo}</p>
+          )}
+          {/* 버튼 */}
+          <div className="flex gap-2 pt-4 border-t border-cream-100 mt-4"
+            style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+            <button onClick={onRepick}
+              className="flex-1 py-3 rounded-2xl border border-cream-300 text-warm-brown text-sm font-medium hover:bg-cream-100 transition-colors active:scale-95 flex items-center justify-center gap-1.5">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              다시 뽑기
+            </button>
+            {result.lat && result.lng && (
+              <button onClick={onViewOnMap}
+                className="flex-1 py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors active:scale-95 flex items-center justify-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                지도에서 보기
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 // ── WishListCard ───────────────────────────────────────────────
 function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail, interestCount, isInterested, onInterestToggle }) {
   const catColor = WISH_CATEGORY_COLORS[item.category]
@@ -713,6 +855,8 @@ export default function MealMap({ onViewMeal, onTabChange }) {
   const [visitingWish, setVisitingWish] = useState(null)
   const [viewingWish, setViewingWish] = useState(null)
   const [wishFilter, setWishFilter] = useState('all') // 'all' | 'mine' | 'theirs'
+  // { candidates: [], result: item|null } — null when closed
+  const [randomPick, setRandomPick] = useState(null)
   const requestedPhotosRef = useRef(new Set())
 
   // ── 파생 상태 ─────────────────────────────────────────────────
@@ -1157,6 +1301,28 @@ export default function MealMap({ onViewMeal, onTabChange }) {
     }
   }
 
+  function handleRandomPick() {
+    // 둘 다 가고싶어요: 나 + 다른 멤버 최소 1명
+    const candidates = unvisited.filter(w => {
+      const interests = wishlistInterestsMap[w.id] || []
+      return interests.some(i => i.user_id === user?.id) && interests.some(i => i.user_id !== user?.id)
+    })
+    if (candidates.length === 0) {
+      setRandomPick({ candidates: [], result: null })
+      return
+    }
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)]
+    setRandomPick({ candidates, result: chosen })
+  }
+
+  function handleRepick() {
+    if (!randomPick?.candidates?.length) return
+    const others = randomPick.candidates.filter(c => c.id !== randomPick.result?.id)
+    const pool = others.length > 0 ? others : randomPick.candidates
+    const chosen = pool[Math.floor(Math.random() * pool.length)]
+    setRandomPick(prev => ({ ...prev, result: chosen }))
+  }
+
   async function handleVisitSubmit(mealData) {
     const meal = await addMeal({ ...mealData, fromWishlist: true })
     if (meal && visitingWish?.id) {
@@ -1373,24 +1539,33 @@ export default function MealMap({ onViewMeal, onTabChange }) {
               가고 싶은 곳 추가
             </button>
 
-            {/* 필터 칩 */}
+            {/* 필터 칩 + 랜덤 추천 버튼 */}
             {unvisited.length > 0 && (
-              <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-                {[
-                  { key: 'all', label: '전체' },
-                  { key: 'mine', label: '나도 가고싶어요' },
-                  { key: 'theirs', label: '상대가 가고싶어요' },
-                ].map(({ key, label }) => (
-                  <button key={key} onClick={() => setWishFilter(key)}
-                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors active:scale-95 ${
-                      wishFilter === key
-                        ? 'bg-warm-brown text-white border-transparent'
-                        : 'bg-cream-50 text-warm-light border-cream-200 hover:bg-cream-100'
-                    }`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+                  {[
+                    { key: 'all', label: '전체' },
+                    { key: 'mine', label: '나도 가고싶어요' },
+                    { key: 'theirs', label: '상대가 가고싶어요' },
+                  ].map(({ key, label }) => (
+                    <button key={key} onClick={() => setWishFilter(key)}
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors active:scale-95 ${
+                        wishFilter === key
+                          ? 'bg-warm-brown text-white border-transparent'
+                          : 'bg-cream-50 text-warm-light border-cream-200 hover:bg-cream-100'
+                      }`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={handleRandomPick}
+                  className="w-full py-3 mb-3 rounded-2xl bg-warm-brown text-white text-sm font-semibold shadow-sm hover:bg-warm-dark transition-colors active:scale-[0.98] flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+                  </svg>
+                  오늘 어디가지?
+                </button>
+              </>
             )}
 
             {(() => {
@@ -1508,6 +1683,21 @@ export default function MealMap({ onViewMeal, onTabChange }) {
           }}
           onVisit={() => setVisitingWish(viewingWish)}
           onViewOnMap={() => handleViewOnMap(viewingWish)}
+        />
+      )}
+
+      {/* ── 모달: 오늘 어디가지 랜덤 추천 ── */}
+      {randomPick && (
+        <RandomPickModal
+          candidates={randomPick.candidates}
+          result={randomPick.result}
+          onClose={() => setRandomPick(null)}
+          onRepick={handleRepick}
+          onViewOnMap={() => {
+            const wish = randomPick.result
+            setRandomPick(null)
+            if (wish?.lat && wish?.lng) handleViewOnMap(wish)
+          }}
         />
       )}
 
