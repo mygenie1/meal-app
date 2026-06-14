@@ -395,6 +395,32 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           console.error('[MealForm] 알림 처리 중 오류:', e)
         }
       }
+      // 수정 게시글 알림 — 수정 시 같은 스페이스 다른 멤버 전원에게
+      if (initial?.id && user && currentSpace?.id) {
+        try {
+          const { data: members, error: membersErr } = await supabase
+            .from('space_members')
+            .select('user_id')
+            .eq('space_id', currentSpace.id)
+            .neq('user_id', user.id)
+          if (membersErr) {
+            console.error('[MealForm] space_members 조회 실패 (수정 알림):', membersErr)
+          } else if (members?.length > 0) {
+            const fromUser = buildFromUser(user)
+            const title = form.title || form.restaurantName || '식사'
+            await Promise.all(members.map(m => sendNotification({
+              toUserId: m.user_id,
+              spaceId: currentSpace.id,
+              mealId: initial.id,
+              fromUser,
+              type: 'new_meal',
+              message: `${fromUser.nickname}님이 식사 기록을 수정했어요: ${title}`,
+            })))
+          }
+        } catch (e) {
+          console.error('[MealForm] 수정 알림 처리 중 오류:', e)
+        }
+      }
     } finally {
       setUploading(false)
     }

@@ -166,8 +166,8 @@ export default function DayDetail({ date, onClose, onViewMeal, repMeals, onSetRe
   if (otherMeals.length > 0) groups.push({ time: '', meals: otherMeals })
 
   function handleAdd(data) {
-    addMeal(data)
     setMode('list')
+    return addMeal(data)
   }
 
   function handleEdit(data) {
