@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import StarRating from '../common/StarRating'
+import { QtyStepper } from '../Ingredients/QtyStepper'
 import { useApp } from '../../context/AppContext'
 import { uploadPhotoWithThumbnail, getThumbUrl } from '../../lib/uploadPhoto'
 import { supabase } from '../../lib/supabase'
@@ -250,7 +251,7 @@ function LocationField({ form, geoStatus, onLocationChange, onLocationBlur }) {
 
 // ─── MealForm 메인 컴포넌트 ───────────────────────────────────────────────
 export default function MealForm({ date, onSubmit, onCancel, initial }) {
-  const { currentSpace, deleteIngredient, user, ratingsMap, addOrUpdateRating, deleteRating } = useApp()
+  const { currentSpace, addIngredient, updateIngredientQuantity, deleteIngredient, user, ratingsMap, addOrUpdateRating, deleteRating } = useApp()
 
   const [step, setStep] = useState(() => initial?.tag ? 'form' : 'tag')
   const [uploading, setUploading] = useState(false)
@@ -278,8 +279,10 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   const [geoStatus, setGeoStatus] = useState(
     () => (initial?.lat && initial?.lng) ? 'found' : 'idle'
   )
-  const [usedIngredientIds, setUsedIngredientIds] = useState([])
   const [ingredientsOpen, setIngredientsOpen] = useState(false)
+  // 재료 입력(추가 폼) — UI 전용 로컬 상태. 실제 목록은 AppContext ingredients(toBuy) 공유
+  const [ingInput, setIngInput] = useState('')
+  const [ingQty, setIngQty] = useState(1)
   const fileRef = useRef()
   const cameraRef = useRef()
 
@@ -367,9 +370,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       }
     }
 
-    if (form.tag === '집밥' && usedIngredientIds.length > 0) {
-      await Promise.all(usedIngredientIds.map(id => deleteIngredient('remaining', id)))
-    }
+    // 집밥 재료는 ingredients 테이블(toBuy)에서 즉시 관리되므로 저장 시 별도 처리 없음
 
     // 사진 Storage 업로드 — base64는 URL로 교체, 이미 URL이면 그대로
     setUploading(true)
@@ -461,8 +462,25 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
 
   const isGeocoding = geoStatus === 'loading'
   const isBusy = isGeocoding || uploading
-  const remainingIngredients = currentSpace?.ingredients?.remaining || []
+  // 집밥 재료 = ingredients 테이블 toBuy 타입 (재료 탭 "살 것 목록"과 동일 데이터 공유)
+  const homeIngredients = currentSpace?.ingredients?.toBuy || []
   const style = TAG_STYLE[form.tag] || {}
+
+  // 재료 추가 — ingredients 테이블에 즉시 insert (toBuy)
+  async function handleAddIngredient(e) {
+    e.preventDefault()
+    const text = ingInput.trim()
+    if (!text) return
+    await addIngredient('toBuy', text, ingQty)
+    setIngInput('')
+    setIngQty(1)
+  }
+
+  // - 버튼: quantity>1이면 감소, 1이면 삭제
+  function handleIngredientDecrement(item) {
+    if (item.quantity > 1) updateIngredientQuantity('toBuy', item.id, item.quantity - 1)
+    else deleteIngredient('toBuy', item.id)
+  }
 
   // ── Step 1: 날짜 + 태그 + 끼니 ───────────────────────────────────────
   if (step === 'tag') {
@@ -790,19 +808,19 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           </div>
         )}
 
-        {/* 집밥: 재료 사용하기 */}
-        {form.tag === '집밥' && remainingIngredients.length > 0 && (
+        {/* 집밥: 재료 — ingredients 테이블 toBuy와 공유 (재료 탭과 실시간 연동) */}
+        {form.tag === '집밥' && (
           <div className="rounded-2xl border border-cream-200 overflow-hidden">
             <button
               type="button"
               onClick={() => setIngredientsOpen(o => !o)}
               className="w-full flex items-center justify-between px-4 py-3 bg-cream-100 hover:bg-cream-200 transition-colors"
             >
-              <span className="text-sm font-medium text-warm-dark">재료 사용하기</span>
+              <span className="text-sm font-medium text-warm-dark">재료</span>
               <div className="flex items-center gap-2">
-                {usedIngredientIds.length > 0 && (
+                {homeIngredients.length > 0 && (
                   <span className="text-xs bg-warm-brown text-white px-2 py-0.5 rounded-full font-medium">
-                    {usedIngredientIds.length}개 선택
+                    {homeIngredients.length}개
                   </span>
                 )}
                 <svg
@@ -814,34 +832,53 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
               </div>
             </button>
             {ingredientsOpen && (
-              <div className="px-4 py-3 space-y-2.5">
-                <p className="text-xs text-warm-light mb-2">체크한 재료는 저장 시 목록에서 제거돼요</p>
-                {remainingIngredients.map(item => (
-                  <label key={item.id} className="flex items-center gap-3 cursor-pointer group">
-                    <button
-                      type="button"
-                      className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        usedIngredientIds.includes(item.id)
-                          ? 'bg-warm-brown border-warm-brown'
-                          : 'border-cream-300 group-hover:border-warm-light'
-                      }`}
-                      onClick={() => setUsedIngredientIds(prev =>
-                        prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]
-                      )}
-                    >
-                      {usedIngredientIds.includes(item.id) && (
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                    <span className={`text-sm transition-colors ${
-                      usedIngredientIds.includes(item.id) ? 'text-cream-400 line-through' : 'text-warm-dark'
-                    }`}>
-                      {item.text}
-                    </span>
-                  </label>
-                ))}
+              <div className="px-4 py-3 space-y-3">
+                <p className="text-xs text-warm-light">재료 탭 "살 것 목록"과 함께 관리돼요</p>
+
+                {/* 입력: 재료명 + 개수 스테퍼 + 추가 */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={ingInput}
+                    onChange={e => setIngInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddIngredient(e) } }}
+                    placeholder="재료 추가하기"
+                    className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
+                  />
+                  <QtyStepper
+                    quantity={ingQty}
+                    onDecrement={() => setIngQty(q => Math.max(1, q - 1))}
+                    onIncrement={() => setIngQty(q => q + 1)}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddIngredient}
+                    className="px-3 py-1.5 rounded-xl bg-warm-brown text-white text-sm hover:bg-warm-dark transition-colors shrink-0"
+                  >
+                    추가
+                  </button>
+                </div>
+
+                {/* 목록: 재료명 + 개수 스테퍼 */}
+                {homeIngredients.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {homeIngredients.map(item => (
+                      <div key={item.id} className="flex items-center gap-2">
+                        <span className={`flex-1 min-w-0 text-sm truncate ${item.done ? 'text-cream-400 line-through' : 'text-warm-dark'}`}>
+                          {item.text}
+                        </span>
+                        <QtyStepper
+                          quantity={item.quantity}
+                          minusAsDelete={item.quantity <= 1}
+                          onDecrement={() => handleIngredientDecrement(item)}
+                          onIncrement={() => updateIngredientQuantity('toBuy', item.id, item.quantity + 1)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-xs text-cream-400 py-2">아직 추가된 재료가 없어요</p>
+                )}
               </div>
             )}
           </div>
