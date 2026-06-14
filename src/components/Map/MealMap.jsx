@@ -18,6 +18,9 @@ const MOOD_TAGS = ['🔥 핫플', '💕 로맨틱', '🌿 힐링', '📸 인생�
 const EMPTY_WISH_FORM = { name: '', location: '', memo: '', moodTags: [] }
 const SEOUL = { lat: 37.5665, lng: 126.9780 }
 
+// 모바일은 클립보드 paste가 잘 안 되므로 안내 문구 숨김
+const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+
 // ── Kakao 지오코딩 ─────────────────────────────────────────────
 async function geocodeKakao(query) {
   if (!window.kakao?.maps || !query.trim()) return null
@@ -588,6 +591,35 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
 
 // ── WishFormFields ─────────────────────────────────────────────
 function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef }) {
+  const [pasteToast, setPasteToast] = useState(null)
+
+  // 클립보드 붙여넣기(Ctrl+V) → 기존 사진 선택과 동일하게 미리보기 설정
+  useEffect(() => {
+    if (isMobile) return
+    function handlePaste(e) {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault()
+          const file = item.getAsFile()
+          if (!file) continue
+          setPasteToast({ kind: 'loading', msg: '사진을 업로드하는 중...' })
+          const reader = new FileReader()
+          reader.onload = ev => { setPhotoPreview(ev.target.result); setPasteToast(null) }
+          reader.onerror = () => {
+            setPasteToast({ kind: 'error', msg: '사진 붙여넣기에 실패했어요' })
+            setTimeout(() => setPasteToast(null), 2000)
+          }
+          reader.readAsDataURL(file)
+          break
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [setPhotoPreview])
+
   return (
     <>
       <div>
@@ -648,7 +680,20 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
             reader.readAsDataURL(file)
           }}
         />
+        {!isMobile && (
+          <p className="text-xs text-cream-400 mt-1.5 text-center">Ctrl+V로 사진을 붙여넣을 수 있어요</p>
+        )}
       </div>
+
+      {/* 붙여넣기 토스트 */}
+      {pasteToast && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-[95] px-4 py-2.5 rounded-2xl bg-warm-dark text-white text-sm font-medium shadow-lg flex items-center gap-2">
+          {pasteToast.kind === 'loading' && (
+            <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin shrink-0" />
+          )}
+          {pasteToast.msg}
+        </div>
+      )}
       <div>
         <label className="text-xs text-warm-light mb-1.5 block font-medium">메모</label>
         <input type="text" value={form.memo}

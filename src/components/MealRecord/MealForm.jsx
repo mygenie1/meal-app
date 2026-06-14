@@ -8,6 +8,9 @@ import { uploadPhotoWithThumbnail, getThumbUrl } from '../../lib/uploadPhoto'
 import { supabase } from '../../lib/supabase'
 import { sendNotification, buildFromUser } from '../../lib/notify'
 
+// 모바일 여부 — 모바일은 클립보드 paste가 잘 안 되므로 안내 문구 숨김
+const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+
 // ─── 이미지 압축 (Canvas, max 1200px, JPEG 0.82) ─────────────────────────
 // 결과물은 base64 — 로컬 미리보기용. 실제 저장 시 Storage에 업로드 후 URL로 교체
 function compressImage(file) {
@@ -283,8 +286,10 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   // 재료 입력(추가 폼) — UI 전용 로컬 상태. 실제 목록은 AppContext ingredients(toBuy) 공유
   const [ingInput, setIngInput] = useState('')
   const [ingQty, setIngQty] = useState(1)
+  const [pasteToast, setPasteToast] = useState(null) // null | { kind: 'loading'|'error', msg }
   const fileRef = useRef()
   const cameraRef = useRef()
+  const photosLenRef = useRef(0)
 
   function set(key, val) {
     setForm(prev => ({ ...prev, [key]: val }))
@@ -305,6 +310,43 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     }
     e.target.value = ''
   }
+
+  // 현재 사진 개수를 ref로 추적 (paste 핸들러의 stale closure 대응)
+  photosLenRef.current = form.photos.length
+
+  // 클립보드 붙여넣기(Ctrl+V) → 기존 사진 업로드와 동일 처리 (compressImage 재사용)
+  useEffect(() => {
+    if (isMobile) return
+    async function handlePaste(e) {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault()
+          const file = item.getAsFile()
+          if (!file) continue
+          if (photosLenRef.current >= 5) {
+            setPasteToast({ kind: 'error', msg: '사진은 최대 5장까지예요' })
+            setTimeout(() => setPasteToast(null), 2000)
+            return
+          }
+          setPasteToast({ kind: 'loading', msg: '사진을 업로드하는 중...' })
+          try {
+            const compressed = await compressImage(file)
+            if (!compressed) throw new Error('compress failed')
+            setForm(prev => prev.photos.length < 5 ? { ...prev, photos: [...prev.photos, compressed] } : prev)
+            setPasteToast(null)
+          } catch {
+            setPasteToast({ kind: 'error', msg: '사진 붙여넣기에 실패했어요' })
+            setTimeout(() => setPasteToast(null), 2000)
+          }
+          break
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [])
 
   function removePhoto(i) {
     setForm(prev => ({ ...prev, photos: prev.photos.filter((_, j) => j !== i) }))
@@ -708,7 +750,20 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           )}
           <input type="file" ref={fileRef} accept="image/*" multiple className="hidden" onChange={handlePhotos} />
           <input type="file" ref={cameraRef} accept="image/*" capture="environment" className="hidden" onChange={handlePhotos} />
+          {!isMobile && (
+            <p className="text-xs text-cream-400 mt-2 text-center">Ctrl+V로 사진을 붙여넣을 수 있어요</p>
+          )}
         </div>
+
+        {/* 붙여넣기 토스트 */}
+        {pasteToast && (
+          <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-[95] px-4 py-2.5 rounded-2xl bg-warm-dark text-white text-sm font-medium shadow-lg flex items-center gap-2">
+            {pasteToast.kind === 'loading' && (
+              <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin shrink-0" />
+            )}
+            {pasteToast.msg}
+          </div>
+        )}
 
         {/* 제목 */}
         <div>
