@@ -254,29 +254,27 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
                             <div className="absolute inset-0">
                               <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
                             </div>
-                            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/60 to-transparent" />
+                            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
                           </>
                         ) : (
                           <div className="absolute inset-0 bg-cream-200" />
                         )}
-                        {/* 위시리스트 방문 점 */}
-                        {dayMeals.some(m => m.fromWishlist) && (
+                        {/* 여러 끼니 뱃지 (좌상단) — 없으면 위시리스트 방문 점 */}
+                        {dayMeals.length > 1 ? (
+                          <span className="absolute top-0.5 left-1 bg-warm-brown/80 text-white text-[9px] font-bold px-1 py-0.5 rounded-full leading-none z-20">
+                            {dayMeals.length}
+                          </span>
+                        ) : dayMeals.some(m => m.fromWishlist) && (
                           <span className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-rose-400 z-20 shadow-sm" />
                         )}
                         {/* 날짜 숫자 (우상단) */}
-                        <span className={`absolute top-0.5 right-1 text-[10px] font-semibold z-10 drop-shadow-sm ${thumbPhoto ? 'text-white' : 'text-warm-dark'}`}>
+                        <span className={`absolute top-0.5 right-1 text-[10px] font-semibold z-10 drop-shadow ${thumbPhoto ? 'text-white' : 'text-warm-dark'}`}>
                           {format(day, 'd')}
                         </span>
-                        {/* 제목 (하단, 말줄임) */}
-                        <span className={`absolute bottom-0.5 left-1 right-1 text-[9px] font-medium leading-tight truncate z-10 ${dayMeals.length > 1 ? 'pr-3.5' : ''} ${thumbPhoto ? 'text-white drop-shadow-sm' : 'text-warm-brown'}`}>
+                        {/* 제목 (하단, 1줄 — 말줄임 없이 최대한 노출) */}
+                        <span className={`absolute bottom-0.5 left-1 right-1 text-[9px] font-medium leading-tight whitespace-nowrap overflow-hidden z-10 ${thumbPhoto ? 'text-white' : 'text-warm-brown'}`}>
                           {displayTitle}
                         </span>
-                        {/* 여러 끼니 기록 — 우하단 숫자 뱃지 */}
-                        {dayMeals.length > 1 && (
-                          <span className="absolute bottom-0.5 right-0.5 bg-warm-brown text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center z-20 leading-none">
-                            {dayMeals.length}
-                          </span>
-                        )}
                       </>
                     ) : (
                       <div className="absolute inset-0 bg-cream-50 flex items-center justify-center">

@@ -22,13 +22,13 @@ function StatBanner({ space, displayMonth }) {
   ].find(m => m !== null)
 
   return (
-    <div className="mx-4 mb-4 px-4 py-3 bg-cream-100 rounded-2xl">
-      <div className="flex items-center gap-2">
-        <span className="text-lg">{space.emoji}</span>
-        <div>
-          <p className="text-xs text-warm-light font-medium">{space.name}</p>
-          <p className="text-sm text-warm-dark">{messages}</p>
-        </div>
+    <div className="mx-4 mb-3 px-4 py-3.5 bg-cream-100 rounded-2xl flex items-center gap-3">
+      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-lg shrink-0">
+        {space.emoji}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-warm-dark truncate">{space.name}</p>
+        <p className="text-sm text-warm-light leading-snug">{messages}</p>
       </div>
     </div>
   )
@@ -120,21 +120,8 @@ export default function CalendarPage() {
 
   return (
     <>
-      {/* 헤더 */}
-      <header className="sticky top-0 z-40 bg-cream-50/90 backdrop-blur-sm border-b border-cream-200 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <h1 className="text-base font-semibold text-warm-dark">식탁 일기</h1>
-          <button
-            onClick={() => navigate('/spaces')}
-            className="text-xs text-warm-light bg-cream-200 px-3 py-1 rounded-full hover:bg-cream-300 transition-colors"
-          >
-            {currentSpace?.emoji} {currentSpace?.name}
-          </button>
-        </div>
-      </header>
-
-      <div className="pb-28 pt-4">
-        {/* 월간 통계 배너 */}
+      <div className="pb-28" style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
+        {/* 단골 멤버 카드 */}
         {currentSpace && <StatBanner space={currentSpace} displayMonth={displayMonth} />}
 
         {/* 태그 필터 드롭다운 */}
@@ -143,7 +130,7 @@ export default function CalendarPage() {
             <select
               value={filter}
               onChange={e => setFilter(e.target.value)}
-              className="text-xs border border-cream-200 rounded-xl pl-3 pr-7 py-1.5 bg-cream-50 text-warm-dark focus:outline-none focus:border-warm-light appearance-none cursor-pointer"
+              className="text-xs border border-cream-300 rounded-xl pl-3 pr-7 py-1.5 bg-cream-50 text-warm-dark focus:outline-none focus:border-warm-light appearance-none cursor-pointer"
             >
               {['전체', '집밥', '외식', '카페', '배달'].map(t => (
                 <option key={t} value={t}>{t}</option>
