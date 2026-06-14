@@ -98,6 +98,8 @@ export function AppProvider({ children }) {
   const [retryAttempt, setRetryAttempt] = useState(0) // 0 = 첫 시도, 1~2 = 재시도 중
   // mealId → [{ id, user_id, nickname, rating }]
   const [ratingsMap, setRatingsMap] = useState({})
+  // wishlistId → [{ id, wishlist_id, user_id, nickname, avatar_url }]
+  const [wishlistInterestsMap, setWishlistInterestsMap] = useState({})
   // 현재 유저의 알림 목록 (최신 50건)
   const [notifications, setNotifications] = useState([])
   const [notifEnabled, setNotifEnabled] = useState(() => localStorage.getItem('notif_enabled') !== 'false')
@@ -471,6 +473,25 @@ export function AppProvider({ children }) {
                 rMap[r.meal_id].push(r)
               })
               setRatingsMap(prev => ({ ...prev, ...rMap }))
+            }
+          } catch {}
+        }
+
+        // 위시리스트 관심 목록 로드
+        const wishlistIds = wishlistData.map(w => w.id)
+        if (wishlistIds.length > 0) {
+          try {
+            const { data: interestsData } = await supabase
+              .from('wishlist_interests')
+              .select('id, wishlist_id, user_id, nickname, avatar_url')
+              .in('wishlist_id', wishlistIds)
+            if (interestsData?.length > 0) {
+              const iMap = {}
+              interestsData.forEach(i => {
+                if (!iMap[i.wishlist_id]) iMap[i.wishlist_id] = []
+                iMap[i.wishlist_id].push(i)
+              })
+              setWishlistInterestsMap(prev => ({ ...prev, ...iMap }))
             }
           } catch {}
         }
@@ -877,6 +898,67 @@ export function AppProvider({ children }) {
     ))
   }
 
+  // 나도 가고싶어요 추가
+  async function addWishlistInterest(wishlistId) {
+    if (!user || !wishlistId) return false
+    const row = {
+      wishlist_id: wishlistId,
+      user_id: user.id,
+      nickname: user.user_metadata?.name || user.user_metadata?.full_name || '',
+      avatar_url: user.user_metadata?.avatar_url || '',
+    }
+    // 낙관적 업데이트
+    const optimistic = { id: `temp-${Date.now()}`, ...row }
+    setWishlistInterestsMap(prev => {
+      const existing = (prev[wishlistId] || []).filter(i => i.user_id !== user.id)
+      return { ...prev, [wishlistId]: [...existing, optimistic] }
+    })
+    const { data, error } = await supabase
+      .from('wishlist_interests')
+      .insert(row)
+      .select('id, wishlist_id, user_id, nickname, avatar_url')
+      .single()
+    if (error) {
+      // 롤백
+      setWishlistInterestsMap(prev => ({
+        ...prev,
+        [wishlistId]: (prev[wishlistId] || []).filter(i => i.id !== optimistic.id),
+      }))
+      return false
+    }
+    setWishlistInterestsMap(prev => ({
+      ...prev,
+      [wishlistId]: (prev[wishlistId] || []).map(i => i.id === optimistic.id ? data : i),
+    }))
+    return true
+  }
+
+  // 나도 가고싶어요 취소
+  async function removeWishlistInterest(wishlistId) {
+    if (!user || !wishlistId) return false
+    const myEntry = (wishlistInterestsMap[wishlistId] || []).find(i => i.user_id === user.id)
+    if (!myEntry) return false
+    // 낙관적 업데이트
+    setWishlistInterestsMap(prev => ({
+      ...prev,
+      [wishlistId]: (prev[wishlistId] || []).filter(i => i.user_id !== user.id),
+    }))
+    const { error } = await supabase
+      .from('wishlist_interests')
+      .delete()
+      .eq('wishlist_id', wishlistId)
+      .eq('user_id', user.id)
+    if (error) {
+      // 롤백
+      setWishlistInterestsMap(prev => ({
+        ...prev,
+        [wishlistId]: [...(prev[wishlistId] || []), myEntry],
+      }))
+      return false
+    }
+    return true
+  }
+
   // 알림 읽음 처리
   async function markNotificationRead(id) {
     await supabase.from('notifications').update({ is_read: true }).eq('id', id)
@@ -1019,6 +1101,9 @@ export function AppProvider({ children }) {
         addWishlistItem,
         updateWishlistItem,
         deleteWishlistItem,
+        wishlistInterestsMap,
+        addWishlistInterest,
+        removeWishlistInterest,
         joinByCode,
         ratingsMap,
         addOrUpdateRating,

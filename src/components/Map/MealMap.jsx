@@ -6,6 +6,7 @@ import Modal from '../common/Modal'
 import MealForm from '../MealRecord/MealForm'
 import FullscreenViewer from '../common/FullscreenViewer'
 import { linkify } from '../../lib/linkify'
+import { sendNotification, buildFromUser } from '../../lib/notify'
 
 // ── 상수 ──────────────────────────────────────────────────────
 const TAG_COLORS = { 집밥: '#86efac', 외식: '#fcd34d', 카페: '#f9a8d4', 배달: '#93c5fd' }
@@ -164,7 +165,7 @@ function MealPinCard({ meal, liveMeal, onClick }) {
 
 // ── WishDetailModal ────────────────────────────────────────────
 function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap }) {
-  const { user } = useApp()
+  const { user, currentSpace, wishlistInterestsMap, addWishlistInterest, removeWishlistInterest } = useApp()
   const [comments, setComments] = useState([])
   const [commentsLoaded, setCommentsLoaded] = useState(false)
   const [commentText, setCommentText] = useState('')
@@ -205,6 +206,33 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
       navigator.clipboard.writeText(url).then(() => showToast('링크가 복사됐어요'))
     } else {
       showToast('복사를 지원하지 않는 환경이에요')
+    }
+  }
+
+  async function handleInterestToggle() {
+    if (!user) return
+    const interests = wishlistInterestsMap[item.id] || []
+    const isInterested = interests.some(i => i.user_id === user.id)
+    if (isInterested) {
+      await removeWishlistInterest(item.id)
+    } else {
+      const ok = await addWishlistInterest(item.id)
+      if (ok) {
+        try {
+          const { data: members } = await supabase.from('space_members').select('user_id').eq('space_id', currentSpace?.id)
+          if (members?.length > 0) {
+            const fromUser = buildFromUser(user)
+            const nick = user.user_metadata?.name || user.user_metadata?.full_name || '누군가'
+            await Promise.all(members.map(m => sendNotification({
+              toUserId: m.user_id,
+              spaceId: currentSpace?.id,
+              fromUser,
+              type: 'wishlist_interest',
+              message: `${nick}님도 "${item.name}"에 가고 싶어해요`,
+            })))
+          }
+        } catch {}
+      }
     }
   }
 
@@ -343,38 +371,76 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
       )}
 
       {/* 액션 버튼 */}
-      <div className="flex gap-2 flex-wrap pt-3 border-t border-cream-100">
-        {!item.visited && (
-          <button
-            onClick={() => { onVisit(); onClose() }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors active:scale-95">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            방문했어요
-          </button>
-        )}
-        {item.lat && item.lng && (
-          <button
-            onClick={() => { onViewOnMap(); onClose() }}
-            className="px-3 py-2 rounded-2xl border border-cream-200 text-warm-light text-xs hover:bg-cream-100 transition-colors active:scale-95 flex items-center gap-1">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
-            지도에서 확인
-          </button>
-        )}
-        <button
-          onClick={() => { onEdit(); onClose() }}
-          className="px-3 py-2 rounded-2xl border border-cream-300 text-warm-brown text-sm hover:bg-cream-100 transition-colors active:scale-95">
-          수정
-        </button>
-        <button
-          onClick={onDelete}
-          className="px-3 py-2 rounded-2xl border border-cream-200 text-red-400 text-sm hover:bg-red-50 transition-colors active:scale-95">
-          삭제
-        </button>
-      </div>
+      {(() => {
+        const interests = wishlistInterestsMap[item.id] || []
+        const isInterested = interests.some(i => i.user_id === user?.id)
+        return (
+          <div className="pt-3 border-t border-cream-100">
+            <div className="flex gap-2 flex-wrap mb-3">
+              {!item.visited && (
+                <button
+                  onClick={() => { onVisit(); onClose() }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors active:scale-95">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  방문했어요
+                </button>
+              )}
+              <button
+                onClick={handleInterestToggle}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-2xl text-sm font-medium transition-colors active:scale-95 ${
+                  isInterested
+                    ? 'bg-warm-brown text-white hover:bg-warm-dark'
+                    : 'border border-cream-300 text-warm-light hover:bg-cream-100'
+                }`}>
+                <svg className="w-3.5 h-3.5" fill={isInterested ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                나도 가고싶어요
+              </button>
+              {item.lat && item.lng && (
+                <button
+                  onClick={() => { onViewOnMap(); onClose() }}
+                  className="px-3 py-2 rounded-2xl border border-cream-200 text-warm-light text-xs hover:bg-cream-100 transition-colors active:scale-95 flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                  지도에서 확인
+                </button>
+              )}
+              <button
+                onClick={() => { onEdit(); onClose() }}
+                className="px-3 py-2 rounded-2xl border border-cream-300 text-warm-brown text-sm hover:bg-cream-100 transition-colors active:scale-95">
+                수정
+              </button>
+              <button
+                onClick={onDelete}
+                className="px-3 py-2 rounded-2xl border border-cream-200 text-red-400 text-sm hover:bg-red-50 transition-colors active:scale-95">
+                삭제
+              </button>
+            </div>
+            {interests.length > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="flex -space-x-1.5">
+                  {interests.slice(0, 5).map(i => (
+                    i.avatar_url
+                      ? <img key={i.id} src={i.avatar_url} alt={i.nickname} title={i.nickname} className="w-6 h-6 rounded-full border-2 border-white object-cover" />
+                      : <div key={i.id} title={i.nickname} className="w-6 h-6 rounded-full border-2 border-white bg-cream-200 flex items-center justify-center text-[8px] text-warm-light font-bold">
+                          {(i.nickname || '?').charAt(0)}
+                        </div>
+                  ))}
+                </div>
+                <span className="text-xs text-warm-light">
+                  {interests.length === 1
+                    ? `${interests[0].nickname}님이 가고 싶어해요`
+                    : `${interests[0].nickname} 외 ${interests.length - 1}명이 가고 싶어해요`}
+                </span>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* 댓글 섹션 */}
       <div className="mt-5 pt-5 border-t border-cream-100">
@@ -509,7 +575,7 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
 }
 
 // ── WishListCard ───────────────────────────────────────────────
-function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail }) {
+function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail, interestCount, isInterested, onInterestToggle }) {
   const catColor = WISH_CATEGORY_COLORS[item.category]
   return (
     <div
@@ -548,28 +614,40 @@ function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail })
           </div>
         )}
         {item.memo && <p className="text-sm text-warm-light leading-relaxed mb-3 line-clamp-2">{item.memo}</p>}
-        {(!item.visited || (item.lat && item.lng)) && (
-          <div className="flex gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
-            {!item.visited && (
-              <button onClick={onVisit}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors active:scale-95">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                방문했어요
-              </button>
-            )}
-            {item.lat && item.lng && (
-              <button onClick={onViewOnMap}
-                className="px-3 py-2 rounded-2xl border border-cream-200 text-warm-light text-xs hover:bg-cream-100 transition-colors active:scale-95 flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-                지도에서 확인
-              </button>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
+          {!item.visited && onVisit && (
+            <button onClick={onVisit}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors active:scale-95">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              방문했어요
+            </button>
+          )}
+          {item.lat && item.lng && (
+            <button onClick={onViewOnMap}
+              className="px-3 py-2 rounded-2xl border border-cream-200 text-warm-light text-xs hover:bg-cream-100 transition-colors active:scale-95 flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+              지도에서 확인
+            </button>
+          )}
+          {onInterestToggle && (
+            <button
+              onClick={onInterestToggle}
+              className={`flex items-center gap-1 px-3 py-2 rounded-2xl text-xs font-medium transition-colors active:scale-95 ${
+                isInterested
+                  ? 'bg-rose-50 text-rose-500 border border-rose-200'
+                  : 'border border-cream-200 text-cream-400 hover:bg-cream-100'
+              }`}>
+              <svg className="w-3.5 h-3.5" fill={isInterested ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              {interestCount > 0 ? interestCount : ''}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -577,7 +655,7 @@ function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail })
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────
 export default function MealMap({ onViewMeal, onTabChange }) {
-  const { currentSpace, addMeal, addWishlistItem, updateWishlistItem, deleteWishlistItem, cacheGeocoords, loadMealPhotos } = useApp()
+  const { currentSpace, addMeal, addWishlistItem, updateWishlistItem, deleteWishlistItem, cacheGeocoords, loadMealPhotos, user, wishlistInterestsMap, addWishlistInterest, removeWishlistInterest } = useApp()
 
   const [activeTab, setActiveTab] = useState('map')
 
@@ -634,6 +712,7 @@ export default function MealMap({ onViewMeal, onTabChange }) {
 
   const [visitingWish, setVisitingWish] = useState(null)
   const [viewingWish, setViewingWish] = useState(null)
+  const [wishFilter, setWishFilter] = useState('all') // 'all' | 'mine' | 'theirs'
   const requestedPhotosRef = useRef(new Set())
 
   // ── 파생 상태 ─────────────────────────────────────────────────
@@ -1294,11 +1373,41 @@ export default function MealMap({ onViewMeal, onTabChange }) {
               가고 싶은 곳 추가
             </button>
 
+            {/* 필터 칩 */}
+            {unvisited.length > 0 && (
+              <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+                {[
+                  { key: 'all', label: '전체' },
+                  { key: 'mine', label: '나도 가고싶어요' },
+                  { key: 'theirs', label: '상대가 가고싶어요' },
+                ].map(({ key, label }) => (
+                  <button key={key} onClick={() => setWishFilter(key)}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors active:scale-95 ${
+                      wishFilter === key
+                        ? 'bg-warm-brown text-white border-transparent'
+                        : 'bg-cream-50 text-warm-light border-cream-200 hover:bg-cream-100'
+                    }`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {(() => {
-              // 좌표 있는 항목은 현재 지도 뷰포트 기준으로 필터링
-              const displayUnvisited = visibleWishIds === null
+              // 뷰포트 필터 (좌표 있는 항목만)
+              const viewportFiltered = visibleWishIds === null
                 ? unvisited
                 : unvisited.filter(w => !w.lat || !w.lng || visibleWishIds.has(w.id))
+              // 관심 필터
+              const displayUnvisited = viewportFiltered.filter(w => {
+                if (wishFilter === 'all') return true
+                const interests = wishlistInterestsMap[w.id] || []
+                if (wishFilter === 'mine') return interests.some(i => i.user_id === user?.id)
+                if (wishFilter === 'theirs') {
+                  return interests.some(i => i.user_id !== user?.id) && !interests.some(i => i.user_id === user?.id)
+                }
+                return true
+              })
               return unvisited.length === 0 ? (
                 <div className="py-10 text-center mb-6">
                   <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mx-auto mb-3">
@@ -1311,19 +1420,53 @@ export default function MealMap({ onViewMeal, onTabChange }) {
                 </div>
               ) : displayUnvisited.length === 0 ? (
                 <div className="py-8 text-center mb-6">
-                  <p className="text-sm font-medium text-warm-dark mb-1">이 지역에 등록된 장소가 없어요</p>
-                  <p className="text-xs text-warm-light">지도를 이동하거나 축소하면 다른 장소가 보여요</p>
+                  <p className="text-sm font-medium text-warm-dark mb-1">
+                    {wishFilter !== 'all' ? '해당하는 장소가 없어요' : '이 지역에 등록된 장소가 없어요'}
+                  </p>
+                  <p className="text-xs text-warm-light">
+                    {wishFilter !== 'all' ? '다른 필터를 선택해보세요' : '지도를 이동하거나 축소하면 다른 장소가 보여요'}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3 mb-6">
-                  {displayUnvisited.map(item => (
-                    <WishListCard key={item.id} item={item}
-                      highlighted={item.id === highlightedWishId}
-                      onViewDetail={() => setViewingWish(item)}
-                      onVisit={e => { e?.stopPropagation(); setVisitingWish(item) }}
-                      onViewOnMap={item.lat && item.lng ? (e => { e?.stopPropagation(); handleViewOnMap(item) }) : null}
-                    />
-                  ))}
+                  {displayUnvisited.map(item => {
+                    const interests = wishlistInterestsMap[item.id] || []
+                    const isInterested = interests.some(i => i.user_id === user?.id)
+                    return (
+                      <WishListCard key={item.id} item={item}
+                        highlighted={item.id === highlightedWishId}
+                        onViewDetail={() => setViewingWish(item)}
+                        onVisit={e => { e?.stopPropagation(); setVisitingWish(item) }}
+                        onViewOnMap={item.lat && item.lng ? (e => { e?.stopPropagation(); handleViewOnMap(item) }) : null}
+                        interestCount={interests.length}
+                        isInterested={isInterested}
+                        onInterestToggle={async e => {
+                          e?.stopPropagation()
+                          if (isInterested) {
+                            await removeWishlistInterest(item.id)
+                          } else {
+                            const ok = await addWishlistInterest(item.id)
+                            if (ok) {
+                              try {
+                                const { data: members } = await supabase.from('space_members').select('user_id').eq('space_id', currentSpace?.id)
+                                if (members?.length > 0) {
+                                  const fromUser = buildFromUser(user)
+                                  const nick = user?.user_metadata?.name || user?.user_metadata?.full_name || '누군가'
+                                  await Promise.all(members.map(m => sendNotification({
+                                    toUserId: m.user_id,
+                                    spaceId: currentSpace?.id,
+                                    fromUser,
+                                    type: 'wishlist_interest',
+                                    message: `${nick}님도 "${item.name}"에 가고 싶어해요`,
+                                  })))
+                                }
+                              } catch {}
+                            }
+                          }
+                        }}
+                      />
+                    )
+                  })}
                 </div>
               )
             })()}
