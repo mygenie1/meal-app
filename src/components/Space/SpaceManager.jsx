@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext'
 import Modal from '../common/Modal'
 import BulkPhotoUpload from './BulkPhotoUpload'
 import SettingsModal from './SettingsModal'
+import FeedbackModal from './FeedbackModal'
 
 const EMOJIS = ['🍽️', '🍜', '🍕', '🍱', '🍰', '☕', '🥗', '🍣', '🌮', '🥘']
 
@@ -12,6 +13,8 @@ export default function SpaceManager() {
   const [showJoin, setShowJoin] = useState(false)
   const [showBulkUpload, setShowBulkUpload] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [feedbackToast, setFeedbackToast] = useState(false)
   const [name, setName] = useState('')
   const [emoji, setEmoji] = useState('🍽️')
   const [code, setCode] = useState('')
@@ -61,6 +64,11 @@ export default function SpaceManager() {
     setClaimingId(spaceId)
     await claimSpace(spaceId)
     setClaimingId(null)
+  }
+
+  function handleFeedbackSuccess() {
+    setFeedbackToast(true)
+    setTimeout(() => setFeedbackToast(false), 2500)
   }
 
   const displayName = user?.user_metadata?.name
@@ -289,6 +297,22 @@ export default function SpaceManager() {
         </div>
       )}
 
+      {/* 피드백 보내기 카드 */}
+      <button
+        onClick={() => setShowFeedback(true)}
+        className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white border border-cream-200 hover:border-cream-300 hover:bg-cream-50 active:scale-[0.99] transition-all text-left"
+      >
+        <div className="w-10 h-10 rounded-full bg-warm-brown/10 flex items-center justify-center shrink-0">
+          <svg className="w-5 h-5 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-warm-dark">피드백 보내기</p>
+          <p className="text-xs text-warm-light mt-0.5">버그나 의견이 있으신가요?<br />스크린샷과 함께 알려주세요!</p>
+        </div>
+      </button>
+
       {/* 사진 일괄 등록 모달 */}
       <Modal isOpen={showBulkUpload} onClose={() => setShowBulkUpload(false)} title="사진 일괄 등록">
         <BulkPhotoUpload onClose={() => setShowBulkUpload(false)} />
@@ -296,6 +320,23 @@ export default function SpaceManager() {
 
       {/* 설정 모달 */}
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+
+      {/* 피드백 모달 */}
+      <FeedbackModal
+        isOpen={showFeedback}
+        onClose={() => setShowFeedback(false)}
+        onSuccess={handleFeedbackSuccess}
+      />
+
+      {/* 피드백 전송 완료 토스트 */}
+      {feedbackToast && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-[90] px-5 py-3 rounded-2xl bg-warm-dark text-white text-sm font-medium shadow-lg flex items-center gap-2">
+          <svg className="w-4 h-4 text-green-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          소중한 의견 감사해요!
+        </div>
+      )}
     </div>
   )
 }
