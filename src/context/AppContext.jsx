@@ -550,6 +550,14 @@ export function AppProvider({ children }) {
     // onAuthStateChange SIGNED_OUT 이벤트에서 상태 초기화
   }
 
+  // 회원 탈퇴: Edge Function 호출 → auth.users 삭제 → 로컬 세션 정리
+  async function deleteAccount() {
+    const { error } = await supabase.functions.invoke('delete-account')
+    if (error) throw new Error(error.message || '탈퇴 처리에 실패했어요')
+    // 서버에서 이미 유저 삭제됨 → 로컬 세션만 정리
+    try { await supabase.auth.signOut() } catch {}
+  }
+
   // 스페이스 생성
   async function createSpace(name, emoji = '🍽️') {
     const code = Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -977,6 +985,7 @@ export function AppProvider({ children }) {
         authLoading,
         signIn,
         signOut,
+        deleteAccount,
         updateProfile,
         spaces,
         currentSpace,
