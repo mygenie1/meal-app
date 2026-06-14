@@ -325,9 +325,20 @@ export function AppProvider({ children }) {
         console.log('[FCM] 토큰 없음 — 저장 스킵')
         return
       }
+      // SELECT 후 조건부 INSERT — DB UNIQUE 제약 없어도 중복 행 방지
+      const { data: existing } = await supabase
+        .from('fcm_tokens')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('token', token)
+        .maybeSingle()
+      if (existing) {
+        console.log('[FCM] 토큰 이미 저장됨, 스킵')
+        return
+      }
       const { error } = await supabase
         .from('fcm_tokens')
-        .upsert({ user_id: userId, token }, { onConflict: 'user_id,token' })
+        .insert({ user_id: userId, token })
       if (error) {
         console.error('[FCM] 토큰 저장 실패:', error)
       } else {

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import Modal from '../common/Modal'
 import { useApp } from '../../context/AppContext'
 import { uploadAvatar } from '../../lib/uploadPhoto'
+import { supabase } from '../../lib/supabase'
 import { version } from '../../../package.json'
 
 export default function SettingsModal({ isOpen, onClose }) {
@@ -18,6 +19,11 @@ export default function SettingsModal({ isOpen, onClose }) {
 
   // 앱 업데이트
   const [checking, setChecking] = useState(false)
+
+  // 개발자 디버그 패널
+  const [debugOpen, setDebugOpen] = useState(false)
+  const [debugInfo, setDebugInfo] = useState(null)
+  const [debugLoading, setDebugLoading] = useState(false)
 
   // 회원 탈퇴
   const [deleteStep, setDeleteStep] = useState('idle') // idle | confirm1 | confirm2
@@ -99,6 +105,53 @@ export default function SettingsModal({ isOpen, onClose }) {
       setPhotoUploading(false)
       if (photoInputRef.current) photoInputRef.current.value = ''
     }
+  }
+
+  // 개발자 디버그 정보 수집
+  async function loadDebugInfo() {
+    setDebugLoading(true)
+    try {
+      const permission = 'Notification' in window ? Notification.permission : 'unsupported'
+      const hasNotifApi = 'Notification' in window
+
+      let swState = 'unsupported'
+      let swScope = ''
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration().catch(() => null)
+        if (reg) {
+          swState = reg.active ? 'active' : reg.waiting ? 'waiting' : reg.installing ? 'installing' : 'registered'
+          swScope = reg.scope || ''
+        } else {
+          swState = 'not registered'
+        }
+      }
+
+      const { data: tokenRows } = await supabase
+        .from('fcm_tokens')
+        .select('token, created_at')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false })
+      const tokenCount = tokenRows?.length ?? 0
+      const latestToken = tokenRows?.[0]?.token
+      const tokenSuffix = latestToken ? '...' + latestToken.slice(-8) : '없음'
+
+      const isStandalone =
+        window.navigator.standalone === true ||
+        window.matchMedia('(display-mode: standalone)').matches
+
+      setDebugInfo({ permission, hasNotifApi, swState, swScope, tokenCount, tokenSuffix, isStandalone })
+    } catch (err) {
+      console.error('[Debug] 정보 로드 실패:', err)
+      setDebugInfo({ error: err.message })
+    } finally {
+      setDebugLoading(false)
+    }
+  }
+
+  function handleDebugToggle() {
+    const next = !debugOpen
+    setDebugOpen(next)
+    if (next && !debugInfo) loadDebugInfo()
   }
 
   // 앱 업데이트: 캐시 삭제 후 새로고침
@@ -397,8 +450,63 @@ export default function SettingsModal({ isOpen, onClose }) {
             </div>
           </section>
 
+          {/* ── 개발자 정보 (접기/펼치기) ── */}
+          <section>
+            <button
+              onClick={handleDebugToggle}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-cream-300 tracking-widest uppercase mb-3"
+            >
+              <svg className={`w-3 h-3 transition-transform duration-200 ${debugOpen ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              개발자 정보
+            </button>
+
+            {debugOpen && (
+              <div className="bg-warm-dark rounded-2xl p-4 space-y-2.5">
+                {debugLoading ? (
+                  <p className="text-xs text-cream-400 text-center py-2">수집 중...</p>
+                ) : debugInfo?.error ? (
+                  <p className="text-xs text-red-400">{debugInfo.error}</p>
+                ) : debugInfo ? (
+                  <>
+                    <DebugRow label="알림 권한" value={debugInfo.permission}
+                      ok={debugInfo.permission === 'granted'} bad={debugInfo.permission === 'denied'} />
+                    <DebugRow label="Notification API" value={debugInfo.hasNotifApi ? '지원' : '미지원'}
+                      ok={debugInfo.hasNotifApi} bad={!debugInfo.hasNotifApi} />
+                    <DebugRow label="Service Worker" value={debugInfo.swState}
+                      ok={debugInfo.swState === 'active'} bad={debugInfo.swState === 'not registered'} />
+                    <DebugRow label="FCM 토큰 수" value={`${debugInfo.tokenCount}개`}
+                      ok={debugInfo.tokenCount === 1} bad={debugInfo.tokenCount === 0} warn={debugInfo.tokenCount > 1} />
+                    <DebugRow label="토큰 끝 8자리" value={debugInfo.tokenSuffix} mono />
+                    <DebugRow label="PWA 독립 앱" value={debugInfo.isStandalone ? '예 (standalone)' : '아니오 (브라우저)'}
+                      ok={debugInfo.isStandalone} />
+                    <div className="pt-1 border-t border-warm-light/20">
+                      <button
+                        onClick={loadDebugInfo}
+                        className="text-[11px] text-cream-400 hover:text-cream-200 transition-colors"
+                      >
+                        새로고침
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            )}
+          </section>
+
         </div>
       )}
     </Modal>
+  )
+}
+
+function DebugRow({ label, value, ok, bad, warn, mono }) {
+  const valueColor = ok ? 'text-green-400' : bad ? 'text-red-400' : warn ? 'text-yellow-400' : 'text-cream-200'
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-[11px] text-cream-400 shrink-0">{label}</span>
+      <span className={`text-[11px] ${valueColor} ${mono ? 'font-mono' : 'font-medium'} text-right break-all`}>{value}</span>
+    </div>
   )
 }
