@@ -7,6 +7,17 @@ import FeedbackModal from './FeedbackModal'
 
 const EMOJIS = ['🍽️', '🍜', '🍕', '🍱', '🍰', '☕', '🥗', '🍣', '🌮', '🥘']
 
+// 마지막 기록이 며칠 전인지 (meals 기준)
+function lastRecordLabel(space) {
+  const dates = (space.meals || []).map(m => m.date).filter(Boolean)
+  if (dates.length === 0) return ''
+  const latest = dates.reduce((a, b) => (a > b ? a : b))
+  const diff = Math.floor((Date.now() - new Date(latest).getTime()) / 86400000)
+  if (diff <= 0) return '오늘 기록'
+  if (diff === 1) return '어제 기록'
+  return `마지막 기록 ${diff}일 전`
+}
+
 export default function SpaceManager() {
   const { user, spaces, currentSpace, createSpace, switchSpace, leaveSpace, joinByCode, claimSpace } = useApp()
   const [showCreate, setShowCreate] = useState(false)
@@ -102,101 +113,139 @@ export default function SpaceManager() {
         </button>
       )}
 
-      {/* 현재 스페이스 */}
+      {/* 현재 스페이스 (강조 카드) */}
       {currentSpace && (
-        <div className="bg-warm-brown/10 border border-warm-brown/20 rounded-2xl p-4">
-          <p className="text-xs text-warm-light mb-1">현재 스페이스</p>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{currentSpace.emoji}</span>
-              <div>
-                <p className="font-semibold text-warm-dark">{currentSpace.name}</p>
-                <p className="text-xs text-warm-light">{currentSpace.meals?.length || 0}개의 식사 기록</p>
-              </div>
+        <div className="bg-white rounded-2xl border border-cream-200 p-5">
+          <p className="text-xs text-warm-brown font-medium mb-3">현재 스페이스</p>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-14 h-14 bg-warm-brown/10 rounded-2xl flex items-center justify-center text-3xl shrink-0">
+              {currentSpace.emoji}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-bold text-warm-dark truncate">{currentSpace.name}</p>
+              <p className="text-sm text-warm-light mt-0.5">{currentSpace.meals?.length || 0}개의 식사 기록</p>
+            </div>
+          </div>
+
+          {/* 초대 코드 */}
+          <div className="flex items-center justify-between bg-cream-50 rounded-xl px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-xs text-cream-400 mb-0.5">초대 코드</p>
+              <p className="font-mono tracking-widest text-lg font-bold text-warm-dark">{currentSpace.code}</p>
             </div>
             <button
               onClick={() => copyCode(currentSpace.code)}
-              className="flex flex-col items-center"
+              className="flex items-center gap-1.5 border border-cream-300 rounded-xl px-3 py-1.5 text-sm text-warm-brown hover:bg-cream-100 transition-colors shrink-0"
             >
-              <span className="bg-cream-200 px-3 py-1 rounded-full text-xs font-mono font-bold text-warm-brown tracking-widest hover:bg-cream-300 transition-colors">
-                {currentSpace.code}
-              </span>
-              <span className="text-[10px] text-warm-light mt-0.5">탭하면 복사</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              복사
+            </button>
+          </div>
+
+          {/* 스페이스 나가기 */}
+          <div className="flex justify-end mt-3">
+            <button
+              onClick={() => {
+                const isOwner = user && currentSpace.ownerId === user.id
+                const ownerWarning = isOwner ? '\n\n이 스페이스의 오너입니다. 나가도 데이터는 유지됩니다.' : ''
+                if (confirm(`"${currentSpace.name}" 스페이스에서 나갈까요?${ownerWarning}`)) {
+                  leaveSpace(currentSpace.id)
+                }
+              }}
+              className="text-xs text-cream-400 underline hover:text-warm-light transition-colors"
+            >
+              스페이스 나가기
             </button>
           </div>
         </div>
       )}
 
-      {/* 스페이스 목록 */}
+      {/* 참여 중인 스페이스 목록 */}
       {spaces.length > 0 && (
         <div>
-          <p className="text-xs text-warm-light mb-2">내 스페이스</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-cream-400">참여 중인 스페이스</p>
+            <span className="text-xs text-cream-400">{spaces.length}</span>
+          </div>
           <div className="space-y-2">
-            {spaces.map(space => (
-              <div
-                key={space.id}
-                className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
-                  space.id === currentSpace?.id
-                    ? 'bg-cream-100 border-cream-300'
-                    : 'bg-white border-cream-200 hover:border-cream-300'
-                }`}
-              >
-                <button
-                  className="flex items-center gap-2 flex-1 text-left"
-                  onClick={() => switchSpace(space.id)}
+            {spaces.map(space => {
+              const isCurrent = space.id === currentSpace?.id
+              const last = lastRecordLabel(space)
+              return (
+                <div
+                  key={space.id}
+                  className={`flex items-center gap-3 bg-white rounded-2xl border px-4 py-3 transition-colors ${
+                    isCurrent ? 'border-warm-brown' : 'border-cream-200 hover:border-cream-300'
+                  }`}
                 >
-                  <span className="text-xl">{space.emoji}</span>
-                  <div>
-                    <p className="text-sm font-medium text-warm-dark">{space.name}</p>
-                    <p className="text-xs text-warm-light">{space.meals?.length || 0}개 기록</p>
-                  </div>
-                </button>
-                <div className="flex items-center gap-1 shrink-0">
-                  {user && !space.ownerId && (
-                    <button
-                      onClick={() => handleClaim(space.id)}
-                      disabled={claimingId === space.id}
-                      title="이 스페이스를 내 계정과 연동"
-                      className="text-[10px] px-2 py-1 rounded-lg border border-warm-brown/30 text-warm-brown hover:bg-warm-brown/10 transition-colors disabled:opacity-50"
-                    >
-                      {claimingId === space.id ? '연동 중...' : '내 것으로'}
-                    </button>
-                  )}
-                  {user && space.ownerId === user.id && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-warm-brown/10 text-warm-brown font-medium">내 스페이스</span>
-                  )}
                   <button
-                    onClick={() => {
-                      const isOwner = user && space.ownerId === user.id
-                      const ownerWarning = isOwner ? '\n\n이 스페이스의 오너입니다. 나가도 데이터는 유지됩니다.' : ''
-                      if (confirm(`"${space.name}" 스페이스에서 나갈까요?${ownerWarning}`)) {
-                        leaveSpace(space.id)
-                      }
-                    }}
-                    className="text-xs text-warm-light hover:text-red-400 p-1 transition-colors"
+                    onClick={() => switchSpace(space.id)}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
                   >
-                    나가기
+                    <div className="w-10 h-10 bg-cream-100 rounded-xl flex items-center justify-center text-xl shrink-0">
+                      {space.emoji}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-warm-dark truncate">{space.name}</p>
+                        {isCurrent && (
+                          <span className="bg-warm-brown text-white text-xs px-2 py-0.5 rounded-full shrink-0">현재</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-cream-400 truncate">
+                        {space.meals?.length || 0}개 기록{last ? ` · ${last}` : ''}
+                      </p>
+                    </div>
                   </button>
+
+                  {/* 연동/나가기 (로직 유지) */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {user && !space.ownerId && (
+                      <button
+                        onClick={() => handleClaim(space.id)}
+                        disabled={claimingId === space.id}
+                        title="이 스페이스를 내 계정과 연동"
+                        className="text-[10px] px-2 py-1 rounded-lg border border-warm-brown/30 text-warm-brown hover:bg-warm-brown/10 transition-colors disabled:opacity-50"
+                      >
+                        {claimingId === space.id ? '연동 중...' : '내 것으로'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const isOwner = user && space.ownerId === user.id
+                        const ownerWarning = isOwner ? '\n\n이 스페이스의 오너입니다. 나가도 데이터는 유지됩니다.' : ''
+                        if (confirm(`"${space.name}" 스페이스에서 나갈까요?${ownerWarning}`)) {
+                          leaveSpace(space.id)
+                        }
+                      }}
+                      className="text-xs text-cream-400 hover:text-red-400 p-1 transition-colors"
+                      aria-label="나가기"
+                    >
+                      나가기
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
 
       {/* 액션 버튼 */}
-      <div className="flex gap-2">
+      <div className="space-y-2">
         <button
           onClick={() => { setShowCreate(true); setShowJoin(false) }}
-          className="flex-1 py-2.5 rounded-xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors"
+          className="w-full py-3 rounded-2xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors active:scale-[0.99]"
         >
-          + 새 스페이스
+          + 새 스페이스 만들기
         </button>
         <button
           onClick={() => { setShowJoin(true); setShowCreate(false) }}
-          className="flex-1 py-2.5 rounded-xl border border-cream-300 text-warm-brown text-sm font-medium hover:bg-cream-100 transition-colors"
+          className="w-full py-3 rounded-2xl border border-warm-brown text-warm-brown text-sm font-medium hover:bg-warm-brown/5 transition-colors active:scale-[0.99]"
         >
-          코드로 참가
+          코드로 참가하기
         </button>
       </div>
 
@@ -297,21 +346,26 @@ export default function SpaceManager() {
         </div>
       )}
 
-      {/* 피드백 보내기 카드 */}
-      <button
-        onClick={() => setShowFeedback(true)}
-        className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white border border-cream-200 hover:border-cream-300 hover:bg-cream-50 active:scale-[0.99] transition-all text-left"
-      >
-        <div className="w-10 h-10 rounded-full bg-warm-brown/10 flex items-center justify-center shrink-0">
-          <svg className="w-5 h-5 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
+      {/* 피드백 카드 */}
+      <div className="bg-cream-100 rounded-2xl p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-warm-dark">버그나 의견이 있으신가요?</p>
+            <p className="text-sm text-warm-light mt-0.5">스크린샷과 함께 알려주세요</p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-warm-dark">피드백 보내기</p>
-          <p className="text-xs text-warm-light mt-0.5">버그나 의견이 있으신가요?<br />스크린샷과 함께 알려주세요!</p>
-        </div>
-      </button>
+        <button
+          onClick={() => setShowFeedback(true)}
+          className="w-full mt-3 py-2.5 rounded-xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors active:scale-[0.99]"
+        >
+          피드백 보내기
+        </button>
+      </div>
 
       {/* 사진 일괄 등록 모달 */}
       <Modal isOpen={showBulkUpload} onClose={() => setShowBulkUpload(false)} title="사진 일괄 등록">
