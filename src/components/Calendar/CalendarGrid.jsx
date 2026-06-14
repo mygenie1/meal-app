@@ -97,6 +97,10 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
     d = addDays(d, 1)
   }
 
+  // 주(7일) 단위로 분할 — 기록 없는 주는 행 높이를 최소화
+  const weeks = []
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7))
+
   function getMealsForDay(date) {
     const dayMeals = meals.filter(m => isSameDay(new Date(m.date), date))
     return filter && filter !== '전체' ? dayMeals.filter(m => m.tag === filter) : dayMeals
@@ -190,78 +194,99 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
         ))}
       </div>
 
-      {/* 날짜 그리드 — 모든 셀 고정 정사각형 */}
-      <div className="grid grid-cols-7 gap-1 px-4">
-        {days.map((day) => {
-          const dayMeals = getMealsForDay(day)
-          const hasMeals = dayMeals.length > 0
-          const dateStr = format(day, 'yyyy-MM-dd')
-          const repMealId = repMeals[dateStr]
-          const repMeal = repMealId ? dayMeals.find(m => m.id === repMealId) : null
-          const displayMeal = repMeal || dayMeals.find(m => m.photos?.[0]) || dayMeals[0]
-          const thumbPhoto = displayMeal ? getThumbUrl(displayMeal.photos?.[0] || '') : ''
-          const displayTitle = displayMeal?.title || displayMeal?.restaurantName || '식사'
-          const inMonth = isSameMonth(day, current)
-          const today = isToday(day)
+      {/* 날짜 그리드 — 주 단위, 기록 없는 주는 얇게 */}
+      <div className="px-4 space-y-1">
+        {weeks.map((week, wi) => {
+          const weekHasRecord = week.some(day => getMealsForDay(day).length > 0)
 
           return (
-            <button
-              key={day.toISOString()}
-              onClick={() => onDayClick(day)}
-              className={`
-                relative aspect-square rounded-lg overflow-hidden transition-all active:scale-95
-                ${!inMonth ? 'opacity-30' : ''}
-                ${today && hasMeals ? 'ring-2 ring-warm-brown ring-inset' : ''}
-              `}
-            >
-              {hasMeals ? (
-                <>
-                  {/* 사진 배경 + 하단 그라데이션 (없으면 베이지) */}
-                  {thumbPhoto ? (
-                    <>
-                      <div className="absolute inset-0">
-                        <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
+            <div key={wi} className="grid grid-cols-7 gap-1">
+              {week.map((day) => {
+                const inMonth = isSameMonth(day, current)
+                const today = isToday(day)
+
+                // 날짜 숫자 색상 (오늘 / 주말 / 평일)
+                const numClass = today
+                  ? 'bg-warm-brown text-white rounded-full w-5 h-5 flex items-center justify-center'
+                  : day.getDay() === 0
+                    ? 'text-rose-400'
+                    : day.getDay() === 6
+                      ? 'text-blue-400'
+                      : 'text-warm-dark'
+
+                // 기록 없는 주 → 얇은 행, 날짜 숫자만
+                if (!weekHasRecord) {
+                  return (
+                    <button
+                      key={day.toISOString()}
+                      onClick={() => onDayClick(day)}
+                      className={`h-8 rounded-lg flex items-center justify-center transition-all active:scale-95 ${!inMonth ? 'opacity-30' : ''}`}
+                    >
+                      <span className={`text-xs ${numClass}`}>{format(day, 'd')}</span>
+                    </button>
+                  )
+                }
+
+                const dayMeals = getMealsForDay(day)
+                const hasMeals = dayMeals.length > 0
+                const dateStr = format(day, 'yyyy-MM-dd')
+                const repMealId = repMeals[dateStr]
+                const repMeal = repMealId ? dayMeals.find(m => m.id === repMealId) : null
+                const displayMeal = repMeal || dayMeals.find(m => m.photos?.[0]) || dayMeals[0]
+                const thumbPhoto = displayMeal ? getThumbUrl(displayMeal.photos?.[0] || '') : ''
+                const displayTitle = displayMeal?.title || displayMeal?.restaurantName || '식사'
+
+                return (
+                  <button
+                    key={day.toISOString()}
+                    onClick={() => onDayClick(day)}
+                    className={`
+                      relative aspect-square rounded-lg overflow-hidden transition-all active:scale-95
+                      ${!inMonth ? 'opacity-30' : ''}
+                      ${today && hasMeals ? 'ring-2 ring-warm-brown ring-inset' : ''}
+                    `}
+                  >
+                    {hasMeals ? (
+                      <>
+                        {/* 사진 배경 + 하단 그라데이션 (없으면 베이지) */}
+                        {thumbPhoto ? (
+                          <>
+                            <div className="absolute inset-0">
+                              <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
+                            </div>
+                            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/60 to-transparent" />
+                          </>
+                        ) : (
+                          <div className="absolute inset-0 bg-cream-200" />
+                        )}
+                        {/* 위시리스트 방문 점 */}
+                        {dayMeals.some(m => m.fromWishlist) && (
+                          <span className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-rose-400 z-20 shadow-sm" />
+                        )}
+                        {/* 날짜 숫자 (우상단) */}
+                        <span className={`absolute top-0.5 right-1 text-[10px] font-semibold z-10 drop-shadow-sm ${thumbPhoto ? 'text-white' : 'text-warm-dark'}`}>
+                          {format(day, 'd')}
+                        </span>
+                        {/* 제목 (하단, 말줄임) */}
+                        <span className={`absolute bottom-0.5 left-1 right-1 text-[9px] font-medium leading-tight truncate z-10 ${dayMeals.length > 1 ? 'pr-3.5' : ''} ${thumbPhoto ? 'text-white drop-shadow-sm' : 'text-warm-brown'}`}>
+                          {displayTitle}
+                        </span>
+                        {/* 여러 끼니 기록 — 우하단 숫자 뱃지 */}
+                        {dayMeals.length > 1 && (
+                          <span className="absolute bottom-0.5 right-0.5 bg-warm-brown text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center z-20 leading-none">
+                            {dayMeals.length}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 bg-cream-50 flex items-center justify-center">
+                        <span className={`text-xs ${numClass}`}>{format(day, 'd')}</span>
                       </div>
-                      <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/60 to-transparent" />
-                    </>
-                  ) : (
-                    <div className="absolute inset-0 bg-cream-200" />
-                  )}
-                  {/* 위시리스트 방문 점 */}
-                  {dayMeals.some(m => m.fromWishlist) && (
-                    <span className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full bg-rose-400 z-20 shadow-sm" />
-                  )}
-                  {/* 날짜 숫자 (우상단) */}
-                  <span className={`absolute top-0.5 right-1 text-[10px] font-semibold z-10 drop-shadow-sm ${thumbPhoto ? 'text-white' : 'text-warm-dark'}`}>
-                    {format(day, 'd')}
-                  </span>
-                  {/* 제목 (하단, 말줄임) */}
-                  <span className={`absolute bottom-0.5 left-1 right-1 text-[9px] font-medium leading-tight truncate z-10 ${dayMeals.length > 1 ? 'pr-3.5' : ''} ${thumbPhoto ? 'text-white drop-shadow-sm' : 'text-warm-brown'}`}>
-                    {displayTitle}
-                  </span>
-                  {/* 여러 끼니 기록 — 우하단 숫자 뱃지 */}
-                  {dayMeals.length > 1 && (
-                    <span className="absolute bottom-0.5 right-0.5 bg-warm-brown text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center z-20 leading-none">
-                      {dayMeals.length}
-                    </span>
-                  )}
-                </>
-              ) : (
-                <div className="absolute inset-0 bg-cream-50 flex items-center justify-center">
-                  <span className={`text-xs ${
-                    today
-                      ? 'bg-warm-brown text-white rounded-full w-5 h-5 flex items-center justify-center'
-                      : day.getDay() === 0
-                        ? 'text-rose-400'
-                        : day.getDay() === 6
-                          ? 'text-blue-400'
-                          : 'text-warm-dark'
-                  }`}>
-                    {format(day, 'd')}
-                  </span>
-                </div>
-              )}
-            </button>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
           )
         })}
       </div>
