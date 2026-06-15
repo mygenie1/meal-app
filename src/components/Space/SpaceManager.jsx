@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
 import Modal from '../common/Modal'
 import BulkPhotoUpload from './BulkPhotoUpload'
@@ -7,7 +8,6 @@ import FeedbackModal from './FeedbackModal'
 
 const EMOJIS = ['🍽️', '🍜', '🍕', '🍱', '🍰', '☕', '🥗', '🍣', '🌮', '🥘']
 
-// 마지막 기록이 며칠 전인지 (meals 기준)
 function lastRecordLabel(space) {
   const dates = (space.meals || []).map(m => m.date).filter(Boolean)
   if (dates.length === 0) return ''
@@ -34,6 +34,10 @@ export default function SpaceManager() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
   const [claimingId, setClaimingId] = useState(null)
+  const [showLeaveModal, setShowLeaveModal] = useState(false)
+  const [leaveTargetSpace, setLeaveTargetSpace] = useState(null)
+  const [memberCount, setMemberCount] = useState(null)
+  const [copied, setCopied] = useState(false)
 
   async function handleCreate(e) {
     e.preventDefault()
@@ -80,6 +84,25 @@ export default function SpaceManager() {
   function handleFeedbackSuccess() {
     setFeedbackToast(true)
     setTimeout(() => setFeedbackToast(false), 2500)
+  }
+
+  async function handleLeaveClick(space) {
+    setLeaveTargetSpace(space)
+    setMemberCount(null)
+    setCopied(false)
+    setShowLeaveModal(true)
+    const { data: members } = await supabase
+      .from('space_members')
+      .select('user_id')
+      .eq('space_id', space.id)
+    setMemberCount(members?.length ?? 0)
+  }
+
+  async function handleLeaveSpace() {
+    if (!leaveTargetSpace) return
+    await leaveSpace(leaveTargetSpace.id)
+    setShowLeaveModal(false)
+    setLeaveTargetSpace(null)
   }
 
   const displayName = user?.user_metadata?.name
@@ -147,13 +170,7 @@ export default function SpaceManager() {
           {/* 스페이스 나가기 */}
           <div className="flex justify-end mt-3">
             <button
-              onClick={() => {
-                const isOwner = user && currentSpace.ownerId === user.id
-                const ownerWarning = isOwner ? '\n\n이 스페이스의 오너입니다. 나가도 데이터는 유지됩니다.' : ''
-                if (confirm(`"${currentSpace.name}" 스페이스에서 나갈까요?${ownerWarning}`)) {
-                  leaveSpace(currentSpace.id)
-                }
-              }}
+              onClick={() => handleLeaveClick(currentSpace)}
               className="text-xs text-cream-400 underline hover:text-warm-light transition-colors"
             >
               스페이스 나가기
@@ -200,7 +217,7 @@ export default function SpaceManager() {
                     </div>
                   </button>
 
-                  {/* 연동/나가기 (로직 유지) */}
+                  {/* 연동/나가기 */}
                   <div className="flex items-center gap-1 shrink-0">
                     {user && !space.ownerId && (
                       <button
@@ -213,13 +230,7 @@ export default function SpaceManager() {
                       </button>
                     )}
                     <button
-                      onClick={() => {
-                        const isOwner = user && space.ownerId === user.id
-                        const ownerWarning = isOwner ? '\n\n이 스페이스의 오너입니다. 나가도 데이터는 유지됩니다.' : ''
-                        if (confirm(`"${space.name}" 스페이스에서 나갈까요?${ownerWarning}`)) {
-                          leaveSpace(space.id)
-                        }
-                      }}
+                      onClick={() => handleLeaveClick(space)}
                       className="text-xs text-cream-400 hover:text-red-400 p-1 transition-colors"
                       aria-label="나가기"
                     >
@@ -249,7 +260,7 @@ export default function SpaceManager() {
         </button>
       </div>
 
-      {/* 사진 일괄 등록 버튼 — 스페이스가 있을 때만 */}
+      {/* 사진 일괄 등록 버튼 */}
       {currentSpace && (
         <button
           onClick={() => setShowBulkUpload(true)}
@@ -341,8 +352,11 @@ export default function SpaceManager() {
 
       {spaces.length === 0 && !showCreate && (
         <div className="text-center py-8 text-cream-400">
-          <p className="text-3xl mb-2">👥</p>
-          <p className="text-sm">스페이스를 만들어 함께 기록을 시작해보세요</p>
+          <svg className="w-12 h-12 mx-auto mb-3 text-cream-300" fill="none" stroke="currentColor" strokeWidth="1.4" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <p className="text-sm font-medium text-warm-light mb-1">참여 중인 스페이스가 없어요</p>
+          <p className="text-xs text-cream-400">새 스페이스를 만들거나 코드로 참가해보세요</p>
         </div>
       )}
 
@@ -381,6 +395,86 @@ export default function SpaceManager() {
         onClose={() => setShowFeedback(false)}
         onSuccess={handleFeedbackSuccess}
       />
+
+      {/* 스페이스 나가기 확인 모달 */}
+      <Modal isOpen={showLeaveModal} onClose={() => setShowLeaveModal(false)}>
+        {memberCount === null ? (
+          <div className="p-8 flex justify-center">
+            <div className="w-8 h-8 border-2 border-cream-300 border-t-warm-brown rounded-full animate-spin" />
+          </div>
+        ) : memberCount <= 1 ? (
+          /* Case A: 나 혼자 */
+          <div className="p-6">
+            <h3 className="font-bold text-warm-dark text-lg mb-2">
+              정말 나가시겠어요?
+            </h3>
+            <p className="text-sm text-warm-light leading-relaxed mb-4">
+              현재 이 식탁에는 나 혼자예요.<br />
+              나가면 함께할 멤버가 없는 스페이스가 돼요.<br /><br />
+              <span className="text-warm-brown font-medium">
+                멤버가 없는 스페이스는 30일 후 자동으로 삭제돼요.
+              </span>
+              <br /><br />
+              초대 코드를 복사해두면 나중에 다시 참가할 수 있어요.
+            </p>
+
+            <div className="bg-cream-100 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-cream-400 mb-1">초대 코드</p>
+                <p className="font-mono tracking-widest font-bold text-warm-dark">
+                  {leaveTargetSpace?.code}
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(leaveTargetSpace?.code || '')
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                }}
+                className="text-xs text-warm-brown font-medium border border-warm-brown rounded-lg px-3 py-1.5 active:scale-95 transition-transform"
+              >
+                {copied ? '복사됨 ✓' : '복사'}
+              </button>
+            </div>
+
+            <button
+              onClick={handleLeaveSpace}
+              className="w-full bg-red-50 text-red-500 rounded-xl py-3 font-medium mb-2 active:scale-[0.99] transition-transform"
+            >
+              그래도 나갈게요
+            </button>
+            <button
+              onClick={() => setShowLeaveModal(false)}
+              className="w-full text-warm-light text-sm py-2"
+            >
+              취소
+            </button>
+          </div>
+        ) : (
+          /* Case B: 다른 멤버도 있음 */
+          <div className="p-6">
+            <h3 className="font-bold text-warm-dark text-lg mb-2">
+              스페이스에서 나갈까요?
+            </h3>
+            <p className="text-sm text-warm-light mb-6">
+              나가도 기록은 그대로 남아요.<br />
+              초대 코드로 다시 참가할 수 있어요.
+            </p>
+            <button
+              onClick={handleLeaveSpace}
+              className="w-full bg-red-50 text-red-500 rounded-xl py-3 font-medium mb-2 active:scale-[0.99] transition-transform"
+            >
+              나갈게요
+            </button>
+            <button
+              onClick={() => setShowLeaveModal(false)}
+              className="w-full text-warm-light text-sm py-2"
+            >
+              취소
+            </button>
+          </div>
+        )}
+      </Modal>
 
       {/* 피드백 전송 완료 토스트 */}
       {feedbackToast && (
