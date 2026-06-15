@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { requestFCMToken } from '../lib/firebase'
 
 const AppContext = createContext(null)
 
@@ -29,23 +30,25 @@ function rowToMeal(row, { photosLoaded = true } = {}) {
     tag: row.tag || '',
     mealTime: row.meal_time || '',
     fromWishlist: row.from_wishlist || false,
+    userId: row.user_id || null,
+    nickname: row.nickname || '',
+    avatarUrl: row.avatar_url || '',
   }
 }
 
 // 목록 조회 시 photos(base64 대용량) 제외 → 타임아웃 방지
-const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, lat, lng, rating, review, memo, tag, meal_time, from_wishlist, created_at'
+const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, lat, lng, rating, review, memo, tag, meal_time, from_wishlist, user_id, nickname, avatar_url, created_at'
 
 // 앱 내부 meal 객체 → DB insert/update 용
 function mealToRow(data) {
   const photos = data.photos ?? (data.photo ? [data.photo] : [])
-  return {
+  const row = {
     date: data.date,
     title: data.title ?? '',
     restaurant_name: data.restaurantName ?? '',
     location: data.location ?? '',
     lat: data.lat ?? null,
     lng: data.lng ?? null,
-    rating: data.rating ?? 0,
     review: data.review ?? '',
     memo: data.memo ?? '',
     tag: data.tag ?? '',
@@ -54,10 +57,15 @@ function mealToRow(data) {
     meal_time: data.mealTime ?? '',
     from_wishlist: data.fromWishlist ?? false,
   }
+  // 별점은 ratings 테이블로 통일됨. rating이 명시적으로 전달된 경우에만 컬럼에 기록
+  // (레거시 데이터 보존 — MealForm은 더 이상 rating을 보내지 않으므로 수정 시 기존 값 유지)
+  if (data.rating !== undefined) row.rating = data.rating
+  return row
 }
 
 function rowToIngredient(row) {
-  return { id: row.id, text: row.text, done: row.done }
+  // quantity가 NULL인 기존 데이터는 1로 표시 (하위 호환)
+  return { id: row.id, text: row.text, done: row.done, quantity: row.quantity ?? 1 }
 }
 
 function rowToWishlist(row) {
@@ -92,6 +100,18 @@ export function AppProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [retryAttempt, setRetryAttempt] = useState(0) // 0 = 첫 시도, 1~2 = 재시도 중
+  // mealId → [{ id, user_id, nickname, rating }]
+  const [ratingsMap, setRatingsMap] = useState({})
+  // wishlistId → [{ id, wishlist_id, user_id, nickname, avatar_url }]
+  const [wishlistInterestsMap, setWishlistInterestsMap] = useState({})
+  // 현재 유저의 알림 목록 (최신 50건)
+  const [notifications, setNotifications] = useState([])
+  const [notifEnabled, setNotifEnabled] = useState(() => localStorage.getItem('notif_enabled') !== 'false')
+
+  function setNotifEnabledPref(val) {
+    setNotifEnabled(val)
+    localStorage.setItem('notif_enabled', val ? 'true' : 'false')
+  }
 
   const currentSpace = spaces.find(s => s.id === currentSpaceId) || null
 
@@ -112,6 +132,7 @@ export function AppProvider({ children }) {
         if (!hasBootedRef.current) {
           hasBootedRef.current = true
           boot(0, currentUser)
+          registerFCMToken(currentUser.id)
         }
       } else if (event === 'INITIAL_SESSION' && !currentUser) {
         setLoading(false)
@@ -239,13 +260,26 @@ export function AppProvider({ children }) {
           setSpaces(prev => prev.map(s => {
             if (s.id !== newRow.space_id) return s
             const type = newRow.type
+            const item = rowToIngredient(newRow)
+            const inTarget = s.ingredients[type]?.some(i => i.id === newRow.id)
+            if (inTarget) {
+              // 같은 타입 내 갱신 — 순서 유지
+              return {
+                ...s,
+                ingredients: {
+                  ...s.ingredients,
+                  [type]: s.ingredients[type].map(i => i.id === newRow.id ? item : i),
+                },
+              }
+            }
+            // 타입 변경(살것↔남은재료 이동) — 반대편에서 제거 후 새 타입에 추가
+            const other = type === 'toBuy' ? 'remaining' : 'toBuy'
             return {
               ...s,
               ingredients: {
                 ...s.ingredients,
-                [type]: s.ingredients[type].map(i =>
-                  i.id === newRow.id ? rowToIngredient(newRow) : i
-                ),
+                [other]: (s.ingredients[other] || []).filter(i => i.id !== newRow.id),
+                [type]: [...(s.ingredients[type] || []).filter(i => i.id !== newRow.id), item],
               },
             }
           }))
@@ -269,8 +303,73 @@ export function AppProvider({ children }) {
     }
   }, [])
 
+  // 알림 로드 + Realtime 구독 (로그인 시)
+  useEffect(() => {
+    if (!user?.id) { setNotifications([]); return }
+    let destroyed = false
+
+    supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+      .then(({ data }) => { if (!destroyed && data) setNotifications(data) })
+
+    const channel = supabase
+      .channel(`notifications:${user.id}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        ({ new: newRow }) => {
+          if (!destroyed && newRow?.user_id === user.id) {
+            // 같은 알림이 두 번 전달되는 경우 중복 추가 방지 (id 기준)
+            setNotifications(prev =>
+              prev.find(n => n.id === newRow.id) ? prev : [newRow, ...prev].slice(0, 50)
+            )
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { destroyed = true; supabase.removeChannel(channel) }
+  }, [user?.id])
+
   const MAX_RETRIES = 3
   const RETRY_DELAYS = [1500, 3000, 5000]
+
+  // FCM 토큰 등록 — 로그인 직후 한 번만 시도
+  async function registerFCMToken(userId) {
+    if (!userId) return
+    console.log('[FCM] registerFCMToken 시작, userId:', userId)
+    try {
+      const token = await requestFCMToken()
+      if (!token) {
+        console.log('[FCM] 토큰 없음 — 저장 스킵')
+        return
+      }
+      // SELECT 후 조건부 INSERT — DB UNIQUE 제약 없어도 중복 행 방지
+      const { data: existing } = await supabase
+        .from('fcm_tokens')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('token', token)
+        .maybeSingle()
+      if (existing) {
+        console.log('[FCM] 토큰 이미 저장됨, 스킵')
+        return
+      }
+      const { error } = await supabase
+        .from('fcm_tokens')
+        .insert({ user_id: userId, token })
+      if (error) {
+        console.error('[FCM] 토큰 저장 실패:', error)
+      } else {
+        console.log('[FCM] 토큰 저장 완료')
+      }
+    } catch (e) {
+      console.error('[FCM] 토큰 등록 오류:', e)
+    }
+  }
 
   // Phase 1: spaces만 빠르게 조회 — DB 웜업 후 앱 즉시 오픈
   async function boot(attempt = 0, currentUser = null) {
@@ -286,21 +385,12 @@ export function AppProvider({ children }) {
 
       if (error) throw new Error(error.message || 'spaces 조회 오류')
 
-      let spaceRows = spacesData || []
+      const spaceRows = spacesData || []
 
-      // RLS 마이그레이션 후 localStorage의 스페이스가 목록에 없으면:
-      // space_members에 추가 시도 → 성공하면 재로드 (NULL owner 기존 스페이스 복구)
-      const savedId = localStorage.getItem(SPACE_KEY)
-      const uid = currentUser?.id
-      if (savedId && uid && !spaceRows.find(s => s.id === savedId)) {
-        const { error: joinErr } = await supabase
-          .from('space_members')
-          .insert({ space_id: savedId, user_id: uid })
-        if (!joinErr) {
-          const { data: reloaded } = await supabase.from('spaces').select('*').order('created_at')
-          if (reloaded) spaceRows = reloaded
-        }
-      }
+      // 주의: 과거 여기에 "localStorage의 savedId가 목록에 없으면 space_members에 재가입"하는
+      // RLS 마이그레이션용 복구 로직이 있었으나, 사용자가 나간(삭제한) 스페이스를 boot 때마다
+      // 되살리는 버그(자동 재생성)의 원인이라 제거함. 멤버십 기반 조회 결과만 신뢰한다.
+      // 멤버가 아닌 savedId는 아래 currentSpaceId 폴백에서 자연스럽게 정리된다.
 
       const spaceList = spaceRows.map(s => ({
         id: s.id,
@@ -378,6 +468,45 @@ export function AppProvider({ children }) {
         } catch {}
 
         console.log(`[loadAllSpaceData] space=${space.id} DB 조회 완료, meals수=${mealsData?.length}`)
+
+        // 별점 로드 (테이블 미존재 시 무시)
+        const mealIds = (mealsData || []).map(r => r.id)
+        if (mealIds.length > 0) {
+          try {
+            const { data: ratingsData } = await supabase
+              .from('ratings')
+              .select('id, meal_id, user_id, nickname, rating')
+              .in('meal_id', mealIds)
+            if (ratingsData?.length > 0) {
+              const rMap = {}
+              ratingsData.forEach(r => {
+                if (!rMap[r.meal_id]) rMap[r.meal_id] = []
+                rMap[r.meal_id].push(r)
+              })
+              setRatingsMap(prev => ({ ...prev, ...rMap }))
+            }
+          } catch {}
+        }
+
+        // 위시리스트 관심 목록 로드
+        const wishlistIds = wishlistData.map(w => w.id)
+        if (wishlistIds.length > 0) {
+          try {
+            const { data: interestsData } = await supabase
+              .from('wishlist_interests')
+              .select('id, wishlist_id, user_id, nickname, avatar_url')
+              .in('wishlist_id', wishlistIds)
+            if (interestsData?.length > 0) {
+              const iMap = {}
+              interestsData.forEach(i => {
+                if (!iMap[i.wishlist_id]) iMap[i.wishlist_id] = []
+                iMap[i.wishlist_id].push(i)
+              })
+              setWishlistInterestsMap(prev => ({ ...prev, ...iMap }))
+            }
+          } catch {}
+        }
+
         setSpaces(prev => prev.map(s => {
           if (s.id !== space.id) return s
           const dbMeals = (mealsData || []).map(row => rowToMeal(row, { photosLoaded: false }))
@@ -441,6 +570,14 @@ export function AppProvider({ children }) {
     }))
   }
 
+  // 프로필 업데이트 (닉네임 등 user_metadata)
+  async function updateProfile(updates) {
+    const { data, error } = await supabase.auth.updateUser({ data: updates })
+    if (error) { console.error(error); return false }
+    setUser(data.user)
+    return true
+  }
+
   // 카카오 로그인
   async function signIn() {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -454,6 +591,14 @@ export function AppProvider({ children }) {
   async function signOut() {
     await supabase.auth.signOut()
     // onAuthStateChange SIGNED_OUT 이벤트에서 상태 초기화
+  }
+
+  // 회원 탈퇴: Edge Function 호출 → auth.users 삭제 → 로컬 세션 정리
+  async function deleteAccount() {
+    const { error } = await supabase.functions.invoke('delete-account')
+    if (error) throw new Error(error.message || '탈퇴 처리에 실패했어요')
+    // 서버에서 이미 유저 삭제됨 → 로컬 세션만 정리
+    try { await supabase.auth.signOut() } catch {}
   }
 
   // 스페이스 생성
@@ -537,6 +682,13 @@ export function AppProvider({ children }) {
     }
 
     const rowData = mealToRow(mealData)
+
+    // 작성자 정보 자동 추가
+    if (user) {
+      rowData.user_id = user.id
+      rowData.nickname = user.user_metadata?.name || user.user_metadata?.full_name || ''
+      rowData.avatar_url = user.user_metadata?.avatar_url || ''
+    }
 
     // Optimistic update: INSERT 완료 전에 즉시 목록에 표시
     const tempId = 'temp_' + Date.now()
@@ -627,12 +779,13 @@ export function AppProvider({ children }) {
   }
 
   // 재료 추가
-  async function addIngredient(type, text) {
+  async function addIngredient(type, text, quantity = 1) {
     if (!currentSpaceId) return
 
+    const qty = Math.max(1, quantity || 1)
     const { data, error } = await supabase
       .from('ingredients')
-      .insert({ space_id: currentSpaceId, type, text, done: false })
+      .insert({ space_id: currentSpaceId, type, text, done: false, quantity: qty })
       .select()
       .single()
 
@@ -666,6 +819,56 @@ export function AppProvider({ children }) {
               ...s.ingredients,
               [type]: s.ingredients[type].map(i =>
                 i.id === itemId ? { ...i, done: !i.done } : i
+              ),
+            },
+          }
+        : s
+    ))
+  }
+
+  // 살 것 → 남은 재료로 이동 (장본 재료를 냉장고로). type을 remaining으로 바꾸고 done 리셋
+  async function moveIngredientToRemaining(itemId) {
+    const item = currentSpace?.ingredients?.toBuy?.find(i => i.id === itemId)
+    if (!item) return
+
+    const { error } = await supabase
+      .from('ingredients')
+      .update({ type: 'remaining', done: false })
+      .eq('id', itemId)
+
+    if (error) { console.error(error); return }
+
+    setSpaces(prev => prev.map(s =>
+      s.id === currentSpaceId
+        ? {
+            ...s,
+            ingredients: {
+              toBuy: s.ingredients.toBuy.filter(i => i.id !== itemId),
+              remaining: [...s.ingredients.remaining, { ...item, done: false }],
+            },
+          }
+        : s
+    ))
+  }
+
+  // 재료 개수 변경 (최소 1) — 0 이하로 줄이려면 호출 측에서 deleteIngredient 사용
+  async function updateIngredientQuantity(type, itemId, quantity) {
+    const qty = Math.max(1, quantity)
+    const { error } = await supabase
+      .from('ingredients')
+      .update({ quantity: qty })
+      .eq('id', itemId)
+
+    if (error) { console.error(error); return }
+
+    setSpaces(prev => prev.map(s =>
+      s.id === currentSpaceId
+        ? {
+            ...s,
+            ingredients: {
+              ...s.ingredients,
+              [type]: s.ingredients[type].map(i =>
+                i.id === itemId ? { ...i, quantity: qty } : i
               ),
             },
           }
@@ -708,6 +911,7 @@ export function AppProvider({ children }) {
       hours: data.hours || '',
       price_range: data.priceRange || '',
       visited: false,
+      user_id: user?.id || null,
     }
     const { data: rowData, error } = await supabase.from('wishlist').insert(row).select().single()
     if (error) { console.error(error); return null }
@@ -755,6 +959,116 @@ export function AppProvider({ children }) {
         ? { ...s, wishlist: (s.wishlist || []).filter(w => w.id !== id) }
         : s
     ))
+  }
+
+  // 나도 가고싶어요 추가
+  async function addWishlistInterest(wishlistId) {
+    if (!user || !wishlistId) return false
+    const row = {
+      wishlist_id: wishlistId,
+      user_id: user.id,
+      nickname: user.user_metadata?.name || user.user_metadata?.full_name || '',
+      avatar_url: user.user_metadata?.avatar_url || '',
+    }
+    // 낙관적 업데이트
+    const optimistic = { id: `temp-${Date.now()}`, ...row }
+    setWishlistInterestsMap(prev => {
+      const existing = (prev[wishlistId] || []).filter(i => i.user_id !== user.id)
+      return { ...prev, [wishlistId]: [...existing, optimistic] }
+    })
+    const { data, error } = await supabase
+      .from('wishlist_interests')
+      .insert(row)
+      .select('id, wishlist_id, user_id, nickname, avatar_url')
+      .single()
+    if (error) {
+      // 롤백
+      setWishlistInterestsMap(prev => ({
+        ...prev,
+        [wishlistId]: (prev[wishlistId] || []).filter(i => i.id !== optimistic.id),
+      }))
+      return false
+    }
+    setWishlistInterestsMap(prev => ({
+      ...prev,
+      [wishlistId]: (prev[wishlistId] || []).map(i => i.id === optimistic.id ? data : i),
+    }))
+    return true
+  }
+
+  // 나도 가고싶어요 취소
+  async function removeWishlistInterest(wishlistId) {
+    if (!user || !wishlistId) return false
+    const myEntry = (wishlistInterestsMap[wishlistId] || []).find(i => i.user_id === user.id)
+    if (!myEntry) return false
+    // 낙관적 업데이트
+    setWishlistInterestsMap(prev => ({
+      ...prev,
+      [wishlistId]: (prev[wishlistId] || []).filter(i => i.user_id !== user.id),
+    }))
+    const { error } = await supabase
+      .from('wishlist_interests')
+      .delete()
+      .eq('wishlist_id', wishlistId)
+      .eq('user_id', user.id)
+    if (error) {
+      // 롤백
+      setWishlistInterestsMap(prev => ({
+        ...prev,
+        [wishlistId]: [...(prev[wishlistId] || []), myEntry],
+      }))
+      return false
+    }
+    return true
+  }
+
+  // 알림 읽음 처리
+  async function markNotificationRead(id) {
+    await supabase.from('notifications').update({ is_read: true }).eq('id', id)
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+  }
+
+  async function markAllNotificationsRead() {
+    if (!user) return
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+  }
+
+  // 별점 추가 또는 수정 (UPSERT)
+  async function addOrUpdateRating(mealId, rating) {
+    if (!user) return false
+    const { data, error } = await supabase
+      .from('ratings')
+      .upsert({
+        meal_id: mealId,
+        user_id: user.id,
+        nickname: user.user_metadata?.name || user.user_metadata?.full_name || '',
+        rating,
+      }, { onConflict: 'meal_id,user_id' })
+      .select('id, meal_id, user_id, nickname, rating')
+      .single()
+    if (error) { console.error(error); return false }
+    setRatingsMap(prev => {
+      const existing = (prev[mealId] || []).filter(r => r.user_id !== user.id)
+      return { ...prev, [mealId]: [...existing, data] }
+    })
+    return true
+  }
+
+  // 내 별점 삭제
+  async function deleteRating(mealId) {
+    if (!user) return false
+    const { error } = await supabase
+      .from('ratings')
+      .delete()
+      .eq('meal_id', mealId)
+      .eq('user_id', user.id)
+    if (error) { console.error(error); return false }
+    setRatingsMap(prev => ({
+      ...prev,
+      [mealId]: (prev[mealId] || []).filter(r => r.user_id !== user.id),
+    }))
+    return true
   }
 
   // 코드로 스페이스 참가
@@ -827,6 +1141,8 @@ export function AppProvider({ children }) {
         authLoading,
         signIn,
         signOut,
+        deleteAccount,
+        updateProfile,
         spaces,
         currentSpace,
         loading,
@@ -844,11 +1160,25 @@ export function AppProvider({ children }) {
         cacheGeocoords,
         addIngredient,
         toggleIngredient,
+        moveIngredientToRemaining,
+        updateIngredientQuantity,
         deleteIngredient,
         addWishlistItem,
         updateWishlistItem,
         deleteWishlistItem,
+        wishlistInterestsMap,
+        addWishlistInterest,
+        removeWishlistInterest,
         joinByCode,
+        ratingsMap,
+        addOrUpdateRating,
+        deleteRating,
+        notifications: notifEnabled ? notifications : [],
+        unreadCount: notifEnabled ? notifications.filter(n => !n.is_read).length : 0,
+        notifEnabled,
+        setNotifEnabledPref,
+        markNotificationRead,
+        markAllNotificationsRead,
       }}
     >
       {children}

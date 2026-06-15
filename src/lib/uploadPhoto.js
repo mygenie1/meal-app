@@ -110,6 +110,20 @@ export async function uploadPhotoWithThumbnail(entry, spaceId) {
   }
 }
 
+// 아바타 이미지 업로드 → 공개 URL 반환 (upsert: 동일 유저 덮어쓰기)
+export async function uploadAvatar(base64, userId) {
+  const compressed = await compressBase64(base64, 400, 0.85)
+  const blob = base64ToBlob(compressed)
+  const path = `avatars/${userId}.jpg`
+  const { error } = await storageClient.storage
+    .from(BUCKET)
+    .upload(path, blob, { contentType: 'image/jpeg', upsert: true })
+  if (error) throw error
+  const { data } = storageClient.storage.from(BUCKET).getPublicUrl(path)
+  // 브라우저 캐시 무효화 파라미터
+  return `${data.publicUrl}?t=${Date.now()}`
+}
+
 // 레거시 — 단일 URL 업로드 (하위 호환 유지)
 export async function uploadPhotoToStorage(base64, spaceId) {
   if (isStorageUrl(base64)) return base64

@@ -2,8 +2,14 @@ import { useState, useRef, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import StarRating from '../common/StarRating'
+import { QtyStepper } from '../Ingredients/QtyStepper'
 import { useApp } from '../../context/AppContext'
 import { uploadPhotoWithThumbnail, getThumbUrl } from '../../lib/uploadPhoto'
+import { supabase } from '../../lib/supabase'
+import { sendNotification, buildFromUser } from '../../lib/notify'
+
+// 모바일 여부 — 모바일은 클립보드 paste가 잘 안 되므로 안내 문구 숨김
+const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
 
 // ─── 이미지 압축 (Canvas, max 1200px, JPEG 0.82) ─────────────────────────
 // 결과물은 base64 — 로컬 미리보기용. 실제 저장 시 Storage에 업로드 후 URL로 교체
@@ -120,7 +126,7 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
   const [searching, setSearching] = useState(false)
   const timerRef = useRef(null)
   const wrapperRef = useRef(null)
-  const dropdownRef = useRef(null)
+  const scrollingRef = useRef(false)
 
   useEffect(() => {
     function handleOutside(e) {
@@ -135,12 +141,6 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
       document.removeEventListener('touchstart', handleOutside)
     }
   }, [])
-
-  useEffect(() => {
-    if (showDropdown && dropdownRef.current) {
-      setTimeout(() => dropdownRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80)
-    }
-  }, [showDropdown])
 
   function handleChange(e) {
     const q = e.target.value
@@ -182,33 +182,40 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
         {searching && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-cream-300 border-t-warm-light rounded-full animate-spin" />
         )}
+
+        {showDropdown && suggestions.length > 0 && (
+          <div
+            className="absolute top-full left-0 right-0 mt-1 rounded-2xl border border-cream-200 bg-white shadow-md max-h-60 overflow-y-auto z-50"
+            onTouchStart={() => { scrollingRef.current = false }}
+            onTouchMove={() => { scrollingRef.current = true }}
+            onScroll={e => e.stopPropagation()}
+          >
+            {suggestions.map((place, i) => (
+              <button
+                key={i}
+                type="button"
+                onMouseDown={e => { e.preventDefault(); handleSelect(place) }}
+                onTouchEnd={e => {
+                  if (scrollingRef.current) { scrollingRef.current = false; return }
+                  e.preventDefault()
+                  handleSelect(place)
+                }}
+                className="w-full text-left px-4 py-3 hover:bg-cream-50 active:bg-cream-100 transition-colors border-b border-cream-100 last:border-0"
+              >
+                <p className="text-sm font-medium text-warm-dark truncate">{place.place_name}</p>
+                {(place.road_address_name || place.address_name) && (
+                  <p className="text-[11px] text-warm-light mt-0.5 truncate">
+                    {place.road_address_name || place.address_name}
+                  </p>
+                )}
+                {place.category_name && (
+                  <p className="text-[10px] text-cream-400 mt-0.5 truncate">{place.category_name}</p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* 인라인 드롭다운 — overflow-y-auto 클리핑 방지 */}
-      {showDropdown && suggestions.length > 0 && (
-        <div ref={dropdownRef} className="mt-1 rounded-2xl border border-cream-200 bg-white shadow-sm overflow-hidden">
-          {suggestions.map((place, i) => (
-            <button
-              key={i}
-              type="button"
-              onMouseDown={e => { e.preventDefault(); handleSelect(place) }}
-              onTouchEnd={e => { e.preventDefault(); handleSelect(place) }}
-              className="w-full text-left px-4 py-3 hover:bg-cream-50 active:bg-cream-100 transition-colors border-b border-cream-100 last:border-0"
-            >
-              <p className="text-sm font-medium text-warm-dark truncate">{place.place_name}</p>
-              {(place.road_address_name || place.address_name) && (
-                <p className="text-[11px] text-warm-light mt-0.5 truncate">
-                  {place.road_address_name || place.address_name}
-                </p>
-              )}
-              {place.category_name && (
-                <p className="text-[10px] text-cream-400 mt-0.5 truncate">{place.category_name}</p>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
     </div>
   )
 }
@@ -247,29 +254,42 @@ function LocationField({ form, geoStatus, onLocationChange, onLocationBlur }) {
 
 // ─── MealForm 메인 컴포넌트 ───────────────────────────────────────────────
 export default function MealForm({ date, onSubmit, onCancel, initial }) {
-  const { currentSpace, deleteIngredient } = useApp()
+  const { currentSpace, addIngredient, updateIngredientQuantity, deleteIngredient, user, ratingsMap, addOrUpdateRating, deleteRating } = useApp()
 
   const [step, setStep] = useState(() => initial?.tag ? 'form' : 'tag')
   const [uploading, setUploading] = useState(false)
   const [formDate, setFormDate] = useState(
     () => initial?.date ?? format(date, 'yyyy-MM-dd')
   )
-  const [form, setForm] = useState(() => ({
-    title: '', restaurantName: '', location: '', lat: null, lng: null,
-    rating: 0, review: '', memo: '', tag: '',
-    mealTime: getAutoMealTime(),  // 현재 시간 자동 감지
-    ...initial,
-    photos: initial?.photos?.length > 0
-      ? initial.photos
-      : (initial?.photo ? [initial.photo] : []),
-  }))
+  const [form, setForm] = useState(() => {
+    // 별점은 ratings 테이블로 통일 — 수정 모드에서는 내(작성자) ratings row로 초기화
+    let initialRating = 0
+    if (initial?.id && user) {
+      const mine = (ratingsMap?.[initial.id] || []).find(r => r.user_id === user.id)
+      initialRating = mine?.rating || 0
+    }
+    return {
+      title: '', restaurantName: '', location: '', lat: null, lng: null,
+      review: '', memo: '', tag: '',
+      mealTime: getAutoMealTime(),  // 현재 시간 자동 감지
+      ...initial,
+      rating: initialRating,
+      photos: initial?.photos?.length > 0
+        ? initial.photos
+        : (initial?.photo ? [initial.photo] : []),
+    }
+  })
   const [geoStatus, setGeoStatus] = useState(
     () => (initial?.lat && initial?.lng) ? 'found' : 'idle'
   )
-  const [usedIngredientIds, setUsedIngredientIds] = useState([])
   const [ingredientsOpen, setIngredientsOpen] = useState(false)
+  // 재료 입력(추가 폼) — UI 전용 로컬 상태. 실제 목록은 AppContext ingredients(toBuy) 공유
+  const [ingInput, setIngInput] = useState('')
+  const [ingQty, setIngQty] = useState(1)
+  const [pasteToast, setPasteToast] = useState(null) // null | { kind: 'loading'|'error', msg }
   const fileRef = useRef()
   const cameraRef = useRef()
+  const photosLenRef = useRef(0)
 
   function set(key, val) {
     setForm(prev => ({ ...prev, [key]: val }))
@@ -290,6 +310,43 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     }
     e.target.value = ''
   }
+
+  // 현재 사진 개수를 ref로 추적 (paste 핸들러의 stale closure 대응)
+  photosLenRef.current = form.photos.length
+
+  // 클립보드 붙여넣기(Ctrl+V) → 기존 사진 업로드와 동일 처리 (compressImage 재사용)
+  useEffect(() => {
+    if (isMobile) return
+    async function handlePaste(e) {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault()
+          const file = item.getAsFile()
+          if (!file) continue
+          if (photosLenRef.current >= 5) {
+            setPasteToast({ kind: 'error', msg: '사진은 최대 5장까지예요' })
+            setTimeout(() => setPasteToast(null), 2000)
+            return
+          }
+          setPasteToast({ kind: 'loading', msg: '사진을 업로드하는 중...' })
+          try {
+            const compressed = await compressImage(file)
+            if (!compressed) throw new Error('compress failed')
+            setForm(prev => prev.photos.length < 5 ? { ...prev, photos: [...prev.photos, compressed] } : prev)
+            setPasteToast(null)
+          } catch {
+            setPasteToast({ kind: 'error', msg: '사진 붙여넣기에 실패했어요' })
+            setTimeout(() => setPasteToast(null), 2000)
+          }
+          break
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [])
 
   function removePhoto(i) {
     setForm(prev => ({ ...prev, photos: prev.photos.filter((_, j) => j !== i) }))
@@ -355,9 +412,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       }
     }
 
-    if (form.tag === '집밥' && usedIngredientIds.length > 0) {
-      await Promise.all(usedIngredientIds.map(id => deleteIngredient('remaining', id)))
-    }
+    // 집밥 재료는 ingredients 테이블(toBuy)에서 즉시 관리되므로 저장 시 별도 처리 없음
 
     // 사진 Storage 업로드 — base64는 URL로 교체, 이미 URL이면 그대로
     setUploading(true)
@@ -366,7 +421,77 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       const uploadedPhotos = await Promise.all(
         form.photos.map(p => uploadPhotoWithThumbnail(p, spaceId))
       )
-      onSubmit({ ...form, date: formDate, lat, lng, photos: uploadedPhotos, photo: uploadedPhotos[0] || '' })
+      // 별점은 meals.rating에 쓰지 않고 ratings 테이블로 통일 → payload에서 제외
+      const { rating: _selectedRating, ...formNoRating } = form
+      const newMeal = await onSubmit({ ...formNoRating, date: formDate, lat, lng, photos: uploadedPhotos, photo: uploadedPhotos[0] || '' })
+
+      // 작성자 별점 → ratings 테이블 upsert (신규: meal insert 후 / 수정: 기존 row 갱신)
+      const mealId = newMeal?.id || initial?.id
+      if (mealId && user) {
+        try {
+          if (form.rating > 0) {
+            await addOrUpdateRating(mealId, form.rating)
+          } else if (initial?.id) {
+            // 수정 모드에서 별점을 비웠고 기존 내 별점이 있으면 삭제
+            const hadMine = (ratingsMap?.[initial.id] || []).some(r => r.user_id === user.id)
+            if (hadMine) await deleteRating(mealId)
+          }
+        } catch (e) {
+          console.error('[MealForm] 별점 저장 중 오류:', e)
+        }
+      }
+      // 새 게시글 알림 — 수정이 아닌 신규 등록이고 다른 멤버가 있을 때만
+      if (!initial && newMeal?.id && user && currentSpace?.id) {
+        try {
+          const { data: members, error: membersErr } = await supabase
+            .from('space_members')
+            .select('user_id')
+            .eq('space_id', currentSpace.id)
+            .neq('user_id', user.id)
+          if (membersErr) {
+            console.error('[MealForm] space_members 조회 실패:', membersErr)
+          } else if (members?.length > 0) {
+            const fromUser = buildFromUser(user)
+            const title = form.title || form.restaurantName || '식사'
+            await Promise.all(members.map(m => sendNotification({
+              toUserId: m.user_id,
+              spaceId: currentSpace.id,
+              mealId: newMeal.id,
+              fromUser,
+              type: 'new_meal',
+              message: `${fromUser.nickname}님이 새 식사를 기록했어요: ${title}`,
+            })))
+          }
+        } catch (e) {
+          console.error('[MealForm] 알림 처리 중 오류:', e)
+        }
+      }
+      // 수정 게시글 알림 — 수정 시 같은 스페이스 다른 멤버 전원에게
+      if (initial?.id && user && currentSpace?.id) {
+        try {
+          const { data: members, error: membersErr } = await supabase
+            .from('space_members')
+            .select('user_id')
+            .eq('space_id', currentSpace.id)
+            .neq('user_id', user.id)
+          if (membersErr) {
+            console.error('[MealForm] space_members 조회 실패 (수정 알림):', membersErr)
+          } else if (members?.length > 0) {
+            const fromUser = buildFromUser(user)
+            const title = form.title || form.restaurantName || '식사'
+            await Promise.all(members.map(m => sendNotification({
+              toUserId: m.user_id,
+              spaceId: currentSpace.id,
+              mealId: initial.id,
+              fromUser,
+              type: 'new_meal',
+              message: `${fromUser.nickname}님이 식사 기록을 수정했어요: ${title}`,
+            })))
+          }
+        } catch (e) {
+          console.error('[MealForm] 수정 알림 처리 중 오류:', e)
+        }
+      }
     } finally {
       setUploading(false)
     }
@@ -379,8 +504,26 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
 
   const isGeocoding = geoStatus === 'loading'
   const isBusy = isGeocoding || uploading
-  const remainingIngredients = currentSpace?.ingredients?.remaining || []
+  // 집밥 재료 = ingredients 테이블 remaining 타입 (재료 탭 "남은 재료"와 동일 데이터 공유)
+  // 집밥은 이미 산(냉장고에 남은) 재료를 쓰는 것이므로 남은 재료 목록을 보여줌
+  const homeIngredients = currentSpace?.ingredients?.remaining || []
   const style = TAG_STYLE[form.tag] || {}
+
+  // 재료 추가 — ingredients 테이블에 즉시 insert (remaining)
+  async function handleAddIngredient(e) {
+    e.preventDefault()
+    const text = ingInput.trim()
+    if (!text) return
+    await addIngredient('remaining', text, ingQty)
+    setIngInput('')
+    setIngQty(1)
+  }
+
+  // - 버튼: quantity>1이면 감소, 1이면 삭제
+  function handleIngredientDecrement(item) {
+    if (item.quantity > 1) updateIngredientQuantity('remaining', item.id, item.quantity - 1)
+    else deleteIngredient('remaining', item.id)
+  }
 
   // ── Step 1: 날짜 + 태그 + 끼니 ───────────────────────────────────────
   if (step === 'tag') {
@@ -607,7 +750,20 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           )}
           <input type="file" ref={fileRef} accept="image/*" multiple className="hidden" onChange={handlePhotos} />
           <input type="file" ref={cameraRef} accept="image/*" capture="environment" className="hidden" onChange={handlePhotos} />
+          {!isMobile && (
+            <p className="text-xs text-cream-400 mt-2 text-center">Ctrl+V로 사진을 붙여넣을 수 있어요</p>
+          )}
         </div>
+
+        {/* 붙여넣기 토스트 */}
+        {pasteToast && (
+          <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-[95] px-4 py-2.5 rounded-2xl bg-warm-dark text-white text-sm font-medium shadow-lg flex items-center gap-2">
+            {pasteToast.kind === 'loading' && (
+              <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin shrink-0" />
+            )}
+            {pasteToast.msg}
+          </div>
+        )}
 
         {/* 제목 */}
         <div>
@@ -708,19 +864,19 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           </div>
         )}
 
-        {/* 집밥: 재료 사용하기 */}
-        {form.tag === '집밥' && remainingIngredients.length > 0 && (
+        {/* 집밥: 재료 — ingredients 테이블 remaining과 공유 (재료 탭과 실시간 연동) */}
+        {form.tag === '집밥' && (
           <div className="rounded-2xl border border-cream-200 overflow-hidden">
             <button
               type="button"
               onClick={() => setIngredientsOpen(o => !o)}
               className="w-full flex items-center justify-between px-4 py-3 bg-cream-100 hover:bg-cream-200 transition-colors"
             >
-              <span className="text-sm font-medium text-warm-dark">재료 사용하기</span>
+              <span className="text-sm font-medium text-warm-dark">재료</span>
               <div className="flex items-center gap-2">
-                {usedIngredientIds.length > 0 && (
+                {homeIngredients.length > 0 && (
                   <span className="text-xs bg-warm-brown text-white px-2 py-0.5 rounded-full font-medium">
-                    {usedIngredientIds.length}개 선택
+                    {homeIngredients.length}개
                   </span>
                 )}
                 <svg
@@ -732,34 +888,53 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
               </div>
             </button>
             {ingredientsOpen && (
-              <div className="px-4 py-3 space-y-2.5">
-                <p className="text-xs text-warm-light mb-2">체크한 재료는 저장 시 목록에서 제거돼요</p>
-                {remainingIngredients.map(item => (
-                  <label key={item.id} className="flex items-center gap-3 cursor-pointer group">
-                    <button
-                      type="button"
-                      className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        usedIngredientIds.includes(item.id)
-                          ? 'bg-warm-brown border-warm-brown'
-                          : 'border-cream-300 group-hover:border-warm-light'
-                      }`}
-                      onClick={() => setUsedIngredientIds(prev =>
-                        prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]
-                      )}
-                    >
-                      {usedIngredientIds.includes(item.id) && (
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-                    <span className={`text-sm transition-colors ${
-                      usedIngredientIds.includes(item.id) ? 'text-cream-400 line-through' : 'text-warm-dark'
-                    }`}>
-                      {item.text}
-                    </span>
-                  </label>
-                ))}
+              <div className="px-4 py-3 space-y-3">
+                <p className="text-xs text-warm-light">재료 탭 "남은 재료"와 함께 관리돼요</p>
+
+                {/* 입력: 재료명 + 개수 스테퍼 + 추가 */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={ingInput}
+                    onChange={e => setIngInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddIngredient(e) } }}
+                    placeholder="재료 추가하기"
+                    className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
+                  />
+                  <QtyStepper
+                    quantity={ingQty}
+                    onDecrement={() => setIngQty(q => Math.max(1, q - 1))}
+                    onIncrement={() => setIngQty(q => q + 1)}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddIngredient}
+                    className="px-3 py-1.5 rounded-xl bg-warm-brown text-white text-sm hover:bg-warm-dark transition-colors shrink-0"
+                  >
+                    추가
+                  </button>
+                </div>
+
+                {/* 목록: 재료명 + 개수 스테퍼 */}
+                {homeIngredients.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {homeIngredients.map(item => (
+                      <div key={item.id} className="flex items-center gap-2">
+                        <span className={`flex-1 min-w-0 text-sm truncate ${item.done ? 'text-cream-400 line-through' : 'text-warm-dark'}`}>
+                          {item.text}
+                        </span>
+                        <QtyStepper
+                          quantity={item.quantity}
+                          minusAsDelete={item.quantity <= 1}
+                          onDecrement={() => handleIngredientDecrement(item)}
+                          onIncrement={() => updateIngredientQuantity('remaining', item.id, item.quantity + 1)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-xs text-cream-400 py-2">아직 추가된 재료가 없어요</p>
+                )}
               </div>
             )}
           </div>

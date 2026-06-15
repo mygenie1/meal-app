@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 export default function Modal({ isOpen, onClose, title, children }) {
   // onClose ref — popstate 핸들러가 stale closure를 참조하지 않도록
@@ -59,7 +60,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center"
       onClick={onClose}
@@ -84,6 +85,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
         )}
         <div className="px-5 py-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

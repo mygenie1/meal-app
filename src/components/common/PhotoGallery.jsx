@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import LazyImage from './LazyImage'
 import FullscreenViewer from './FullscreenViewer'
 
-export default function PhotoGallery({ photos, fullscreenPhotos, maxHeight = 240, className = '', onDownload }) {
+export default function PhotoGallery({ photos, fullscreenPhotos, maxHeight = 240, className = '', onDownload, disableFullscreen = false }) {
   const [idx, setIdx] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const touchStartX = useRef(null)
@@ -28,10 +28,10 @@ export default function PhotoGallery({ photos, fullscreenPhotos, maxHeight = 240
   return (
     <>
       <div
-        className={`relative overflow-hidden select-none cursor-pointer ${className}`}
+        className={`relative overflow-hidden select-none ${!disableFullscreen ? 'cursor-pointer' : ''} ${className}`}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        onClick={e => { e.stopPropagation(); setIsFullscreen(true) }}
+        onClick={disableFullscreen ? undefined : e => { e.stopPropagation(); setIsFullscreen(true) }}
       >
         <LazyImage
           src={photos[idx]}
@@ -73,7 +73,7 @@ export default function PhotoGallery({ photos, fullscreenPhotos, maxHeight = 240
         )}
       </div>
 
-      {isFullscreen && (
+      {!disableFullscreen && isFullscreen && (
         <FullscreenViewer
           photos={fsPhotos}
           initialIndex={idx}
