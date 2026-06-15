@@ -93,6 +93,7 @@ export function AppProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true)
   const hasBootedRef = useRef(false)
   const leftSpacesRef = useRef(new Set()) // leaveSpace로 명시적으로 나간 스페이스 ID 추적
+  const isLeavingRef = useRef(false)      // 나가기 진행 중 플래그 — Realtime/boot 재로딩 차단
 
   const [spaces, setSpaces] = useState([])
   const [currentSpaceId, setCurrentSpaceId] = useState(
@@ -154,8 +155,11 @@ export function AppProvider({ children }) {
       .channel('realtime:spaces')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'spaces' }, ({ eventType, new: newRow, old: oldRow }) => {
         if (eventType === 'INSERT') {
+          // 나가기 진행 중이면 spurious INSERT(RLS 재평가 시 발생 가능)로 간주해 무시
+          if (isLeavingRef.current) return
           setSpaces(prev => {
             if (prev.find(s => s.id === newRow.id)) return prev
+            if (leftSpacesRef.current.has(newRow.id)) return prev  // 이미 나간 스페이스 재추가 방지
             return [...prev, {
               id: newRow.id,
               name: newRow.name,
@@ -428,9 +432,14 @@ export function AppProvider({ children }) {
       setLoading(false)
 
       // Phase 2: 각 space의 meals + ingredients 백그라운드 로드 (에러 있어도 앱 유지)
-      loadAllSpaceData(spaceList).catch(err =>
-        console.warn('백그라운드 데이터 로드 실패:', err)
-      )
+      // 나가기 진행 중이면 stale spaceList로 재로딩하지 않음
+      if (isLeavingRef.current) {
+        console.log('[boot] 나가기 진행 중 — loadAllSpaceData 건너뜀')
+      } else {
+        loadAllSpaceData(spaceList).catch(err =>
+          console.warn('백그라운드 데이터 로드 실패:', err)
+        )
+      }
     } catch (err) {
       console.error(`Supabase boot error (시도 ${attempt + 1}/${MAX_RETRIES}):`, err)
 
@@ -683,6 +692,9 @@ export function AppProvider({ children }) {
 
   // 스페이스 나가기 — space_members에서 내 참가 기록만 제거 (Supabase 데이터 삭제 없음)
   async function leaveSpace(id) {
+    // 플래그를 먼저 세워 boot/Realtime이 이 스페이스를 재로딩하지 않도록 차단
+    isLeavingRef.current = true
+
     if (user?.id) {
       const { error } = await supabase
         .from('space_members')
@@ -690,7 +702,11 @@ export function AppProvider({ children }) {
         .eq('space_id', id)
         .eq('user_id', user.id)
       console.log('[leaveSpace] DB 삭제 결과:', error ? error.message : '성공')
-      if (error) { console.error('[leaveSpace] 오류:', error); return }
+      if (error) {
+        console.error('[leaveSpace] 오류:', error)
+        isLeavingRef.current = false  // 실패 시 즉시 플래그 해제
+        return
+      }
     }
 
     // boot()의 비동기 DB 쿼리가 leaveSpace보다 늦게 완료되어 stale spaceList로 덮어쓰는
@@ -702,6 +718,9 @@ export function AppProvider({ children }) {
     const nextSpaces = spaces.filter(s => s.id !== id)
     setSpaces(nextSpaces)
     setCurrentSpaceId(cur => cur === id ? (nextSpaces[0]?.id || null) : cur)
+
+    // 500ms 후 플래그 해제 — boot의 setSpaces/loadAllSpaceData가 완료될 충분한 시간
+    setTimeout(() => { isLeavingRef.current = false }, 500)
   }
 
   // 식사 기록 추가
@@ -1182,7 +1201,7 @@ export function AppProvider({ children }) {
         loading,
         loadError,
         retryAttempt,
-        reload: () => boot(0, user),
+        reload: () => !isLeavingRef.current && boot(0, user),
         createSpace,
         claimSpace,
         switchSpace,
