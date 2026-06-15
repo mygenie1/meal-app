@@ -9,7 +9,9 @@ const WHO_OPTIONS = [
   { label: '혼자 먼저 써보기', emoji: '🙋', spaceName: '나의 식탁' },
 ]
 
-const TOTAL_STEPS = 5
+const TOTAL_STEPS = 7
+
+// Steps: 0=환영, 1=누구와, 2=스페이스, 3=달력, 4=지도, 5=가고싶은곳, 6=첫기록
 
 export default function TutorialFlow({ onComplete }) {
   const { createSpace, joinByCode } = useApp()
@@ -17,15 +19,15 @@ export default function TutorialFlow({ onComplete }) {
 
   const [currentStep, setCurrentStep] = useState(0)
   const [fade, setFade] = useState(false)
-
   const [selectedType, setSelectedType] = useState(null)
-  const [spaceName, setSpaceName] = useState('')
   const [showJoinInput, setShowJoinInput] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [creating, setCreating] = useState(false)
   const [joining, setJoining] = useState(false)
   const [spaceError, setSpaceError] = useState('')
 
+  // 한국어 입력 시 포커스 해제 버그 방지: uncontrolled input
+  const spaceNameRef = useRef(null)
   const didAutoOpen = useRef(false)
 
   function goStep(n) {
@@ -36,7 +38,6 @@ export default function TutorialFlow({ onComplete }) {
     }, 200)
   }
   const goNext = () => goStep(currentStep + 1)
-  const handleSkip = () => goNext()
 
   function handleComplete(openForm = false) {
     if (openForm && !didAutoOpen.current) {
@@ -47,7 +48,7 @@ export default function TutorialFlow({ onComplete }) {
   }
 
   async function handleCreateSpace() {
-    const name = spaceName.trim() || selectedType?.spaceName || '우리 식탁'
+    const name = (spaceNameRef.current?.value || '').trim() || selectedType?.spaceName || '우리 식탁'
     setCreating(true)
     setSpaceError('')
     const result = await createSpace(name)
@@ -72,9 +73,11 @@ export default function TutorialFlow({ onComplete }) {
     }
   }
 
-  // ── 각 스텝 콘텐츠 ───────────────────────────────────────────────
+  // ── 스텝 렌더 함수 (함수로 호출 — <Component />가 아닌 {fn()} 패턴)
+  // <StepComponent />로 사용하면 state 변경 시 함수 참조가 바뀌어 unmount/remount 발생,
+  // input 포커스가 풀리는 버그가 생김. 함수 직접 호출로 DOM 유지.
 
-  function Step0() {
+  function renderStep0() {
     return (
       <div className="flex flex-col items-center justify-center h-full px-8 text-center">
         <div className="w-20 h-20 bg-warm-brown rounded-2xl flex items-center justify-center mb-8 shadow-sm">
@@ -95,7 +98,7 @@ export default function TutorialFlow({ onComplete }) {
     )
   }
 
-  function Step1() {
+  function renderStep1() {
     return (
       <div className="flex flex-col px-8 pt-12">
         <h2 className="text-xl font-bold text-warm-dark mb-2">누구와 함께 기록할까요?</h2>
@@ -108,7 +111,6 @@ export default function TutorialFlow({ onComplete }) {
             key={option.label}
             onClick={() => {
               setSelectedType(option)
-              setSpaceName(option.spaceName)
               goNext()
             }}
             className="w-full text-left px-5 py-4 mb-3 bg-white rounded-2xl border border-cream-200 flex items-center gap-3 active:border-warm-brown transition-colors">
@@ -120,7 +122,7 @@ export default function TutorialFlow({ onComplete }) {
     )
   }
 
-  function Step2() {
+  function renderStep2() {
     return (
       <div className="flex flex-col px-8 pt-12 overflow-y-auto">
         <h2 className="text-xl font-bold text-warm-dark mb-2">
@@ -133,9 +135,10 @@ export default function TutorialFlow({ onComplete }) {
 
         <div className="bg-white rounded-2xl border border-cream-200 p-5 mb-3">
           <h3 className="font-semibold text-warm-dark mb-3">새 식탁 만들기</h3>
+          {/* uncontrolled input — onChange 없으므로 타이핑 시 re-render 없음 */}
           <input
-            value={spaceName}
-            onChange={e => setSpaceName(e.target.value)}
+            ref={spaceNameRef}
+            defaultValue={selectedType?.spaceName || '우리 식탁'}
             placeholder={selectedType?.spaceName || '우리 식탁'}
             style={{ fontSize: 16 }}
             className="w-full px-4 py-3 rounded-xl border border-cream-300 bg-cream-50 text-warm-dark outline-none focus:border-warm-light"
@@ -186,7 +189,7 @@ export default function TutorialFlow({ onComplete }) {
     )
   }
 
-  function Step3() {
+  function renderStep3() {
     return (
       <div className="flex flex-col items-center px-8 pt-12 text-center">
         <div className="w-full bg-cream-100 rounded-2xl p-5 mb-8">
@@ -216,7 +219,94 @@ export default function TutorialFlow({ onComplete }) {
     )
   }
 
-  function Step4() {
+  function renderStep4() {
+    return (
+      <div className="flex flex-col items-center px-8 pt-12 text-center">
+        <div className="w-24 h-24 bg-cream-100 rounded-full flex items-center justify-center mb-8">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#6b4f3a" strokeWidth="1.6" className="w-12 h-12" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+            <circle cx="12" cy="9" r="2.5" />
+          </svg>
+        </div>
+
+        <h2 className="text-xl font-bold text-warm-dark mb-3">
+          우리만의 맛집 지도
+        </h2>
+        <p className="text-sm text-warm-light leading-relaxed">
+          식사를 기록할 때 장소를 입력하면<br />
+          지도에 핀으로 표시돼요.<br /><br />
+          우리가 함께 다녀온 곳들이<br />
+          지도 위에 하나씩 쌓여가요.
+        </p>
+
+        <div className="w-full bg-cream-100 rounded-2xl p-6 mt-6">
+          <div className="relative h-32 bg-cream-200 rounded-xl overflow-hidden">
+            <div className="absolute inset-0 opacity-30">
+              <div className="absolute top-1/3 left-0 right-0 h-px bg-warm-light" />
+              <div className="absolute top-2/3 left-0 right-0 h-px bg-warm-light" />
+              <div className="absolute left-1/3 top-0 bottom-0 w-px bg-warm-light" />
+              <div className="absolute left-2/3 top-0 bottom-0 w-px bg-warm-light" />
+            </div>
+            {[
+              { top: '20%', left: '25%', color: 'bg-amber-400' },
+              { top: '50%', left: '55%', color: 'bg-pink-400' },
+              { top: '30%', left: '70%', color: 'bg-amber-400' },
+            ].map((pin, i) => (
+              <div
+                key={i}
+                style={{ top: pin.top, left: pin.left }}
+                className={`absolute w-4 h-4 ${pin.color} rounded-full border-2 border-white shadow-sm -translate-x-1/2 -translate-y-1/2`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function renderStep5() {
+    return (
+      <div className="flex flex-col items-center px-8 pt-12 text-center">
+        <div className="w-24 h-24 bg-cream-100 rounded-full flex items-center justify-center mb-8">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#6b4f3a" strokeWidth="1.6" className="w-12 h-12" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </div>
+
+        <h2 className="text-xl font-bold text-warm-dark mb-3">
+          가고 싶은 곳을 저장해요
+        </h2>
+        <p className="text-sm text-warm-light leading-relaxed">
+          다음에 가보고 싶은 곳을 미리 저장해두면<br />
+          지도에서 한눈에 볼 수 있어요.<br /><br />
+          "오늘 어디 가지?" 버튼을 누르면<br />
+          저장된 곳 중 하나를 랜덤으로 추천해드려요.
+        </p>
+
+        <div className="w-full bg-white rounded-2xl border border-cream-200 p-4 mt-6 text-left">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="font-semibold text-warm-dark text-sm">연남동 파스타집</p>
+              <p className="text-xs text-cream-400">양식 · 0.4km</p>
+            </div>
+            <span className="text-xs bg-pink-50 text-pink-500 px-2 py-1 rounded-full">
+              #로맨틱
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-warm-brown text-white text-xs rounded-lg py-1.5 text-center">
+              ♡ 가고싶어요 2
+            </div>
+            <div className="flex-1 border border-cream-300 text-warm-dark text-xs rounded-lg py-1.5 text-center">
+              지도에서 확인
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  function renderStep6() {
     return (
       <div className="flex flex-col items-center px-8 pt-12 text-center">
         <div className="w-20 h-20 bg-cream-100 rounded-full flex items-center justify-center mb-8">
@@ -244,24 +334,33 @@ export default function TutorialFlow({ onComplete }) {
     )
   }
 
-  const steps = [Step0, Step1, Step2, Step3, Step4]
-  const StepComponent = steps[currentStep]
+  const stepRenderers = [renderStep0, renderStep1, renderStep2, renderStep3, renderStep4, renderStep5, renderStep6]
 
   function renderBottomButton() {
     if (currentStep === 0) {
       return (
-        <button
-          onClick={goNext}
-          className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold active:scale-[0.99] transition-transform">
+        <button onClick={goNext} className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold active:scale-[0.99] transition-transform">
           시작하기
         </button>
       )
     }
     if (currentStep === 3) {
       return (
-        <button
-          onClick={goNext}
-          className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold active:scale-[0.99] transition-transform">
+        <button onClick={goNext} className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold active:scale-[0.99] transition-transform">
+          좋아요
+        </button>
+      )
+    }
+    if (currentStep === 4) {
+      return (
+        <button onClick={goNext} className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold active:scale-[0.99] transition-transform">
+          다음
+        </button>
+      )
+    }
+    if (currentStep === 5) {
+      return (
+        <button onClick={goNext} className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold active:scale-[0.99] transition-transform">
           좋아요
         </button>
       )
@@ -273,38 +372,46 @@ export default function TutorialFlow({ onComplete }) {
     <div className="fixed inset-0 bg-cream-50 flex flex-col z-50"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}>
 
-      {/* 건너뛰기 버튼 (steps 1, 2에서만) */}
-      {currentStep !== 0 && currentStep !== 3 && currentStep !== 4 && (
+      {/* 뒤로가기 버튼 (step 0 제외) */}
+      {currentStep > 0 && (
         <button
-          onClick={handleSkip}
+          onClick={() => goStep(currentStep - 1)}
+          className="absolute left-6 w-9 h-9 rounded-full bg-cream-100 flex items-center justify-center z-10"
+          style={{ top: 'calc(env(safe-area-inset-top) + 1.5rem)' }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-5 h-5 text-warm-dark">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+      )}
+
+      {/* 건너뛰기 버튼 (steps 1, 2에서만) */}
+      {(currentStep === 1 || currentStep === 2) && (
+        <button
+          onClick={goNext}
           className="absolute right-6 text-sm text-cream-400 z-10"
           style={{ top: 'calc(env(safe-area-inset-top) + 1.5rem)' }}>
           건너뛰기
         </button>
       )}
 
-      {/* 콘텐츠 */}
+      {/* 콘텐츠 — 함수 직접 호출로 DOM 유지 (포커스 버그 방지) */}
       <div
         className="flex-1 overflow-hidden transition-opacity duration-200"
         style={{ opacity: fade ? 0 : 1 }}>
-        <StepComponent />
+        {stepRenderers[currentStep]()}
       </div>
 
       {/* 하단 영역 */}
-      <div className="px-8 pb-10" style={{ paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom))' }}>
-        {/* 점 인디케이터 */}
+      <div className="px-8" style={{ paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom))' }}>
         <div className="flex justify-center gap-2 mb-6">
           {Array.from({ length: TOTAL_STEPS }, (_, i) => (
             <div
               key={i}
               className={`rounded-full transition-all duration-300
-                ${i === currentStep
-                  ? 'w-6 h-2 bg-warm-brown'
-                  : 'w-2 h-2 bg-cream-300'}`}
+                ${i === currentStep ? 'w-6 h-2 bg-warm-brown' : 'w-2 h-2 bg-cream-300'}`}
             />
           ))}
         </div>
-
         {renderBottomButton()}
       </div>
     </div>
