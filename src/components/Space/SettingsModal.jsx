@@ -44,6 +44,10 @@ export default function SettingsModal({ isOpen, onClose }) {
 
   const avatarUrl = user?.user_metadata?.avatar_url
   const displayEmail = user?.email || ''
+  const provider = user?.app_metadata?.provider
+  const providerLabel = provider === 'kakao' ? '카카오'
+    : provider === 'email' ? '이메일'
+    : provider || '소셜'
 
   // 닫기 처리: 탈퇴 플로우 중이면 idle로 복귀
   function handleModalClose() {
@@ -196,7 +200,9 @@ export default function SettingsModal({ isOpen, onClose }) {
             <p className="text-sm font-semibold text-red-600">탈퇴 전 꼭 확인해주세요</p>
             <ul className="space-y-1.5">
               {[
-                '로그인 정보(카카오 계정 연결)가 해제돼요',
+                provider === 'kakao'
+                  ? '로그인 정보(카카오 계정 연결)가 해제돼요'
+                  : `${providerLabel} 계정 정보가 삭제돼요`,
                 '스페이스 멤버에서 자동으로 나가게 돼요',
                 '작성한 식사 기록·댓글은 스페이스에 남아요',
                 '탈퇴 후 같은 계정으로 재가입해도 이전 데이터와 연결되지 않아요',
@@ -291,13 +297,21 @@ export default function SettingsModal({ isOpen, onClose }) {
                       alt="프로필 사진"
                       className={`w-14 h-14 rounded-full object-cover ring-2 ring-cream-200 transition-opacity ${photoUploading ? 'opacity-50' : ''}`}
                     />
-                  ) : (
+                  ) : provider === 'kakao' ? (
                     <div
                       className={`w-14 h-14 rounded-full flex items-center justify-center ring-2 ring-cream-200 transition-opacity ${photoUploading ? 'opacity-50' : ''}`}
                       style={{ background: '#FEE500' }}
                     >
                       <svg width="26" height="26" viewBox="0 0 24 24" fill="#3C1E1E">
                         <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.79 1.63 5.24 4.1 6.73l-1.05 3.85a.25.25 0 0 0 .38.27L9.7 19.2a11.2 11.2 0 0 0 2.3.24C17.523 19.44 22 15.963 22 11.64 22 7.317 17.523 3 12 3z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div
+                      className={`w-14 h-14 rounded-full flex items-center justify-center ring-2 ring-cream-200 bg-cream-200 transition-opacity ${photoUploading ? 'opacity-50' : ''}`}
+                    >
+                      <svg className="w-7 h-7 text-warm-light" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                       </svg>
                     </div>
                   )}
@@ -322,7 +336,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] text-cream-400 mb-0.5">카카오 계정</p>
+                  <p className="text-[11px] text-cream-400 mb-0.5">{providerLabel} 계정</p>
                   <p className="text-sm text-warm-dark font-medium truncate">{displayEmail}</p>
                   {photoError && (
                     <p className="text-[11px] text-red-400 mt-1">{photoError}</p>

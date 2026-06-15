@@ -595,10 +595,27 @@ export function AppProvider({ children }) {
 
   // 회원 탈퇴: Edge Function 호출 → auth.users 삭제 → 로컬 세션 정리
   async function deleteAccount() {
-    const { error } = await supabase.functions.invoke('delete-account')
-    if (error) throw new Error(error.message || '탈퇴 처리에 실패했어요')
-    // 서버에서 이미 유저 삭제됨 → 로컬 세션만 정리
-    try { await supabase.auth.signOut() } catch {}
+    const { data, error } = await supabase.functions.invoke('delete-account')
+    console.log('[deleteAccount] Edge Function 응답:', { data, error })
+    if (error) {
+      console.error('[deleteAccount] invoke 오류:', error)
+      throw new Error(error.message || '탈퇴 처리에 실패했어요')
+    }
+    if (data?.error) {
+      console.error('[deleteAccount] 서버 오류:', data.error)
+      throw new Error(data.error)
+    }
+    console.log('[deleteAccount] 서버 삭제 완료 — 로컬 세션 정리')
+    try {
+      await supabase.auth.signOut()
+    } catch (e) {
+      console.warn('[deleteAccount] signOut 실패 (무시):', e)
+    }
+    // signOut이 onAuthStateChange를 트리거하지 않을 경우 강제 초기화
+    setUser(null)
+    setSpaces([])
+    setCurrentSpaceId(null)
+    localStorage.removeItem(SPACE_KEY)
   }
 
   // 스페이스 생성
