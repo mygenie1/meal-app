@@ -188,7 +188,10 @@ export default function LoginPage() {
               <h3 className="font-bold text-warm-dark mb-2">인증 이메일을 보냈어요</h3>
               <p className="text-sm text-warm-light leading-relaxed">
                 {email}로 인증 링크를 보냈어요.<br />
-                이메일을 확인하고 링크를 클릭해주세요.
+                이메일을 확인하고 링크를 클릭해주세요.<br /><br />
+                <span className="text-warm-brown font-medium">
+                  이메일이 안 보이면 스팸함도 확인해주세요 😊
+                </span>
               </p>
               <button
                 onClick={() => setShowEmailSent(false)}
