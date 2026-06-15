@@ -680,14 +680,15 @@ export function AppProvider({ children }) {
         .delete()
         .eq('space_id', id)
         .eq('user_id', user.id)
-      if (error) { console.error(error); return }
+      console.log('[leaveSpace] DB 삭제 결과:', error ? error.message : '성공')
+      if (error) { console.error('[leaveSpace] 오류:', error); return }
     }
 
-    setSpaces(prev => {
-      const next = prev.filter(s => s.id !== id)
-      setCurrentSpaceId(cur => cur === id ? (next[0]?.id || null) : cur)
-      return next
-    })
+    // setCurrentSpaceId를 setSpaces 콜백 안에 중첩하면 React에서 처리가 보장되지 않음.
+    // 두 업데이트를 분리하고 현재 spaces 값으로 next를 미리 계산.
+    const nextSpaces = spaces.filter(s => s.id !== id)
+    setSpaces(nextSpaces)
+    setCurrentSpaceId(cur => cur === id ? (nextSpaces[0]?.id || null) : cur)
   }
 
   // 식사 기록 추가
