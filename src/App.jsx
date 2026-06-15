@@ -8,6 +8,7 @@ import MapPage from './pages/MapPage'
 import IngredientsPage from './pages/IngredientsPage'
 import SpacesPage from './pages/SpacesPage'
 import LoginPage from './pages/LoginPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import InstallBanner from './components/common/InstallBanner'
 
 function OfflineBanner() {
@@ -193,6 +194,7 @@ function AppContent() {
           <Route path="/map" element={<MapPage />} />
           <Route path="/ingredients" element={<IngredientsPage />} />
           <Route path="/spaces" element={<SpacesPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Routes>
       </main>
       <BottomNav />
