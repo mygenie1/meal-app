@@ -135,7 +135,7 @@ meal-app/
 │   │
 │   ├── context/
 │   │   └── AppContext.jsx               전체 상태 관리 + Supabase CRUD + Realtime 구독
-│   │                                    boot() → spaces만 빠르게 로드 후 앱 오픈
+│   │                                    boot() → space_members 기반으로 내 스페이스만 조회 (spaces 직접 조회 X)
 │   │                                    loadAllSpaceData() → MEAL_LIST_SELECT로 photo/photos 제외 조회
 │   │                                    loadMealPhotos(mealId) → 개별 meal 사진 lazy 로드
 │   │                                    photosLoaded flag: false=미로드, true=로드완료(빈 배열 포함)
@@ -472,7 +472,7 @@ getOriginalUrl(entry)  // → 원본 URL
 - MealDetailModal을 MealMap 외부에 렌더 → CSS 스태킹 이슈 방지
 
 ### Supabase Realtime
-- `spaces`, `meals`, `ingredients` 테이블 Realtime 구독
+- `meals`, `ingredients` 테이블 Realtime 구독 (spacesChannel 제거 — 나가기/참가는 DB 직접 조회로 대체)
 - INSERT: `MEAL_LIST_SELECT` 기준으로 수신 → `photosLoaded: false`로 추가 (사진 제외)
   - 이미 로컬에 있는 ID는 중복 추가 방지
 - DELETE: `old` 레코드에 id만 있어서 전체 스페이스/타입에서 필터링
@@ -483,11 +483,12 @@ getOriginalUrl(entry)  // → 원본 URL
 - `supabase.js`: 모든 DB 요청에 15초 타임아웃 (AbortController)
 - `uploadPhoto.js`: Storage 전용 클라이언트 — 타임아웃 없음
 - `AppContext.jsx` boot 시퀀스:
-  1. Phase 1: `spaces` 테이블만 조회 (DB 웜업, 빠름) → 앱 즉시 오픈
+  1. Phase 1: `space_members` 조인으로 내 스페이스만 조회 (`spaces` 직접 조회 X, RLS 의존 X) → 앱 즉시 오픈
   2. Phase 2: 각 space의 `meals`(MEAL_LIST_SELECT) + `ingredients` 순차 백그라운드 로드
   3. Phase 1 실패 시: 최대 3회 자동 재시도 (1.5s → 3s → 5s)
   4. 모든 재시도 실패 시: 빈 상태로 앱 오픈 + 상단 `ConnectErrorBanner`
 - `ConnectErrorBanner`: 황색 배너, 재시도 / 닫기 버튼
+- `leaveSpace()`: DB 삭제 후 `space_members` 재조회 → 실제 멤버십 기준으로 state 필터링 (stale state 방지)
 
 ### 재료 목록
 - 살 것(toBuy) / 남은 재료(remaining) 두 섹션
@@ -594,11 +595,18 @@ npm run dev
 | 가고싶은곳 지도 개선 | 미방문 핀만 표시, "지도에서 확인" 탭 유지 panTo, GPS 현재위치 버튼 |
 | 알림 벨 위치 수정 | 헤더 [검색][벨][스페이스 배지] 순서로 변경 |
 | 알림 설정 활성화 | 설정 화면 토글 → notifEnabled localStorage 저장, 꺼짐 시 배지/목록 숨김 |
+| 이메일 로그인 | 이메일/비밀번호 회원가입·로그인, 비밀번호 재설정, provider 기반 동적 레이블 |
+| 회원 탈퇴 | Edge Function `delete-account` 호출, 확인 2단계(안내→"탈퇴" 입력), 로컬 세션 정리 |
+| 튜토리얼 7단계 | 스페이스 유형 선택 → 이름 입력 → 초대/참가 → 지도 소개 → 가고싶은곳 소개 → 첫 기록 CTA |
+| 튜토리얼 버그 수정 | uncontrolled input(ref+defaultValue)으로 한글 포커스 해제 버그 해결, 뒤로가기 버튼 추가 |
+| 스페이스 나가기 UX | 나가기 확인 모달 (Case A 혼자/Case B 다른멤버 코드 복사), 즉시 목록 제거 |
+| 스페이스 나가기 버그 수정 | leaveSpace 후 DB 재조회 방식으로 stale state 방지, boot() space_members 기반 조회로 전환 |
+| 이메일 계정 기본 아바타 | kakaocdn URL 감지 → 이메일 계정이면 warm-brown 배경 기본 아이콘으로 대체 |
+| 프로필 사진 upsert | uploadAvatar에 upsert:true → 두 번째 업로드 시 RLS 에러 방지 |
 
 ---
 
 ## 다음 단계
 
 - **Claude Design으로 전체 UI 개선** — 전반적인 디자인 리뉴얼
-- **회원 탈퇴** — auth.users 삭제 + CASCADE 데이터 정리
 - **앱스토어 / 플레이스토어 등록** — PWA → 네이티브 앱 래핑 (Capacitor 등)
