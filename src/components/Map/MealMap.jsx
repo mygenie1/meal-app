@@ -1155,7 +1155,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
 
   const [visitingWish, setVisitingWish] = useState(null)
   const [viewingWish, setViewingWish] = useState(null)
-  const [wishFilter, setWishFilter] = useState('all') // 'all' | 'mine' | 'theirs'
+  const [wishFilter, setWishFilter] = useState('all') // 'all' | 'mine' | 'theirs' | 'together'
   // { candidates: [], result: item|null } — null when closed
   const [randomPick, setRandomPick] = useState(null)
   const requestedPhotosRef = useRef(new Set())
@@ -1209,6 +1209,23 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
     })
     return Object.values(map)
   }, [filteredPins])
+
+  // 필터 미적용 전체 클러스터 — 오버레이 생성용 (재생성 최소화)
+  const allClusters = useMemo(() => {
+    const map = {}
+    pins.forEach(({ meal, coords }) => {
+      const key = `${Math.round(coords[0] * ROUND)},${Math.round(coords[1] * ROUND)}`
+      if (!map[key]) map[key] = { coords, meals: [] }
+      map[key].meals.push(meal)
+    })
+    return Object.values(map)
+  }, [pins])
+
+  // show/hide 시 최신 필터/선택 상태 읽기용 ref (effect 의존성 추가 없이)
+  const activeFiltersRef = useRef(activeFilters)
+  useEffect(() => { activeFiltersRef.current = activeFilters }, [activeFilters])
+  const selectedClusterKeyRef = useRef(null)
+  useEffect(() => { selectedClusterKeyRef.current = selectedClusterKey }, [selectedClusterKey])
 
   // 지도 뷰포트(bounds) 안에 있는 핀만 목록에 표시. bounds 미확정 시 전체 표시.
   const visiblePins = useMemo(() => {
@@ -1281,7 +1298,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
     return () => {
       destroyed = true
       clearTimeout(failTimer)
-      mealOverlaysRef.current.forEach(o => o.setMap(null))
+      mealOverlaysRef.current.forEach(({ overlay }) => overlay.setMap(null))
       mealOverlaysRef.current = []
       if (userOverlayRef.current) { userOverlayRef.current.setMap(null); userOverlayRef.current = null }
       kakaoMapRef.current = null
@@ -1385,33 +1402,51 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
   // ── 필터 변경 시 더보기 카운트 리셋 ───────────────────────────────
   useEffect(() => { setWishDisplayCount(20) }, [wishFilter])
 
-  // ── 맛집 마커 갱신 (fitBounds 제거) ──────────────────────────
+  // ── 맛집 마커 생성 (pins 변경 시만 재생성) ───────────────────
   useEffect(() => {
     if (!mapReady || !kakaoMapRef.current) return
-    mealOverlaysRef.current.forEach(o => o.setMap(null))
+    mealOverlaysRef.current.forEach(({ overlay }) => overlay.setMap(null))
     mealOverlaysRef.current = []
-    clusters.forEach(cluster => {
+    const curFilters = activeFiltersRef.current
+    const curSelectedKey = selectedClusterKeyRef.current
+    allClusters.forEach(cluster => {
       const key = `${Math.round(cluster.coords[0] * ROUND)},${Math.round(cluster.coords[1] * ROUND)}`
-      const isSelected = key === selectedClusterKey
       const el = document.createElement('div')
-      el.innerHTML = makePinHTML(TAG_COLORS[cluster.meals[0].tag] || '#a07850', cluster.meals.length, isSelected)
+      el.innerHTML = makePinHTML(TAG_COLORS[cluster.meals[0].tag] || '#a07850', cluster.meals.length, false)
       el.addEventListener('click', (e) => {
-        e.stopPropagation() // 지도 빈 곳 클릭(초기화) 핸들러로 전파 방지
-        setSelectedCluster(cluster) // 핀 강조 유지
-        // 핀 클릭 → 목록 카드 강조 + 지도 이동 (두 번째 클릭 시 상세) — handlePinClick이 처리
+        e.stopPropagation()
+        setSelectedCluster(cluster)
         handlePinClick(cluster.meals[0], cluster.coords)
       })
+      const matches = curFilters.has('전체') || cluster.meals.some(m => curFilters.has(m.tag))
       const overlay = new window.kakao.maps.CustomOverlay({
         position: new window.kakao.maps.LatLng(cluster.coords[0], cluster.coords[1]),
         content: el,
         xAnchor: 0.5,
         yAnchor: 0.5,
-        zIndex: isSelected ? 10 : 1,
+        zIndex: key === curSelectedKey ? 10 : 1,
       })
-      overlay.setMap(kakaoMapRef.current)
-      mealOverlaysRef.current.push(overlay)
+      overlay.setMap(matches ? kakaoMapRef.current : null)
+      mealOverlaysRef.current.push({ overlay, cluster, key })
     })
-  }, [clusters, selectedClusterKey, mapReady])
+  }, [allClusters, mapReady])
+
+  // ── 필터 변경 시 마커 show/hide (재생성 없음) ─────────────────
+  useEffect(() => {
+    if (!mapReady || !kakaoMapRef.current) return
+    mealOverlaysRef.current.forEach(({ overlay, cluster }) => {
+      const matches = activeFilters.has('전체') || cluster.meals.some(m => activeFilters.has(m.tag))
+      overlay.setMap(matches ? kakaoMapRef.current : null)
+    })
+  }, [activeFilters, mapReady])
+
+  // ── 선택 마커 z-index 갱신 ────────────────────────────────────
+  useEffect(() => {
+    if (!mapReady) return
+    mealOverlaysRef.current.forEach(({ overlay, key }) => {
+      overlay.setZIndex(key === selectedClusterKey ? 10 : 1)
+    })
+  }, [selectedClusterKey, mapReady])
 
   // ── 내 위치 마커 ──────────────────────────────────────────────
   useEffect(() => {
@@ -1964,6 +1999,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
                     { key: 'all', label: '전체' },
                     { key: 'mine', label: '내가 가고싶어요' },
                     { key: 'theirs', label: '상대가 가고싶어요' },
+                    { key: 'together', label: '함께 가고싶어요' },
                   ].map(({ key, label }) => (
                     <button key={key} onClick={() => setWishFilter(key)}
                       className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors active:scale-95 ${
@@ -1993,6 +2029,9 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
                 if (wishFilter === 'mine') return interests.some(i => i.user_id === user?.id)
                 if (wishFilter === 'theirs') {
                   return interests.some(i => i.user_id !== user?.id) && !interests.some(i => i.user_id === user?.id)
+                }
+                if (wishFilter === 'together') {
+                  return interests.some(i => i.user_id === user?.id) && interests.some(i => i.user_id !== user?.id)
                 }
                 return true
               })

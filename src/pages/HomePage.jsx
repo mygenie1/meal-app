@@ -670,7 +670,7 @@ export default function HomePage() {
 
             {/* 서브 스탯 3개 */}
             <div className="mt-5 flex items-stretch">
-              <SubStat value={`${report.newRestaurants}곳`} label="새로운 맛집"
+              <SubStat value={`${report.newRestaurants}곳`} label="새로운 가게"
                 active={activeStatTab === 'newPlaces'}
                 onClick={() => setActiveStatTab(t => t === 'newPlaces' ? null : 'newPlaces')} />
               <div className="w-px bg-cream-200 mx-1" />
