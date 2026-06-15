@@ -92,6 +92,7 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const hasBootedRef = useRef(false)
+  const leftSpacesRef = useRef(new Set()) // leaveSpace로 명시적으로 나간 스페이스 ID 추적
 
   const [spaces, setSpaces] = useState([])
   const [currentSpaceId, setCurrentSpaceId] = useState(
@@ -409,12 +410,16 @@ export function AppProvider({ children }) {
       // functional update로 기존 meals/ingredients를 보존하고 space 메타데이터만 갱신.
       setSpaces(prev => {
         const prevMap = Object.fromEntries(prev.map(s => [s.id, s]))
-        return spaceList.map(s => ({
-          ...s,
-          meals: prevMap[s.id]?.meals ?? [],
-          ingredients: prevMap[s.id]?.ingredients ?? { toBuy: [], remaining: [] },
-          wishlist: prevMap[s.id]?.wishlist ?? [],
-        }))
+        // leaveSpace가 먼저 실행됐는데 boot DB 쿼리가 stale 데이터로 늦게 완료된 경우
+        // leftSpacesRef에 있는 스페이스를 재추가하지 않도록 필터링
+        return spaceList
+          .filter(s => !leftSpacesRef.current.has(s.id))
+          .map(s => ({
+            ...s,
+            meals: prevMap[s.id]?.meals ?? [],
+            ingredients: prevMap[s.id]?.ingredients ?? { toBuy: [], remaining: [] },
+            wishlist: prevMap[s.id]?.wishlist ?? [],
+          }))
       })
       setCurrentSpaceId(prev => {
         if (prev && spaceList.find(s => s.id === prev)) return prev
@@ -447,6 +452,10 @@ export function AppProvider({ children }) {
   async function loadAllSpaceData(spaceList) {
     console.log(`[loadAllSpaceData] 시작, spaces수=${spaceList.length}`, spaceList.map(s => s.id))
     for (const space of spaceList) {
+      if (leftSpacesRef.current.has(space.id)) {
+        console.log(`[loadAllSpaceData] space=${space.id} 이미 나간 스페이스 — 건너뜀`)
+        continue
+      }
       try {
         console.log(`[loadAllSpaceData] space=${space.id} DB 조회 시작`)
         const [
@@ -683,6 +692,10 @@ export function AppProvider({ children }) {
       console.log('[leaveSpace] DB 삭제 결과:', error ? error.message : '성공')
       if (error) { console.error('[leaveSpace] 오류:', error); return }
     }
+
+    // boot()의 비동기 DB 쿼리가 leaveSpace보다 늦게 완료되어 stale spaceList로 덮어쓰는
+    // race condition 방지: 나간 스페이스 ID를 추적해 boot/loadAllSpaceData가 재추가 못하게 함
+    leftSpacesRef.current.add(id)
 
     // setCurrentSpaceId를 setSpaces 콜백 안에 중첩하면 React에서 처리가 보장되지 않음.
     // 두 업데이트를 분리하고 현재 spaces 값으로 next를 미리 계산.
@@ -1109,6 +1122,9 @@ export function AppProvider({ children }) {
     }
 
     if (!spaceRow) return null
+
+    // 이전에 나간 스페이스를 다시 참가하는 경우 leftSpacesRef에서 제거
+    leftSpacesRef.current.delete(spaceRow.id)
 
     // 이미 로컬에 있으면 그냥 전환
     const existing = spaces.find(s => s.id === spaceRow.id)
