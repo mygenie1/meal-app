@@ -344,19 +344,20 @@ export function AppProvider({ children }) {
     setRetryAttempt(attempt)
 
     try {
-      const { data: spacesData, error } = await supabase
-        .from('spaces')
-        .select('*')
-        .order('created_at')
+      // spaces 테이블 직접 조회 대신 space_members 기반으로 명시적 조회.
+      // 이렇게 해야 나간 스페이스가 새로고침 후 다시 나타나는 버그를 방지할 수 있음.
+      // spaces 테이블 RLS에만 의존하면 정책 설정 상태에 따라 모든 스페이스가 반환될 수 있음.
+      const { data: memberships, error } = await supabase
+        .from('space_members')
+        .select('spaces(*)')
+        .eq('user_id', currentUser?.id)
 
       if (error) throw new Error(error.message || 'spaces 조회 오류')
 
-      const spaceRows = spacesData || []
-
-      // 주의: 과거 여기에 "localStorage의 savedId가 목록에 없으면 space_members에 재가입"하는
-      // RLS 마이그레이션용 복구 로직이 있었으나, 사용자가 나간(삭제한) 스페이스를 boot 때마다
-      // 되살리는 버그(자동 재생성)의 원인이라 제거함. 멤버십 기반 조회 결과만 신뢰한다.
-      // 멤버가 아닌 savedId는 아래 currentSpaceId 폴백에서 자연스럽게 정리된다.
+      const spaceRows = (memberships || [])
+        .map(m => m.spaces)
+        .filter(Boolean)
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
 
       const spaceList = spaceRows.map(s => ({
         id: s.id,
