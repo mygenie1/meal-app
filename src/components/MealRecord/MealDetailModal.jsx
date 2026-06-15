@@ -8,7 +8,7 @@ import MealForm from './MealForm'
 import PhotoGallery from '../common/PhotoGallery'
 import { getOriginalUrl } from '../../lib/uploadPhoto'
 import AuthorBadge from '../common/AuthorBadge'
-import { sendNotification, buildFromUser } from '../../lib/notify'
+import { sendNotification, buildFromUser, getSpaceMemberIds } from '../../lib/notify'
 import { linkify } from '../../lib/linkify'
 
 const TAG_STYLES = {
@@ -91,9 +91,9 @@ function RatingsSection({ mealId }) {
     } else {
       await addOrUpdateRating(mealId, value)
       const fromUser = buildFromUser(user)
-      const meal = spaces?.flatMap(s => s.meals).find(m => m.id === mealId)
+      const memberIds = await getSpaceMemberIds(currentSpace?.id)
       await sendNotification({
-        toUserId: meal?.userId,
+        toUserIds: memberIds,
         spaceId: currentSpace?.id,
         mealId,
         fromUser,
@@ -322,8 +322,9 @@ export default function MealDetailModal({ meal, onClose }) {
       setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
       const fromUser = buildFromUser(user)
       const preview = trimmed.length > 20 ? trimmed.slice(0, 20) + '…' : trimmed
+      const memberIds = await getSpaceMemberIds(currentSpace?.id)
       await sendNotification({
-        toUserId: liveMeal.userId,
+        toUserIds: memberIds,
         spaceId: currentSpace?.id,
         mealId: liveMeal.id,
         fromUser,

@@ -9,22 +9,29 @@ export function buildFromUser(user) {
   }
 }
 
-export async function sendNotification({ toUserId, spaceId, mealId, fromUser, type, message }) {
-  if (!toUserId || !fromUser?.id || toUserId === fromUser.id) return
+export async function sendNotification({ toUserIds, spaceId, mealId, fromUser, type, message }) {
+  const targets = toUserIds.filter(id => id !== fromUser.id)
+  if (targets.length === 0) return
   try {
-    const { error } = await supabase.from('notifications').insert({
-      user_id: toUserId,
-      space_id: spaceId || null,
-      meal_id: mealId || null,
-      from_user_id: fromUser.id,
-      from_nickname: fromUser.nickname || '',
-      from_avatar_url: fromUser.avatar_url || '',
-      type,
-      message,
-      is_read: false,
-    })
-    if (error) console.error('[notify] 알림 전송 실패:', error)
+    await supabase.from('notifications').insert(
+      targets.map(userId => ({
+        user_id: userId,
+        space_id: spaceId || null,
+        meal_id: mealId || null,
+        from_user_id: fromUser.id,
+        from_nickname: fromUser.nickname || '',
+        from_avatar_url: fromUser.avatar_url || '',
+        type,
+        message,
+        is_read: false,
+      }))
+    )
   } catch (e) {
-    console.error('[notify] 알림 처리 오류:', e)
+    console.error('[notify] 알림 전송 실패:', e)
   }
+}
+
+export async function getSpaceMemberIds(spaceId) {
+  const { data } = await supabase.from('space_members').select('user_id').eq('space_id', spaceId)
+  return data?.map(m => m.user_id) || []
 }

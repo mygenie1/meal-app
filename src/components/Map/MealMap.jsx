@@ -319,13 +319,13 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
           if (members?.length > 0) {
             const fromUser = buildFromUser(user)
             const nick = user.user_metadata?.name || user.user_metadata?.full_name || '누군가'
-            await Promise.all(members.map(m => sendNotification({
-              toUserId: m.user_id,
+            await sendNotification({
+              toUserIds: members.map(m => m.user_id),
               spaceId: currentSpace?.id,
               fromUser,
               type: 'wishlist_interest',
               message: `${nick}님도 "${item.name}"에 가고 싶어해요`,
-            })))
+            })
           }
         } catch {}
       }
@@ -1641,13 +1641,13 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
         if (members?.length > 0) {
           const fromUser = buildFromUser(user)
           const nick = user?.user_metadata?.name || user?.user_metadata?.full_name || '누군가'
-          await Promise.all(members.map(m => sendNotification({
-            toUserId: m.user_id,
+          await sendNotification({
+            toUserIds: members.map(m => m.user_id),
             spaceId: currentSpace?.id,
             fromUser,
             type: 'new_wishlist',
             message: `${nick}님이 가고 싶은 곳을 추가했어요: ${newItem.name}`,
-          })))
+          })
         }
       } catch {}
     }
@@ -2053,13 +2053,13 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
                                   if (members?.length > 0) {
                                     const fromUser = buildFromUser(user)
                                     const nick = user?.user_metadata?.name || user?.user_metadata?.full_name || '누군가'
-                                    await Promise.all(members.map(m => sendNotification({
-                                      toUserId: m.user_id,
+                                    await sendNotification({
+                                      toUserIds: members.map(m => m.user_id),
                                       spaceId: currentSpace?.id,
                                       fromUser,
                                       type: 'wishlist_interest',
                                       message: `${nick}님도 "${item.name}"에 가고 싶어해요`,
-                                    })))
+                                    })
                                   }
                                 } catch {}
                               }
