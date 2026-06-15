@@ -9,6 +9,7 @@ import IngredientsPage from './pages/IngredientsPage'
 import SpacesPage from './pages/SpacesPage'
 import LoginPage from './pages/LoginPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import TutorialFlow from './components/Tutorial/TutorialFlow'
 import InstallBanner from './components/common/InstallBanner'
 
 function OfflineBanner() {
@@ -86,6 +87,9 @@ function AppContent() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
   const [errorDismissed, setErrorDismissed] = useState(false)
   const [updateReady, setUpdateReady] = useState(false)
+  const [tutorialCompleted, setTutorialCompleted] = useState(
+    () => !!localStorage.getItem('tutorial_completed')
+  )
 
   useEffect(() => {
     const goOnline  = () => setIsOffline(false)
@@ -176,6 +180,17 @@ function AppContent() {
   }
 
   if (!user) return <LoginPage />
+
+  if (!tutorialCompleted) {
+    return (
+      <TutorialFlow
+        onComplete={() => {
+          localStorage.setItem('tutorial_completed', 'true')
+          setTutorialCompleted(true)
+        }}
+      />
+    )
+  }
 
   return (
     <div className="min-h-svh max-w-lg mx-auto flex flex-col bg-cream-50">

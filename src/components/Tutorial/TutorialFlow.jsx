@@ -1,0 +1,312 @@
+import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useApp } from '../../context/AppContext'
+
+const WHO_OPTIONS = [
+  { label: '커플', emoji: '💑', spaceName: '우리 식탁' },
+  { label: '가족', emoji: '👨‍👩‍👧', spaceName: '가족 식탁' },
+  { label: '친구', emoji: '👫', spaceName: '맛집 모임' },
+  { label: '혼자 먼저 써보기', emoji: '🙋', spaceName: '나의 식탁' },
+]
+
+const TOTAL_STEPS = 5
+
+export default function TutorialFlow({ onComplete }) {
+  const { createSpace, joinByCode } = useApp()
+  const navigate = useNavigate()
+
+  const [currentStep, setCurrentStep] = useState(0)
+  const [fade, setFade] = useState(false)
+
+  const [selectedType, setSelectedType] = useState(null)
+  const [spaceName, setSpaceName] = useState('')
+  const [showJoinInput, setShowJoinInput] = useState(false)
+  const [joinCode, setJoinCode] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [joining, setJoining] = useState(false)
+  const [spaceError, setSpaceError] = useState('')
+
+  const didAutoOpen = useRef(false)
+
+  function goStep(n) {
+    setFade(true)
+    setTimeout(() => {
+      setCurrentStep(n)
+      setFade(false)
+    }, 200)
+  }
+  const goNext = () => goStep(currentStep + 1)
+  const handleSkip = () => goNext()
+
+  function handleComplete(openForm = false) {
+    if (openForm && !didAutoOpen.current) {
+      didAutoOpen.current = true
+      navigate('/', { state: { openMealForm: true } })
+    }
+    onComplete()
+  }
+
+  async function handleCreateSpace() {
+    const name = spaceName.trim() || selectedType?.spaceName || '우리 식탁'
+    setCreating(true)
+    setSpaceError('')
+    const result = await createSpace(name)
+    setCreating(false)
+    if (result) {
+      goNext()
+    } else {
+      setSpaceError('식탁을 만들지 못했어요. 다시 시도해주세요.')
+    }
+  }
+
+  async function handleJoinSpace() {
+    if (joinCode.length !== 6) return
+    setJoining(true)
+    setSpaceError('')
+    const result = await joinByCode(joinCode)
+    setJoining(false)
+    if (result) {
+      goNext()
+    } else {
+      setSpaceError('코드를 확인해주세요. 일치하는 식탁이 없어요.')
+    }
+  }
+
+  // ── 각 스텝 콘텐츠 ───────────────────────────────────────────────
+
+  function Step0() {
+    return (
+      <div className="flex flex-col items-center justify-center h-full px-8 text-center">
+        <div className="w-20 h-20 bg-warm-brown rounded-2xl flex items-center justify-center mb-8 shadow-sm">
+          <svg className="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 2v6a2 2 0 0 0 2 2v12M9 2v6a2 2 0 0 1-2 2" />
+            <path d="M16 2c-1.7 0-3 1.8-3 4s1.3 4 3 4 3-1.8 3-4-1.3-4-3-4zM16 10v12" />
+          </svg>
+        </div>
+        <h1 className="text-2xl font-bold text-warm-dark mb-3">
+          식탁일기에 오신 걸<br />환영해요
+        </h1>
+        <p className="text-sm text-warm-light leading-relaxed">
+          함께 먹은 한 끼를 사진으로 남기고,<br />
+          먹은 날들을 달력에 차곡차곡 기록해보세요.
+        </p>
+        <p className="text-xs text-cream-400 mt-6">설정은 나중에 언제든 바꿀 수 있어요</p>
+      </div>
+    )
+  }
+
+  function Step1() {
+    return (
+      <div className="flex flex-col px-8 pt-12">
+        <h2 className="text-xl font-bold text-warm-dark mb-2">누구와 함께 기록할까요?</h2>
+        <p className="text-sm text-warm-light mb-8">
+          식탁일기는 함께 먹은 기록을<br />
+          하나의 공간에 모아두는 방식이에요.
+        </p>
+        {WHO_OPTIONS.map(option => (
+          <button
+            key={option.label}
+            onClick={() => {
+              setSelectedType(option)
+              setSpaceName(option.spaceName)
+              goNext()
+            }}
+            className="w-full text-left px-5 py-4 mb-3 bg-white rounded-2xl border border-cream-200 flex items-center gap-3 active:border-warm-brown transition-colors">
+            <span className="text-2xl">{option.emoji}</span>
+            <span className="font-medium text-warm-dark">{option.label}</span>
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  function Step2() {
+    return (
+      <div className="flex flex-col px-8 pt-12 overflow-y-auto">
+        <h2 className="text-xl font-bold text-warm-dark mb-2">
+          식탁을 만들거나<br />초대받은 곳에 들어가세요
+        </h2>
+        <p className="text-sm text-warm-light mb-8">
+          함께 기록할 공간을 만들고,<br />
+          초대 코드로 다른 사람을 초대할 수 있어요.
+        </p>
+
+        <div className="bg-white rounded-2xl border border-cream-200 p-5 mb-3">
+          <h3 className="font-semibold text-warm-dark mb-3">새 식탁 만들기</h3>
+          <input
+            value={spaceName}
+            onChange={e => setSpaceName(e.target.value)}
+            placeholder={selectedType?.spaceName || '우리 식탁'}
+            style={{ fontSize: 16 }}
+            className="w-full px-4 py-3 rounded-xl border border-cream-300 bg-cream-50 text-warm-dark outline-none focus:border-warm-light"
+          />
+          <button
+            onClick={handleCreateSpace}
+            disabled={creating}
+            className="w-full mt-3 bg-warm-brown text-white rounded-xl py-3 font-medium disabled:opacity-50">
+            {creating ? '만드는 중...' : '만들기'}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 my-2">
+          <div className="flex-1 h-px bg-cream-200" />
+          <span className="text-xs text-cream-400">또는</span>
+          <div className="flex-1 h-px bg-cream-200" />
+        </div>
+
+        <button
+          onClick={() => setShowJoinInput(v => !v)}
+          className="w-full border border-cream-300 text-warm-dark rounded-xl py-3 font-medium">
+          초대 코드로 참가하기
+        </button>
+
+        {showJoinInput && (
+          <div className="mt-3">
+            <input
+              value={joinCode}
+              onChange={e => setJoinCode(e.target.value.toUpperCase())}
+              placeholder="6자리 코드 입력"
+              maxLength={6}
+              style={{ fontSize: 16 }}
+              className="w-full px-4 py-3 rounded-xl border border-cream-300 bg-cream-50 text-center font-mono tracking-widest text-lg text-warm-dark outline-none focus:border-warm-light"
+            />
+            <button
+              onClick={handleJoinSpace}
+              disabled={joinCode.length !== 6 || joining}
+              className="w-full mt-2 bg-warm-brown text-white rounded-xl py-3 font-medium disabled:opacity-50">
+              {joining ? '참가 중...' : '참가하기'}
+            </button>
+          </div>
+        )}
+
+        {spaceError && (
+          <p className="text-xs text-red-400 mt-3 text-center">{spaceError}</p>
+        )}
+      </div>
+    )
+  }
+
+  function Step3() {
+    return (
+      <div className="flex flex-col items-center px-8 pt-12 text-center">
+        <div className="w-full bg-cream-100 rounded-2xl p-5 mb-8">
+          <div className="grid grid-cols-7 gap-1 text-xs">
+            {['일', '월', '화', '수', '목', '금', '토'].map(d => (
+              <div key={d} className="text-center text-cream-400 py-1">{d}</div>
+            ))}
+            {Array.from({ length: 30 }, (_, i) => i + 1).map(d => (
+              <div key={d}
+                className={`text-center py-1.5 rounded-lg text-xs font-medium
+                  ${[3, 7, 12, 18, 24].includes(d)
+                    ? 'bg-warm-brown text-white'
+                    : 'text-warm-dark'}`}>
+                {d}
+              </div>
+            ))}
+          </div>
+        </div>
+        <h2 className="text-xl font-bold text-warm-dark mb-3">먹은 날들이 달력에 쌓여요</h2>
+        <p className="text-sm text-warm-light leading-relaxed">
+          사진으로 남긴 한 끼는<br />
+          날짜별로 달력에 정리돼요.<br /><br />
+          나중에 달력을 넘기다 보면<br />
+          그날 먹은 음식과 장소를 다시 볼 수 있어요.
+        </p>
+      </div>
+    )
+  }
+
+  function Step4() {
+    return (
+      <div className="flex flex-col items-center px-8 pt-12 text-center">
+        <div className="w-20 h-20 bg-cream-100 rounded-full flex items-center justify-center mb-8">
+          <svg className="w-9 h-9 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-warm-dark mb-3">첫 식탁을 남겨볼까요?</h2>
+        <p className="text-sm text-warm-light leading-relaxed mb-8">
+          오늘 먹은 음식 사진이 있다면<br />
+          첫 기록으로 남겨보세요.
+        </p>
+        <button
+          onClick={() => handleComplete(true)}
+          className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold mb-3 active:scale-[0.99] transition-transform">
+          첫 식사 기록하기
+        </button>
+        <button
+          onClick={() => handleComplete(false)}
+          className="w-full text-warm-light text-sm py-2">
+          나중에 할게요
+        </button>
+      </div>
+    )
+  }
+
+  const steps = [Step0, Step1, Step2, Step3, Step4]
+  const StepComponent = steps[currentStep]
+
+  function renderBottomButton() {
+    if (currentStep === 0) {
+      return (
+        <button
+          onClick={goNext}
+          className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold active:scale-[0.99] transition-transform">
+          시작하기
+        </button>
+      )
+    }
+    if (currentStep === 3) {
+      return (
+        <button
+          onClick={goNext}
+          className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold active:scale-[0.99] transition-transform">
+          좋아요
+        </button>
+      )
+    }
+    return null
+  }
+
+  return (
+    <div className="fixed inset-0 bg-cream-50 flex flex-col z-50"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+
+      {/* 건너뛰기 버튼 (steps 1, 2에서만) */}
+      {currentStep !== 0 && currentStep !== 3 && currentStep !== 4 && (
+        <button
+          onClick={handleSkip}
+          className="absolute right-6 text-sm text-cream-400 z-10"
+          style={{ top: 'calc(env(safe-area-inset-top) + 1.5rem)' }}>
+          건너뛰기
+        </button>
+      )}
+
+      {/* 콘텐츠 */}
+      <div
+        className="flex-1 overflow-hidden transition-opacity duration-200"
+        style={{ opacity: fade ? 0 : 1 }}>
+        <StepComponent />
+      </div>
+
+      {/* 하단 영역 */}
+      <div className="px-8 pb-10" style={{ paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom))' }}>
+        {/* 점 인디케이터 */}
+        <div className="flex justify-center gap-2 mb-6">
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+            <div
+              key={i}
+              className={`rounded-full transition-all duration-300
+                ${i === currentStep
+                  ? 'w-6 h-2 bg-warm-brown'
+                  : 'w-2 h-2 bg-cream-300'}`}
+            />
+          ))}
+        </div>
+
+        {renderBottomButton()}
+      </div>
+    </div>
+  )
+}

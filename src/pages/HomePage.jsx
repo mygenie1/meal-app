@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { format, isSameMonth, parseISO, subMonths, startOfMonth, differenceInDays } from 'date-fns'
 import { ko, enUS } from 'date-fns/locale'
 import { useApp } from '../context/AppContext'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import MealDetailModal from '../components/MealRecord/MealDetailModal'
 import Modal from '../components/common/Modal'
 import DayDetail from '../components/MealRecord/DayDetail'
@@ -195,6 +195,7 @@ function SubStat({ value, label, active, onClick }) {
 export default function HomePage() {
   const { currentSpace, spaces, loadMealPhotos, ratingsMap, user } = useApp()
   const navigate = useNavigate()
+  const location = useLocation()
   const [selectedMeal, setSelectedMeal] = useState(null)
   const [activeStatTab, setActiveStatTab] = useState(null) // null | 'newPlaces' | 'rating' | 'days'
   const [todayFormOpen, setTodayFormOpen] = useState(false)
@@ -236,6 +237,13 @@ export default function HomePage() {
     const m = memoryCard.meal
     if (m && !m.photosLoaded) loadMealPhotos(m.id)
   }, [memoryCard.meal?.id])
+
+  // 튜토리얼 "첫 식사 기록하기" 후 자동 폼 오픈
+  useEffect(() => {
+    if (location.state?.openMealForm) {
+      setTodayFormOpen(true)
+    }
+  }, [])
   const nickname = user?.user_metadata?.name || user?.user_metadata?.full_name || '식탁'
   const avatarUrl = user?.user_metadata?.avatar_url
 
