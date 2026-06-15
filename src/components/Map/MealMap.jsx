@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useApp } from '../../context/AppContext'
 import { getThumbUrl, uploadPhotoToStorage } from '../../lib/uploadPhoto'
+import { getNaverPlacePhotos } from '../../lib/naverPlace'
 import MealDetailModal from '../MealRecord/MealDetailModal'
 import Modal from '../common/Modal'
 import MealForm from '../MealRecord/MealForm'
@@ -12,7 +13,7 @@ const ROUND = 1e4
 const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
 const WISH_CATEGORY_COLORS = { 한식: '#fca5a5', 일식: '#93c5fd', 양식: '#86efac', 중식: '#fcd34d', 카페: '#f9a8d4', 기타: '#d1b89a' }
 const MOOD_TAGS = ['🔥 핫플', '💕 로맨틱', '🌿 힐링', '📸 인생샷', '✨ 특별한 날', '🍽️ 맛집 예감']
-const EMPTY_WISH_FORM = { name: '', location: '', memo: '', moodTags: [] }
+const EMPTY_WISH_FORM = { name: '', location: '', memo: '', moodTags: [], lat: null, lng: null }
 
 // ── Kakao 지오코딩 ─────────────────────────────────────────────
 async function geocodeKakao(query) {
@@ -33,6 +34,19 @@ async function geocodeKakao(query) {
           }, { size: 1 })
         }
       })
+    })
+  })
+}
+
+// ── Kakao 장소 검색 ────────────────────────────────────────────
+async function searchKakaoPlaces(query) {
+  if (!window.kakao?.maps || !query.trim()) return []
+  return new Promise(resolve => {
+    window.kakao.maps.load(() => {
+      const ps = new window.kakao.maps.services.Places()
+      ps.keywordSearch(query, (result, status) => {
+        resolve(status === window.kakao.maps.services.Status.OK ? result.slice(0, 5) : [])
+      }, { size: 5 })
     })
   })
 }
@@ -105,20 +119,130 @@ function MealPinCard({ meal, liveMeal, onClick }) {
 }
 
 function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef }) {
+  const [placeSuggestions, setPlaceSuggestions] = useState([])
+  const [showPlaceDropdown, setShowPlaceDropdown] = useState(false)
+  const [searchingPlace, setSearchingPlace] = useState(false)
+  const [naverPhotos, setNaverPhotos] = useState([])
+  const [naverPhotoIdx, setNaverPhotoIdx] = useState(0)
+  const [loadingNaverPhoto, setLoadingNaverPhoto] = useState(false)
+  const [isNaverPhoto, setIsNaverPhoto] = useState(false)
+  const placeTimerRef = useRef(null)
+  const placeWrapperRef = useRef(null)
+
+  useEffect(() => {
+    function handleOutside(e) {
+      if (placeWrapperRef.current && !placeWrapperRef.current.contains(e.target)) {
+        setShowPlaceDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    document.addEventListener('touchstart', handleOutside, { passive: true })
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('touchstart', handleOutside)
+    }
+  }, [])
+
+  function handleNameChange(e) {
+    const q = e.target.value
+    setForm(p => ({ ...p, name: q }))
+    clearTimeout(placeTimerRef.current)
+    if (!q.trim()) { setPlaceSuggestions([]); setShowPlaceDropdown(false); return }
+    placeTimerRef.current = setTimeout(async () => {
+      setSearchingPlace(true)
+      const results = await searchKakaoPlaces(q)
+      setPlaceSuggestions(results)
+      setShowPlaceDropdown(results.length > 0)
+      setSearchingPlace(false)
+    }, 350)
+  }
+
+  async function handlePlaceSelect(place) {
+    setForm(p => ({
+      ...p,
+      name: place.place_name,
+      location: place.road_address_name || place.address_name || '',
+      lat: parseFloat(place.y) || null,
+      lng: parseFloat(place.x) || null,
+    }))
+    setPlaceSuggestions([])
+    setShowPlaceDropdown(false)
+
+    setLoadingNaverPhoto(true)
+    setNaverPhotos([])
+    setIsNaverPhoto(false)
+    const photos = await getNaverPlacePhotos(place.place_name)
+    setLoadingNaverPhoto(false)
+    if (photos.length > 0) {
+      setNaverPhotos(photos)
+      setNaverPhotoIdx(0)
+      setPhotoPreview(photos[0])
+      setIsNaverPhoto(true)
+    }
+  }
+
+  function handleCyclePhoto() {
+    const next = (naverPhotoIdx + 1) % naverPhotos.length
+    setNaverPhotoIdx(next)
+    setPhotoPreview(naverPhotos[next])
+  }
+
+  function handleRemovePhoto() {
+    setPhotoPreview('')
+    setIsNaverPhoto(false)
+    if (photoRef.current) photoRef.current.value = ''
+  }
+
+  function handleManualUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => { setPhotoPreview(ev.target.result); setIsNaverPhoto(false) }
+    reader.readAsDataURL(file)
+  }
+
   return (
     <>
-      <div>
+      <div ref={placeWrapperRef}>
         <label className="text-xs text-warm-light mb-1.5 block font-medium">장소명 *</label>
-        <input type="text" value={form.name} required
-          onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-          placeholder="어디에 가고 싶으신가요?" className={INPUT_CLS} />
+        <div className="relative">
+          <input type="text" value={form.name} required
+            onChange={handleNameChange}
+            onFocus={() => placeSuggestions.length > 0 && setShowPlaceDropdown(true)}
+            onKeyDown={e => e.key === 'Escape' && setShowPlaceDropdown(false)}
+            placeholder="어디에 가고 싶으신가요?" className={INPUT_CLS} />
+          {searchingPlace && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-cream-300 border-t-warm-light rounded-full animate-spin" />
+          )}
+        </div>
+        {showPlaceDropdown && placeSuggestions.length > 0 && (
+          <div className="mt-1 rounded-2xl border border-cream-200 bg-white shadow-sm overflow-hidden">
+            {placeSuggestions.map((place, i) => (
+              <button key={i} type="button"
+                onMouseDown={e => { e.preventDefault(); handlePlaceSelect(place) }}
+                onTouchEnd={e => { e.preventDefault(); handlePlaceSelect(place) }}
+                className="w-full text-left px-4 py-3 hover:bg-cream-50 active:bg-cream-100 transition-colors border-b border-cream-100 last:border-0"
+              >
+                <p className="text-sm font-medium text-warm-dark truncate">{place.place_name}</p>
+                {(place.road_address_name || place.address_name) && (
+                  <p className="text-[11px] text-warm-light mt-0.5 truncate">{place.road_address_name || place.address_name}</p>
+                )}
+                {place.category_name && (
+                  <p className="text-[10px] text-cream-400 mt-0.5 truncate">{place.category_name}</p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
       <div>
         <label className="text-xs text-warm-light mb-1.5 block font-medium">주소</label>
         <input type="text" value={form.location}
           onChange={e => setForm(p => ({ ...p, location: e.target.value }))}
           placeholder="예: 서울 마포구 연남동" className={INPUT_CLS} />
       </div>
+
       <div>
         <label className="text-xs text-warm-light mb-2 block font-medium">분위기</label>
         <div className="flex gap-2 flex-wrap">
@@ -133,19 +257,38 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
           })}
         </div>
       </div>
+
       <div>
         <label className="text-xs text-warm-light mb-1.5 block font-medium">사진</label>
-        {photoPreview ? (
+        {loadingNaverPhoto ? (
+          <div className="w-full h-36 rounded-2xl bg-cream-100 flex flex-col items-center justify-center gap-2">
+            <div className="w-5 h-5 border-2 border-cream-200 border-t-warm-light rounded-full animate-spin" />
+            <p className="text-xs text-cream-400">장소 사진을 가져오는 중...</p>
+          </div>
+        ) : photoPreview ? (
           <div className="relative">
             <img src={photoPreview} alt="" className="w-full h-36 object-cover rounded-2xl" />
-            <button type="button"
-              onClick={() => { setPhotoPreview(''); if (photoRef.current) photoRef.current.value = '' }}
+            <button type="button" onClick={handleRemovePhoto}
               className="absolute top-2 right-2 w-7 h-7 bg-black/50 rounded-full flex items-center justify-center text-white"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+            {isNaverPhoto && naverPhotos.length > 1 && (
+              <button type="button" onClick={handleCyclePhoto}
+                className="absolute bottom-2 left-2 px-3 py-1.5 bg-black/50 rounded-full text-white text-xs font-medium backdrop-blur-sm active:scale-95"
+              >
+                다른 사진 ({naverPhotoIdx + 1}/{naverPhotos.length})
+              </button>
+            )}
+            {isNaverPhoto && (
+              <button type="button" onClick={() => photoRef.current?.click()}
+                className="absolute bottom-2 right-2 px-3 py-1.5 bg-black/50 rounded-full text-white text-xs font-medium backdrop-blur-sm active:scale-95"
+              >
+                직접 업로드
+              </button>
+            )}
           </div>
         ) : (
           <button type="button" onClick={() => photoRef.current?.click()}
@@ -158,16 +301,9 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
             <span className="text-xs">사진 추가</span>
           </button>
         )}
-        <input ref={photoRef} type="file" accept="image/*" className="hidden"
-          onChange={e => {
-            const file = e.target.files?.[0]
-            if (!file) return
-            const reader = new FileReader()
-            reader.onload = ev => setPhotoPreview(ev.target.result)
-            reader.readAsDataURL(file)
-          }}
-        />
+        <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handleManualUpload} />
       </div>
+
       <div>
         <label className="text-xs text-warm-light mb-1.5 block font-medium">메모</label>
         <input type="text" value={form.memo}
@@ -618,12 +754,16 @@ export default function MealMap() {
     e.preventDefault()
     if (!addForm.name.trim()) return
     setSavingAdd(true)
-    let lat = null, lng = null
-    if (addForm.location.trim()) {
+    let lat = addForm.lat || null, lng = addForm.lng || null
+    if (!lat && addForm.location.trim()) {
       try { const coords = await geocodeKakao(addForm.location); if (coords) { lat = coords[0]; lng = coords[1] } } catch {}
     }
     let photoUrl = ''
-    if (addPhotoPreview) photoUrl = await uploadPhotoToStorage(addPhotoPreview, currentSpace?.id)
+    if (addPhotoPreview) {
+      photoUrl = addPhotoPreview.startsWith('data:')
+        ? await uploadPhotoToStorage(addPhotoPreview, currentSpace?.id)
+        : addPhotoPreview
+    }
     await addWishlistItem({ name: addForm.name.trim(), memo: addForm.memo.trim(), location: addForm.location.trim(), lat, lng, moodTags: addForm.moodTags, photo: photoUrl })
     setShowAddModal(false)
     setSavingAdd(false)
@@ -631,7 +771,7 @@ export default function MealMap() {
 
   function handleOpenEdit(item) {
     setEditingWish(item)
-    setEditForm({ name: item.name || '', location: item.location || '', memo: item.memo || '', moodTags: item.moodTags || [] })
+    setEditForm({ name: item.name || '', location: item.location || '', memo: item.memo || '', moodTags: item.moodTags || [], lat: item.lat || null, lng: item.lng || null })
     setEditPhotoPreview(item.photo || '')
   }
 
@@ -640,7 +780,9 @@ export default function MealMap() {
     if (!editForm.name.trim() || !editingWish) return
     setSavingEdit(true)
     let lat = editingWish.lat, lng = editingWish.lng
-    if (editForm.location.trim() && editForm.location !== editingWish.location) {
+    if (editForm.lat && editForm.lng) {
+      lat = editForm.lat; lng = editForm.lng
+    } else if (editForm.location.trim() && editForm.location !== editingWish.location) {
       try { const coords = await geocodeKakao(editForm.location); if (coords) { lat = coords[0]; lng = coords[1] } } catch {}
     }
     let photoUrl = editingWish.photo || ''
