@@ -610,7 +610,6 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
   const [showPlaceDropdown, setShowPlaceDropdown] = useState(false)
   const [searchingPlace, setSearchingPlace] = useState(false)
   const [naverPhotos, setNaverPhotos] = useState([])
-  const [naverPhotoIdx, setNaverPhotoIdx] = useState(0)
   const [loadingNaverPhoto, setLoadingNaverPhoto] = useState(false)
   const [isNaverPhoto, setIsNaverPhoto] = useState(false)
   const placeTimerRef = useRef(null)
@@ -689,16 +688,9 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
     setLoadingNaverPhoto(false)
     if (photos.length > 0) {
       setNaverPhotos(photos)
-      setNaverPhotoIdx(0)
       setPhotoPreview(photos[0])
       setIsNaverPhoto(true)
     }
-  }
-
-  function handleCyclePhoto() {
-    const next = (naverPhotoIdx + 1) % naverPhotos.length
-    setNaverPhotoIdx(next)
-    setPhotoPreview(naverPhotos[next])
   }
 
   function handleManualUpload(e) {
@@ -707,6 +699,16 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
     const reader = new FileReader()
     reader.onload = ev => { setPhotoPreview(ev.target.result); setIsNaverPhoto(false) }
     reader.readAsDataURL(file)
+  }
+
+  function handleRemoveUpload() {
+    if (naverPhotos.length > 0) {
+      setPhotoPreview(naverPhotos[0])
+      setIsNaverPhoto(true)
+    } else {
+      setPhotoPreview('')
+      if (photoRef.current) photoRef.current.value = ''
+    }
   }
 
   return (
@@ -767,49 +769,67 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
       <div>
         <label className="text-xs text-warm-light mb-1.5 block font-medium">사진</label>
         {loadingNaverPhoto ? (
-          <div className="w-full h-36 rounded-2xl bg-cream-100 flex flex-col items-center justify-center gap-2">
+          <div className="w-full h-28 rounded-2xl bg-cream-100 flex flex-col items-center justify-center gap-2">
             <div className="w-5 h-5 border-2 border-cream-200 border-t-warm-light rounded-full animate-spin" />
             <p className="text-xs text-cream-400">장소 사진을 가져오는 중...</p>
           </div>
+        ) : naverPhotos.length > 0 && isNaverPhoto ? (
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              {naverPhotos.map((url, idx) => {
+                const selected = photoPreview === url
+                return (
+                  <div key={idx} onClick={() => setPhotoPreview(url)}
+                    className={`relative aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all active:scale-95 ${selected ? 'border-warm-brown' : 'border-transparent'}`}
+                  >
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                    {selected && (
+                      <div className="absolute inset-0 bg-warm-brown/20 flex items-center justify-center">
+                        <div className="w-6 h-6 bg-warm-brown rounded-full flex items-center justify-center shadow-sm">
+                          <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <button type="button" onClick={() => photoRef.current?.click()}
+              className="w-full mt-2 py-2 rounded-xl border border-cream-300 text-sm text-warm-light hover:bg-cream-100 transition-colors active:scale-[0.98]">
+              직접 업로드
+            </button>
+            {!isMobile && (
+              <p className="text-xs text-cream-400 text-center mt-1">Ctrl+V로 사진을 붙여넣을 수 있어요</p>
+            )}
+          </>
         ) : photoPreview ? (
           <div className="relative">
             <img src={photoPreview} alt="" className="w-full h-36 object-cover rounded-2xl" />
-            <button type="button"
-              onClick={() => { setPhotoPreview(''); setIsNaverPhoto(false); if (photoRef.current) photoRef.current.value = '' }}
+            <button type="button" onClick={handleRemoveUpload}
               className="absolute top-2 right-2 w-7 h-7 bg-black/50 rounded-full flex items-center justify-center text-white">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            {isNaverPhoto && naverPhotos.length > 1 && (
-              <button type="button" onClick={handleCyclePhoto}
-                className="absolute bottom-2 left-2 px-3 py-1.5 bg-black/50 rounded-full text-white text-xs font-medium backdrop-blur-sm active:scale-95"
-              >
-                다른 사진 ({naverPhotoIdx + 1}/{naverPhotos.length})
-              </button>
-            )}
-            {isNaverPhoto && (
-              <button type="button" onClick={() => photoRef.current?.click()}
-                className="absolute bottom-2 right-2 px-3 py-1.5 bg-black/50 rounded-full text-white text-xs font-medium backdrop-blur-sm active:scale-95"
-              >
-                직접 업로드
-              </button>
-            )}
           </div>
         ) : (
-          <button type="button" onClick={() => photoRef.current?.click()}
-            className="w-full h-24 rounded-2xl border-2 border-dashed border-cream-300 flex flex-col items-center justify-center gap-1.5 text-cream-400 hover:border-warm-light hover:text-warm-light transition-colors">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span className="text-xs">사진 추가</span>
-          </button>
+          <>
+            <button type="button" onClick={() => photoRef.current?.click()}
+              className="w-full h-24 rounded-2xl border-2 border-dashed border-cream-300 flex flex-col items-center justify-center gap-1.5 text-cream-400 hover:border-warm-light hover:text-warm-light transition-colors">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="text-xs">사진 추가</span>
+            </button>
+            {!isMobile && (
+              <p className="text-xs text-cream-400 mt-1.5 text-center">Ctrl+V로 사진을 붙여넣을 수 있어요</p>
+            )}
+          </>
         )}
         <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handleManualUpload} />
-        {!isMobile && (
-          <p className="text-xs text-cream-400 mt-1.5 text-center">Ctrl+V로 사진을 붙여넣을 수 있어요</p>
-        )}
       </div>
 
       {/* 붙여넣기 토스트 */}
