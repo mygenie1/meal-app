@@ -1221,12 +1221,6 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
     return Object.values(map)
   }, [pins])
 
-  // show/hide 시 최신 필터/선택 상태 읽기용 ref (effect 의존성 추가 없이)
-  const activeFiltersRef = useRef(activeFilters)
-  useEffect(() => { activeFiltersRef.current = activeFilters }, [activeFilters])
-  const selectedClusterKeyRef = useRef(null)
-  useEffect(() => { selectedClusterKeyRef.current = selectedClusterKey }, [selectedClusterKey])
-
   // 지도 뷰포트(bounds) 안에 있는 핀만 목록에 표시. bounds 미확정 시 전체 표시.
   const visiblePins = useMemo(() => {
     if (!mapBounds) return filteredPins
@@ -1241,6 +1235,12 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
     const [lat, lng] = selectedCluster.coords
     return `${Math.round(lat * ROUND)},${Math.round(lng * ROUND)}`
   }, [selectedCluster])
+
+  // show/hide 시 최신 필터/선택 상태 읽기용 ref (effect 의존성 추가 없이)
+  const activeFiltersRef = useRef(activeFilters)
+  useEffect(() => { activeFiltersRef.current = activeFilters }, [activeFilters])
+  const selectedClusterKeyRef = useRef(null)
+  useEffect(() => { selectedClusterKeyRef.current = selectedClusterKey }, [selectedClusterKey])
 
   // ── 맛집 지도 초기화 (현재 위치 우선) ─────────────────────────
   useEffect(() => {
