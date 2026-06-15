@@ -42,9 +42,12 @@ export default function SettingsModal({ isOpen, onClose }) {
     }
   }, [isOpen, user])
 
-  const avatarUrl = user?.user_metadata?.avatar_url
+  const rawAvatarUrl = user?.user_metadata?.avatar_url
   const displayEmail = user?.email || ''
   const provider = user?.app_metadata?.provider
+  // 이메일 계정인데 카카오 CDN URL이 저장된 경우 기본 아바타로 대체
+  const isKakaoAvatar = rawAvatarUrl?.includes('kakaocdn') || rawAvatarUrl?.includes('k.kakaocdn')
+  const avatarUrl = (provider === 'email' && isKakaoAvatar) ? null : rawAvatarUrl
   const providerLabel = provider === 'kakao' ? '카카오'
     : provider === 'email' ? '이메일'
     : provider || '소셜'
@@ -308,10 +311,12 @@ export default function SettingsModal({ isOpen, onClose }) {
                     </div>
                   ) : (
                     <div
-                      className={`w-14 h-14 rounded-full flex items-center justify-center ring-2 ring-cream-200 bg-cream-200 transition-opacity ${photoUploading ? 'opacity-50' : ''}`}
+                      className={`w-14 h-14 rounded-full flex items-center justify-center ring-2 ring-cream-200 transition-opacity ${photoUploading ? 'opacity-50' : ''}`}
+                      style={{ background: 'rgba(107,79,58,0.15)' }}
                     >
-                      <svg className="w-7 h-7 text-warm-light" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      <svg className="w-7 h-7 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
                       </svg>
                     </div>
                   )}
