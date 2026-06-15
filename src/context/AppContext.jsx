@@ -92,8 +92,6 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const hasBootedRef = useRef(false)
-  const leftSpacesRef = useRef(new Set()) // leaveSpace로 명시적으로 나간 스페이스 ID 추적
-  const isLeavingRef = useRef(false)      // 나가기 진행 중 플래그 — Realtime/boot 재로딩 차단
 
   const [spaces, setSpaces] = useState([])
   const [currentSpaceId, setCurrentSpaceId] = useState(
@@ -150,44 +148,8 @@ export function AppProvider({ children }) {
   }, [])
 
   // Supabase Realtime 구독 — 다른 기기/사용자의 변경사항 실시간 반영
+  // spacesChannel: 나가기/참가 후 DB 직접 재조회 방식으로 대체하여 제거
   useEffect(() => {
-    const spacesChannel = supabase
-      .channel('realtime:spaces')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'spaces' }, ({ eventType, new: newRow, old: oldRow }) => {
-        if (eventType === 'INSERT') {
-          // 나가기 진행 중이면 spurious INSERT(RLS 재평가 시 발생 가능)로 간주해 무시
-          if (isLeavingRef.current) return
-          setSpaces(prev => {
-            if (prev.find(s => s.id === newRow.id)) return prev
-            if (leftSpacesRef.current.has(newRow.id)) return prev  // 이미 나간 스페이스 재추가 방지
-            return [...prev, {
-              id: newRow.id,
-              name: newRow.name,
-              emoji: newRow.emoji,
-              code: newRow.code,
-              ownerId: newRow.owner_id || null,
-              createdAt: newRow.created_at,
-              meals: [],
-              ingredients: { toBuy: [], remaining: [] },
-              wishlist: [],
-            }]
-          })
-        } else if (eventType === 'UPDATE') {
-          setSpaces(prev => prev.map(s =>
-            s.id === newRow.id
-              ? { ...s, name: newRow.name, emoji: newRow.emoji, code: newRow.code, ownerId: newRow.owner_id || null }
-              : s
-          ))
-        } else if (eventType === 'DELETE') {
-          setSpaces(prev => {
-            const next = prev.filter(s => s.id !== oldRow.id)
-            setCurrentSpaceId(cur => cur === oldRow.id ? (next[0]?.id || null) : cur)
-            return next
-          })
-        }
-      })
-      .subscribe()
-
     const mealsChannel = supabase
       .channel('realtime:meals')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meals' }, ({ eventType, new: newRow, old: oldRow }) => {
@@ -302,7 +264,6 @@ export function AppProvider({ children }) {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(spacesChannel)
       supabase.removeChannel(mealsChannel)
       supabase.removeChannel(ingredientsChannel)
     }
@@ -414,16 +375,12 @@ export function AppProvider({ children }) {
       // functional update로 기존 meals/ingredients를 보존하고 space 메타데이터만 갱신.
       setSpaces(prev => {
         const prevMap = Object.fromEntries(prev.map(s => [s.id, s]))
-        // leaveSpace가 먼저 실행됐는데 boot DB 쿼리가 stale 데이터로 늦게 완료된 경우
-        // leftSpacesRef에 있는 스페이스를 재추가하지 않도록 필터링
-        return spaceList
-          .filter(s => !leftSpacesRef.current.has(s.id))
-          .map(s => ({
-            ...s,
-            meals: prevMap[s.id]?.meals ?? [],
-            ingredients: prevMap[s.id]?.ingredients ?? { toBuy: [], remaining: [] },
-            wishlist: prevMap[s.id]?.wishlist ?? [],
-          }))
+        return spaceList.map(s => ({
+          ...s,
+          meals: prevMap[s.id]?.meals ?? [],
+          ingredients: prevMap[s.id]?.ingredients ?? { toBuy: [], remaining: [] },
+          wishlist: prevMap[s.id]?.wishlist ?? [],
+        }))
       })
       setCurrentSpaceId(prev => {
         if (prev && spaceList.find(s => s.id === prev)) return prev
@@ -432,14 +389,9 @@ export function AppProvider({ children }) {
       setLoading(false)
 
       // Phase 2: 각 space의 meals + ingredients 백그라운드 로드 (에러 있어도 앱 유지)
-      // 나가기 진행 중이면 stale spaceList로 재로딩하지 않음
-      if (isLeavingRef.current) {
-        console.log('[boot] 나가기 진행 중 — loadAllSpaceData 건너뜀')
-      } else {
-        loadAllSpaceData(spaceList).catch(err =>
-          console.warn('백그라운드 데이터 로드 실패:', err)
-        )
-      }
+      loadAllSpaceData(spaceList).catch(err =>
+        console.warn('백그라운드 데이터 로드 실패:', err)
+      )
     } catch (err) {
       console.error(`Supabase boot error (시도 ${attempt + 1}/${MAX_RETRIES}):`, err)
 
@@ -461,10 +413,6 @@ export function AppProvider({ children }) {
   async function loadAllSpaceData(spaceList) {
     console.log(`[loadAllSpaceData] 시작, spaces수=${spaceList.length}`, spaceList.map(s => s.id))
     for (const space of spaceList) {
-      if (leftSpacesRef.current.has(space.id)) {
-        console.log(`[loadAllSpaceData] space=${space.id} 이미 나간 스페이스 — 건너뜀`)
-        continue
-      }
       try {
         console.log(`[loadAllSpaceData] space=${space.id} DB 조회 시작`)
         const [
@@ -692,35 +640,28 @@ export function AppProvider({ children }) {
 
   // 스페이스 나가기 — space_members에서 내 참가 기록만 제거 (Supabase 데이터 삭제 없음)
   async function leaveSpace(id) {
-    // 플래그를 먼저 세워 boot/Realtime이 이 스페이스를 재로딩하지 않도록 차단
-    isLeavingRef.current = true
+    if (!user?.id) return
 
-    if (user?.id) {
-      const { error } = await supabase
-        .from('space_members')
-        .delete()
-        .eq('space_id', id)
-        .eq('user_id', user.id)
-      console.log('[leaveSpace] DB 삭제 결과:', error ? error.message : '성공')
-      if (error) {
-        console.error('[leaveSpace] 오류:', error)
-        isLeavingRef.current = false  // 실패 시 즉시 플래그 해제
-        return
-      }
-    }
+    const { error } = await supabase
+      .from('space_members')
+      .delete()
+      .eq('space_id', id)
+      .eq('user_id', user.id)
+    console.log('[leaveSpace] DB 삭제 결과:', error ? error.message : '성공')
+    if (error) { console.error('[leaveSpace] 오류:', error); return }
 
-    // boot()의 비동기 DB 쿼리가 leaveSpace보다 늦게 완료되어 stale spaceList로 덮어쓰는
-    // race condition 방지: 나간 스페이스 ID를 추적해 boot/loadAllSpaceData가 재추가 못하게 함
-    leftSpacesRef.current.add(id)
+    // 삭제 성공 후 내가 실제로 속한 스페이스만 DB에서 재조회 → stale local state 방지
+    const { data: memberships } = await supabase
+      .from('space_members')
+      .select('space_id')
+      .eq('user_id', user.id)
 
-    // setCurrentSpaceId를 setSpaces 콜백 안에 중첩하면 React에서 처리가 보장되지 않음.
-    // 두 업데이트를 분리하고 현재 spaces 값으로 next를 미리 계산.
-    const nextSpaces = spaces.filter(s => s.id !== id)
+    const mySpaceIds = new Set((memberships || []).map(m => m.space_id))
+    console.log('[leaveSpace] 남은 스페이스 수:', mySpaceIds.size)
+
+    const nextSpaces = spaces.filter(s => mySpaceIds.has(s.id))
     setSpaces(nextSpaces)
-    setCurrentSpaceId(cur => cur === id ? (nextSpaces[0]?.id || null) : cur)
-
-    // 500ms 후 플래그 해제 — boot의 setSpaces/loadAllSpaceData가 완료될 충분한 시간
-    setTimeout(() => { isLeavingRef.current = false }, 500)
+    setCurrentSpaceId(cur => mySpaceIds.has(cur) ? cur : (nextSpaces[0]?.id || null))
   }
 
   // 식사 기록 추가
@@ -1142,9 +1083,6 @@ export function AppProvider({ children }) {
 
     if (!spaceRow) return null
 
-    // 이전에 나간 스페이스를 다시 참가하는 경우 leftSpacesRef에서 제거
-    leftSpacesRef.current.delete(spaceRow.id)
-
     // 이미 로컬에 있으면 그냥 전환
     const existing = spaces.find(s => s.id === spaceRow.id)
     if (existing) {
@@ -1201,7 +1139,7 @@ export function AppProvider({ children }) {
         loading,
         loadError,
         retryAttempt,
-        reload: () => !isLeavingRef.current && boot(0, user),
+        reload: () => boot(0, user),
         createSpace,
         claimSpace,
         switchSpace,
