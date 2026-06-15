@@ -109,17 +109,51 @@ function RatingsSection({ mealId }) {
   return (
     <div className="mb-3">
       {ratings.length > 0 && (
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <div className="flex gap-0.5">
-            {[1,2,3,4,5].map(i => (
-              <span key={i} className={`text-xl ${i <= floorAvg ? 'star-filled' : 'star-empty'}`}>★</span>
+        <>
+          {/* 평균 별점 */}
+          <div className="flex items-center gap-1.5 mb-2">
+            <div className="flex gap-0.5">
+              {[1,2,3,4,5].map(i => (
+                <span key={i} className={`text-xl ${i <= floorAvg ? 'star-filled' : 'star-empty'}`}>★</span>
+              ))}
+            </div>
+            {ratings.length >= 2 && (
+              <span className="text-xs text-warm-light">{ratings.length}명 평가</span>
+            )}
+          </div>
+
+          {/* 멤버별 별점 */}
+          <div className="space-y-1.5 mb-3">
+            {ratings.map(r => (
+              <div key={r.user_id} className="flex items-center gap-2">
+                {r.avatar_url ? (
+                  <img
+                    src={r.avatar_url} alt=""
+                    className="w-5 h-5 rounded-full object-cover shrink-0"
+                    onError={e => { e.currentTarget.style.display = 'none' }}
+                  />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-cream-200 shrink-0 flex items-center justify-center">
+                    <span className="text-[7px] text-warm-light font-bold leading-none">
+                      {(r.nickname || '?').charAt(0)}
+                    </span>
+                  </div>
+                )}
+                <span className="text-xs text-warm-light w-14 truncate shrink-0">
+                  {r.nickname || '알 수 없음'}
+                </span>
+                <div className="flex gap-0.5">
+                  {[1,2,3,4,5].map(i => (
+                    <span key={i} className={`text-sm ${i <= r.rating ? 'star-filled' : 'star-empty'}`}>★</span>
+                  ))}
+                </div>
+                <span className="text-xs text-cream-400">{r.rating}점</span>
+              </div>
             ))}
           </div>
-          {ratings.length >= 2 && (
-            <span className="text-xs text-warm-light">{ratings.length}명 평가</span>
-          )}
-        </div>
+        </>
       )}
+
       {user && (
         <div>
           <p className="text-[10px] text-cream-400 mb-1">
