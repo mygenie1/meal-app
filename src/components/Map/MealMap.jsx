@@ -614,6 +614,7 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
   const [isNaverPhoto, setIsNaverPhoto] = useState(false)
   const placeTimerRef = useRef(null)
   const placeWrapperRef = useRef(null)
+  const scrollingRef = useRef(false)
 
   useEffect(() => {
     function handleOutside(e) {
@@ -726,11 +727,18 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
           )}
         </div>
         {showPlaceDropdown && placeSuggestions.length > 0 && (
-          <div className="mt-1 rounded-2xl border border-cream-200 bg-white shadow-sm overflow-hidden">
+          <div className="mt-1 rounded-2xl border border-cream-200 bg-white shadow-sm overflow-hidden"
+            onTouchStart={() => { scrollingRef.current = false }}
+            onTouchMove={() => { scrollingRef.current = true }}
+          >
             {placeSuggestions.map((place, i) => (
               <button key={i} type="button"
                 onMouseDown={e => { e.preventDefault(); handlePlaceSelect(place) }}
-                onTouchEnd={e => { e.preventDefault(); handlePlaceSelect(place) }}
+                onTouchEnd={e => {
+                  if (scrollingRef.current) { scrollingRef.current = false; return }
+                  e.preventDefault()
+                  handlePlaceSelect(place)
+                }}
                 className="w-full text-left px-4 py-3 hover:bg-cream-50 active:bg-cream-100 transition-colors border-b border-cream-100 last:border-0"
               >
                 <p className="text-sm font-medium text-warm-dark truncate">{place.place_name}</p>
