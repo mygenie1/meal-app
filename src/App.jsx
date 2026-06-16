@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import BottomNav from './components/common/BottomNav'
@@ -83,7 +83,9 @@ function UpdateBanner({ onReload }) {
 }
 
 function AppContent() {
-  const { user, authLoading, loading, loadError, retryAttempt, reload } = useApp()
+  const { user, authLoading, loading, loadError, retryAttempt, reload, joinByCode } = useApp()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
   const [errorDismissed, setErrorDismissed] = useState(false)
   const [updateReady, setUpdateReady] = useState(false)
@@ -149,6 +151,47 @@ function AppContent() {
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [])
+
+  // /join?code=... 처리: 비로그인 시 코드 저장 → 로그인 후 자동 참가
+  useEffect(() => {
+    if (authLoading) return
+    if (location.pathname !== '/join') return
+
+    const code = new URLSearchParams(location.search).get('code')
+    if (!code) {
+      navigate('/', { replace: true })
+      return
+    }
+
+    if (!user) {
+      sessionStorage.setItem('pendingJoinCode', code)
+      navigate('/', { replace: true })
+      return
+    }
+
+    // 로그인 상태: URL 먼저 정리 후 자동 참가
+    navigate('/', { replace: true })
+    ;(async () => {
+      try {
+        const result = await joinByCode(code)
+        if (result) navigate('/spaces', { replace: true })
+      } catch {}
+    })()
+  }, [authLoading, user?.id, location.pathname])
+
+  // 로그인 직후 대기 중인 초대 코드 처리
+  useEffect(() => {
+    if (!user) return
+    const pendingCode = sessionStorage.getItem('pendingJoinCode')
+    if (!pendingCode) return
+    sessionStorage.removeItem('pendingJoinCode')
+    ;(async () => {
+      try {
+        await joinByCode(pendingCode)
+        navigate('/spaces', { replace: true })
+      } catch {}
+    })()
+  }, [user?.id])
 
   // 배너 "새로고침" 클릭 시에만 reload
   const handleUpdate = () => {
