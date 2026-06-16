@@ -9,7 +9,7 @@ Supabase 백엔드 연결 완료. Vercel 배포 완료. PWA 설치 가능.
 
 | 항목 | 내용 |
 |---|---|
-| 서비스 URL | https://meal-app-nine-snowy.vercel.app |
+| 서비스 URL | https://siktakilgi.com (구: meal-app-nine-snowy.vercel.app) |
 | GitHub | https://github.com/mygenie1/meal-app |
 | Vercel 계정 | mygenie1 |
 | Supabase 프로젝트 | jsesigubkqnddcjqusjv (mygenie1 개인 계정) |
@@ -122,6 +122,7 @@ meal-app/
 │   │   │                                Storage 전용 클라이언트 (타임아웃 없음, 업로드가 15초 초과 가능)
 │   │   ├── notify.js                    알림 전송 헬퍼
 │   │   │                                buildFromUser(user) — user 객체 → { id, nickname, avatar_url }
+│   │   │                                  내부적으로 getUserAvatarUrl()로 kakaocdn URL 필터링
 │   │   │                                sendNotification({ toUserId, spaceId, mealId, fromUser, type, message })
 │   │   │                                MealForm(new_meal) / MealDetailModal(comment, rating)에서 호출
 │   │   ├── linkify.jsx                  URL 자동 하이퍼링크 변환 (.jsx — JSX 반환)
@@ -147,11 +148,18 @@ meal-app/
 │   │                                    setNotifEnabledPref() — 상태 + localStorage 동시 업데이트
 │   │                                    markNotificationRead() / markAllNotificationsRead()
 │   │                                    registerFCMToken(userId) — 로그인 직후 FCM 토큰 요청 + fcm_tokens upsert
+│   │                                    deleteAccount() — space_members/fcm_tokens/notifications 정리 후
+│   │                                      supabase.rpc('delete_user_account') 직접 호출 (Edge Function 제거)
+│   │                                    getUserAvatarUrl(user) — kakaocdn URL 필터링 헬퍼 (모듈 레벨)
 │   │
 │   ├── components/
 │   │   ├── common/
 │   │   │   ├── BottomNav.jsx            하단 탭 네비게이션 5탭 (홈/달력/지도/재료/스페이스)
 │   │   │   ├── Header.jsx               상단 헤더
+│   │   │   ├── Avatar.jsx               공용 아바타 컴포넌트
+│   │   │   │                            kakaocdn URL → 모든 계정 유형에서 기본 이니셜 아이콘으로 대체
+│   │   │   │                            size prop: xs/sm/md/lg, 유효 URL 없으면 warm-brown 이니셜 원
+│   │   │   │                            onError로 이미지 로드 실패 시 자동 숨김
 │   │   │   ├── AuthorBadge.jsx          게시글 작성자 표시 (아바타 + 닉네임)
 │   │   │   ├── LazyImage.jsx            IntersectionObserver 기반 lazy 이미지 로드
 │   │   │   │                            뷰포트 150px 이내 진입 시 로드, 이전엔 bg-cream-100 플레이스홀더
@@ -220,19 +228,25 @@ meal-app/
 │   │   │
 │   │   └── Space/
 │   │       ├── SpaceManager.jsx         스페이스 생성·전환·코드 참가 + 사진 일괄 등록 버튼
-│   │       ├── SettingsModal.jsx        설정 모달 (프로필/닉네임/알림 토글/로그아웃)
+│   │       ├── SettingsModal.jsx        설정 모달 (프로필/닉네임/알림 토글/로그아웃/회원탈퇴)
 │   │       │                            알림 토글: notifEnabled ↔ setNotifEnabledPref()
+│   │       │                            회원탈퇴: 2단계 확인 → supabase.rpc('delete_user_account') 직접 호출
+│   │       │                            탈퇴 후 signOut() + navigate('/login')
 │   │       └── BulkPhotoUpload.jsx      사진 일괄 등록
 │   │                                    EXIF 바이너리 스캔으로 날짜 추출 (외부 라이브러리 없음)
 │   │                                    Canvas로 로컬 압축 후 uploadPhotoWithThumbnail() 호출
 │   │                                    날짜별 자동 묶음 → 태그/끼니 선택 후 일괄 저장
 │   │
 │   └── pages/
-│       ├── HomePage.jsx                 홈 피드 (통계 카드 + 최근 기록 피드)
+│       ├── HomePage.jsx                 홈 피드 (히어로 CTA + 식탁 리포트 + 추억 카드 + 최근 피드)
 │       │                                마운트 시 requestedPhotosRef로 중복 없이 전체 loadMealPhotos
 │       │                                FeedCard: ratingsMap 기반 평균 별점 표시
 │       │                                헤더 우측: [검색][벨][스페이스 배지] 순서
 │       │                                NotificationPanel: 벨 클릭 시 top-sheet 열림
+│       │                                식탁 리포트: reportMonth state, ‹ › 화살표로 월 전환
+│       │                                  현재 월 = "이번 달 식탁 리포트", 과거 = "2026년 5월 식탁 리포트"
+│       │                                  경계: 미래(현재 월 이후) 및 가장 오래된 meal 월 이전 disabled
+│       │                                  통계 집계(태그 비율/새가게/별점/기록일) 모두 reportMonth 기준
 │       ├── CalendarPage.jsx             달력 (월간 그리드)
 │       ├── MapPage.jsx                  맛집 지도 전체화면
 │       │                                viewingMeal 상태 + MealDetailModal 렌더 (MealMap 외부)
@@ -465,6 +479,10 @@ getOriginalUrl(entry)  // → 원본 URL
   - `wishFlyTarget` 상태로 지도 이동 처리 (wishMapReady 전 클릭도 안전)
 - 현재 위치 GPS 파란 점 + 위치 버튼 (handleWishLocate, wishUserOverlayRef)
 - 핀 클릭 → wish-card-{id} scrollIntoView
+- **근처 배너** ("근처에 가고 싶은 곳이 있어요"):
+  - `hasRealLocation` state — GPS 실제 위치 취득 성공 시에만 true, 배너 표시 조건에 포함
+  - 배너 클릭 시 가고싶은곳 탭(`setActiveTab('wishlist')`)으로 전환 + `wishFlyTarget` + 읽음 처리
+  - 서울시청 기본값일 때는 배너 숨김
 
 **MapPage 구조**
 - `viewingMeal` 상태를 MapPage에서 관리 (MealMap 외부)
@@ -499,6 +517,26 @@ getOriginalUrl(entry)  // → 원본 URL
 - 앱 이름: 식탁일기 / 테마 컬러: #6b4f3a
 - 오프라인 감지 시 OfflineBanner 표시 (App.jsx)
 - Workbox로 앱 쉘 전체 프리캐시 → 오프라인에서도 앱 로드 가능
+- manifest `start_url` / `scope` = `https://siktakilgi.com/` (vite.config.js VitePWA 설정)
+
+### 아바타 정책
+- 모든 계정(카카오·이메일 공통): kakaocdn / k.kakaocdn URL → 유효하지 않은 것으로 간주
+- 유효 URL 없을 때: warm-brown 배경에 닉네임 첫 글자 이니셜 표시
+- `Avatar.jsx` 컴포넌트 공통 사용, `getUserAvatarUrl()` 헬퍼(AppContext/notify.js)로 저장 시에도 필터링
+
+### 튜토리얼
+- 사용자별 localStorage 키: `tutorial_completed_{userId}` — 재가입 시 튜토리얼 재노출
+- 마지막 단계 버튼 3종: "첫 기록 남기기" / "사진 한번에 올리기" / "나중에 하기"
+  - "사진 한번에 올리기": navigate('/', { state: { openBulkUpload: true } })
+  - HomePage의 useEffect에서 location.state.openBulkUpload 감지 → BulkPhotoUpload 모달 오픈
+
+### 회원탈퇴 플로우
+1. SettingsModal: 2단계 확인 (안내 → "탈퇴" 직접 입력)
+2. AppContext.deleteAccount():
+   - `space_members`, `fcm_tokens`, `notifications` 본인 레코드 삭제
+   - `supabase.rpc('delete_user_account', { user_id })` 호출 (SECURITY DEFINER RPC)
+3. signOut() 후 navigate('/login')
+→ Supabase SQL Editor에서 `delete_user_account` 함수 생성 필요 (auth.users 삭제 포함)
 
 ---
 
@@ -603,6 +641,15 @@ npm run dev
 | 스페이스 나가기 버그 수정 | leaveSpace 후 DB 재조회 방식으로 stale state 방지, boot() space_members 기반 조회로 전환 |
 | 이메일 계정 기본 아바타 | kakaocdn URL 감지 → 이메일 계정이면 warm-brown 배경 기본 아이콘으로 대체 |
 | 프로필 사진 upsert | uploadAvatar에 upsert:true → 두 번째 업로드 시 RLS 에러 방지 |
+| Avatar 공용 컴포넌트 | Avatar.jsx 신설 — 모든 계정 kakaocdn URL 이니셜로 대체, size prop(xs/sm/md/lg) |
+| 아바타 일관성 | MealDetailModal/SettingsModal/SpaceManager/AuthorBadge 등 전체 Avatar 컴포넌트 적용 |
+| 회원탈퇴 Edge Function 제거 | delete-account Edge Function → 프론트 직접 RPC(`delete_user_account`) 호출로 대체 |
+| 튜토리얼 사용자별 키 | `tutorial_completed_{userId}` — 재가입 시 튜토리얼 재노출 |
+| 튜토리얼 사진 한번에 올리기 | 마지막 단계에 "사진 한번에 올리기" 버튼 추가, navigate state로 BulkPhotoUpload 오픈 |
+| 설정 개발자 정보 제거 | SettingsModal에서 디버그 섹션(debugOpen/debugInfo) 완전 제거 |
+| 가고싶은곳 배너 버그 수정 | hasRealLocation: GPS 실제 취득 시에만 배너 표시, 클릭 시 가고싶은곳 탭으로 이동 |
+| 식탁 리포트 월 전환 | reportMonth state + ‹ › 화살표, 첫 기록 월~현재 월 범위, 과거 월 집계 |
+| 도메인 변경 | siktakilgi.com 적용 — LoginPage redirectTo, send-push 아이콘, manifest start_url/scope |
 
 ---
 
