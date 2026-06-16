@@ -93,7 +93,7 @@ export default function LoginPage() {
     if (!email.includes('@')) { setError('이메일을 먼저 입력해주세요'); return }
     setError('')
     const { error: e } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://meal-app-nine-snowy.vercel.app/reset-password',
+      redirectTo: 'https://siktakilgi.com/reset-password',
     })
     if (!e) alert('비밀번호 재설정 링크를 이메일로 보내드렸어요')
   }

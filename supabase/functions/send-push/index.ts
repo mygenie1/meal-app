@@ -147,8 +147,8 @@ Deno.serve(async (req) => {
             notification: { title: notifTitle, body: notifBody },
             webpush: {
               notification: {
-                icon: 'https://meal-app-nine-snowy.vercel.app/icon-192x192.png',
-                badge: 'https://meal-app-nine-snowy.vercel.app/icon-192x192.png',
+                icon: 'https://siktakilgi.com/icon-192x192.png',
+                badge: 'https://siktakilgi.com/icon-192x192.png',
                 requireInteraction: false,
                 vibrate: [200, 100, 200],
               },
