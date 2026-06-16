@@ -18,7 +18,8 @@ export default defineConfig({
         theme_color: '#6b4f3a',
         background_color: '#fdfcf9',
         display: 'standalone',
-        start_url: '/',
+        start_url: 'https://siktakilgi.com/',
+        scope: 'https://siktakilgi.com/',
         lang: 'ko',
         icons: [
           {
