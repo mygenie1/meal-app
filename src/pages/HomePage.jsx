@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { format, isSameMonth, parseISO, subMonths, startOfMonth, differenceInDays } from 'date-fns'
+import { format, isSameMonth, parseISO, subMonths, addMonths, startOfMonth, differenceInDays } from 'date-fns'
 import { ko, enUS } from 'date-fns/locale'
 import { useApp } from '../context/AppContext'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -210,9 +210,19 @@ export default function HomePage() {
   const requestedPhotosRef = useRef(new Set())
   const searchInputRef = useRef(null)
   const today = useMemo(() => new Date(), [])
+  const [reportMonth, setReportMonth] = useState(() => startOfMonth(new Date()))
 
   const meals = currentSpace?.meals || []
   const wishlist = currentSpace?.wishlist || []
+
+  const oldestMealMonth = useMemo(() => {
+    if (meals.length === 0) return startOfMonth(today)
+    const dates = meals.map(m => m.date).filter(Boolean).sort()
+    try { return startOfMonth(parseISO(dates[0])) } catch { return startOfMonth(today) }
+  }, [meals, today])
+
+  const isCurrentMonth = isSameMonth(reportMonth, today)
+  const isOldestMonth = meals.length === 0 || isSameMonth(reportMonth, oldestMealMonth)
 
   // 추억 카드 — 오늘 날짜(월-일)와 같은 과거 기록, 없으면 30~90일 사이 랜덤 1개
   const memoryCard = useMemo(() => {
@@ -274,16 +284,16 @@ export default function HomePage() {
     return { kind: 'partial', next }
   }, [meals, today])
 
-  // 이번 달 식탁 리포트 데이터
+  // 식탁 리포트 데이터 (reportMonth 기준)
   const report = useMemo(() => {
-    const monthStart = startOfMonth(today)
-    const lastMonth = subMonths(today, 1)
+    const monthStart = startOfMonth(reportMonth)
+    const prevMonth = subMonths(reportMonth, 1)
 
     const thisMonthMeals = meals.filter(m => {
-      try { return isSameMonth(parseISO(m.date), today) } catch { return false }
+      try { return isSameMonth(parseISO(m.date), reportMonth) } catch { return false }
     })
     const lastMonthCount = meals.filter(m => {
-      try { return isSameMonth(parseISO(m.date), lastMonth) } catch { return false }
+      try { return isSameMonth(parseISO(m.date), prevMonth) } catch { return false }
     }).length
 
     const thisMonthCount = thisMonthMeals.length
@@ -361,7 +371,7 @@ export default function HomePage() {
       ratingMeals,
       dayGroups,
     }
-  }, [meals, ratingsMap, today])
+  }, [meals, ratingsMap, reportMonth])
 
   const MEAL_TIME_ORDER = { 아침: 0, 점심: 1, 저녁: 2 }
   const sortedMeals = useMemo(
@@ -411,6 +421,9 @@ export default function HomePage() {
 
   // 필터 변경 시 페이지 리셋
   useEffect(() => { setVisibleCount(PAGE_SIZE) }, [ratingFilter, tagFilter])
+
+  // reportMonth 변경 시 열린 통계 패널 닫기
+  useEffect(() => { setActiveStatTab(null) }, [reportMonth])
 
   // 보이는 카드만 사진 로드
   useEffect(() => {
@@ -642,11 +655,37 @@ export default function HomePage() {
         <div className="px-4 mb-7">
           <div className="bg-white rounded-2xl border border-cream-200 shadow-sm px-5 py-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1.5">
-                <SparkleIcon className="w-4 h-4 text-warm-brown" />
-                <h3 className="text-sm font-semibold text-warm-dark">이번 달 식탁 리포트</h3>
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <SparkleIcon className="w-4 h-4 text-warm-brown shrink-0" />
+                <h3 className="text-sm font-semibold text-warm-dark truncate">
+                  {isCurrentMonth ? '이번 달 식탁 리포트' : format(reportMonth, 'yyyy년 M월 식탁 리포트', { locale: ko })}
+                </h3>
               </div>
-              <span className="text-xs text-cream-400">{format(today, 'yyyy.M', { locale: ko })}</span>
+              <div className="flex items-center shrink-0 ml-2">
+                <button
+                  onClick={() => !isOldestMonth && setReportMonth(prev => subMonths(prev, 1))}
+                  disabled={isOldestMonth}
+                  aria-label="이전 달"
+                  className={`p-1.5 rounded-full transition-colors ${isOldestMonth ? 'text-cream-300' : 'text-warm-light hover:text-warm-brown active:scale-95'}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+                  </svg>
+                </button>
+                <span className="text-xs text-cream-400 w-[52px] text-center tabular-nums">
+                  {format(reportMonth, 'yyyy.M', { locale: ko })}
+                </span>
+                <button
+                  onClick={() => !isCurrentMonth && setReportMonth(prev => addMonths(prev, 1))}
+                  disabled={isCurrentMonth}
+                  aria-label="다음 달"
+                  className={`p-1.5 rounded-full transition-colors ${isCurrentMonth ? 'text-cream-300' : 'text-warm-light hover:text-warm-brown active:scale-95'}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* 큰 숫자 + 지난달 대비 */}
@@ -661,7 +700,9 @@ export default function HomePage() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-warm-light mt-1">이번 달 함께한 식사</p>
+            <p className="text-xs text-warm-light mt-1">
+              {isCurrentMonth ? '이번 달' : format(reportMonth, 'M월')} 함께한 식사
+            </p>
 
             {/* 태그 비율 바 */}
             {report.tagSegments.length > 0 ? (
