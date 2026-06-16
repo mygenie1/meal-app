@@ -11,6 +11,7 @@ import { getOriginalUrl, getThumbUrl } from '../lib/uploadPhoto'
 import AuthorBadge from '../components/common/AuthorBadge'
 import { linkify } from '../lib/linkify'
 import NotificationPanel, { NotificationBell } from '../components/common/NotificationPanel'
+import Avatar from '../components/common/Avatar'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700',
@@ -238,10 +239,16 @@ export default function HomePage() {
     if (m && !m.photosLoaded) loadMealPhotos(m.id)
   }, [memoryCard.meal?.id])
 
-  // 튜토리얼 "첫 식사 기록하기" 후 자동 폼 오픈
+  // 튜토리얼 완료 후 자동 오픈
   useEffect(() => {
     if (location.state?.openMealForm) {
       setTodayFormOpen(true)
+    }
+    if (location.state?.openBulkUpload) {
+      setShowBulkUpload(true)
+    }
+    if (location.state?.openMealForm || location.state?.openBulkUpload) {
+      window.history.replaceState({}, '')
     }
   }, [])
   const nickname = user?.user_metadata?.name || user?.user_metadata?.full_name || '식탁'
@@ -521,14 +528,10 @@ export default function HomePage() {
             <NotificationBell onClick={() => setNotifOpen(true)} />
             <button
               onClick={() => navigate('/spaces')}
-              className="ml-0.5 w-8 h-8 rounded-full overflow-hidden bg-cream-200 border border-cream-300 flex items-center justify-center active:scale-95 transition-transform"
+              className="ml-0.5 w-8 h-8 rounded-full overflow-hidden border border-cream-300 flex items-center justify-center active:scale-95 transition-transform"
               aria-label="프로필"
             >
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-xs font-bold text-warm-light">{nickname.charAt(0)}</span>
-              )}
+              <Avatar url={avatarUrl} nickname={nickname} size="md" />
             </button>
           </div>
         </div>

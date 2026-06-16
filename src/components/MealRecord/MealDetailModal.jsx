@@ -8,6 +8,7 @@ import MealForm from './MealForm'
 import PhotoGallery from '../common/PhotoGallery'
 import { getOriginalUrl } from '../../lib/uploadPhoto'
 import AuthorBadge from '../common/AuthorBadge'
+import Avatar from '../common/Avatar'
 import { sendNotification, buildFromUser, getSpaceMemberIds } from '../../lib/notify'
 import { linkify } from '../../lib/linkify'
 
@@ -39,13 +40,7 @@ function CommentItem({ comment, currentUserId, onDelete }) {
 
   return (
     <div className="flex gap-2.5">
-      {comment.avatar_url ? (
-        <img src={comment.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5" />
-      ) : (
-        <div className="w-7 h-7 rounded-full bg-cream-200 shrink-0 mt-0.5 flex items-center justify-center">
-          <span className="text-[9px] text-warm-light font-bold leading-none">{initial}</span>
-        </div>
-      )}
+      <Avatar url={comment.avatar_url} nickname={comment.nickname} size="sm" className="shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-1.5">
           <span className="text-xs font-semibold text-warm-dark">
@@ -126,19 +121,7 @@ function RatingsSection({ mealId }) {
           <div className="space-y-1.5 mb-3">
             {ratings.map(r => (
               <div key={r.user_id} className="flex items-center gap-2">
-                {r.avatar_url ? (
-                  <img
-                    src={r.avatar_url} alt=""
-                    className="w-5 h-5 rounded-full object-cover shrink-0"
-                    onError={e => { e.currentTarget.style.display = 'none' }}
-                  />
-                ) : (
-                  <div className="w-5 h-5 rounded-full bg-cream-200 shrink-0 flex items-center justify-center">
-                    <span className="text-[7px] text-warm-light font-bold leading-none">
-                      {(r.nickname || '?').charAt(0)}
-                    </span>
-                  </div>
-                )}
+                <Avatar url={r.avatar_url} nickname={r.nickname} size="xs" />
                 <span className="text-xs text-warm-light w-14 truncate shrink-0">
                   {r.nickname || '알 수 없음'}
                 </span>
@@ -490,19 +473,12 @@ export default function MealDetailModal({ meal, onClose }) {
           className="flex items-center gap-2.5 sticky bottom-0 bg-cream-50 pt-2"
           style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
         >
-          {user?.user_metadata?.avatar_url ? (
-            <img
-              src={user.user_metadata.avatar_url}
-              alt=""
-              className="w-7 h-7 rounded-full object-cover shrink-0"
-            />
-          ) : (
-            <div className="w-7 h-7 rounded-full bg-cream-200 shrink-0 flex items-center justify-center">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="#c4a882">
-                <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
-              </svg>
-            </div>
-          )}
+          <Avatar
+            url={user?.user_metadata?.avatar_url}
+            nickname={user?.user_metadata?.name || user?.user_metadata?.full_name}
+            size="sm"
+            className="shrink-0"
+          />
           <div className="flex-1 flex items-center bg-white border border-cream-200 rounded-full px-4 py-2 gap-2 focus-within:border-warm-light transition-colors">
             <input
               type="text"

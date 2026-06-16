@@ -39,10 +39,14 @@ export default function TutorialFlow({ onComplete }) {
   }
   const goNext = () => goStep(currentStep + 1)
 
-  function handleComplete(openForm = false) {
-    if (openForm && !didAutoOpen.current) {
+  function handleComplete({ openMealForm, openBulkUpload } = {}) {
+    if (!didAutoOpen.current) {
       didAutoOpen.current = true
-      navigate('/', { state: { openMealForm: true } })
+      if (openBulkUpload) {
+        navigate('/', { state: { openBulkUpload: true } })
+      } else if (openMealForm) {
+        navigate('/', { state: { openMealForm: true } })
+      }
     }
     onComplete()
   }
@@ -320,16 +324,30 @@ export default function TutorialFlow({ onComplete }) {
           오늘 먹은 음식 사진이 있다면<br />
           첫 기록으로 남겨보세요.
         </p>
-        <button
-          onClick={() => handleComplete(true)}
-          className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold mb-3 active:scale-[0.99] transition-transform">
-          첫 식사 기록하기
-        </button>
-        <button
-          onClick={() => handleComplete(false)}
-          className="w-full text-warm-light text-sm py-2">
-          나중에 할게요
-        </button>
+        <div className="w-full flex flex-col">
+          <button
+            onClick={() => handleComplete({ openMealForm: true })}
+            className="w-full bg-warm-brown text-white rounded-2xl py-4 font-semibold mb-3 active:scale-[0.99] transition-transform">
+            첫 식사 기록하기
+          </button>
+          <div className="bg-cream-100 rounded-2xl p-4 mb-3">
+            <p className="text-xs text-cream-400 text-center mb-3">올릴 사진이 많다면 이 기능을 활용해보세요</p>
+            <button
+              onClick={() => handleComplete({ openBulkUpload: true })}
+              className="w-full border border-warm-brown text-warm-brown rounded-xl py-3 font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.99] transition-transform">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-4 h-4">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18M9 21V9" />
+              </svg>
+              사진 한번에 올리기
+            </button>
+          </div>
+          <button
+            onClick={() => handleComplete({})}
+            className="w-full text-warm-light text-sm py-2">
+            나중에 할게요
+          </button>
+        </div>
       </div>
     )
   }

@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext'
 import { uploadAvatar } from '../../lib/uploadPhoto'
 import { supabase } from '../../lib/supabase'
 import { version } from '../../../package.json'
+import Avatar from '../common/Avatar'
 
 export default function SettingsModal({ isOpen, onClose }) {
   const navigate = useNavigate()
@@ -47,9 +48,6 @@ export default function SettingsModal({ isOpen, onClose }) {
   const rawAvatarUrl = user?.user_metadata?.avatar_url
   const displayEmail = user?.email || ''
   const provider = user?.app_metadata?.provider
-  // 이메일 계정인데 카카오 CDN URL이 저장된 경우 기본 아바타로 대체
-  const isKakaoAvatar = rawAvatarUrl?.includes('kakaocdn') || rawAvatarUrl?.includes('k.kakaocdn')
-  const avatarUrl = (provider === 'email' && isKakaoAvatar) ? null : rawAvatarUrl
   const providerLabel = provider === 'kakao' ? '카카오'
     : provider === 'email' ? '이메일'
     : provider || '소셜'
@@ -302,32 +300,12 @@ export default function SettingsModal({ isOpen, onClose }) {
                   onClick={() => !photoUploading && photoInputRef.current?.click()}
                   title="프로필 사진 변경"
                 >
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt="프로필 사진"
-                      className={`w-14 h-14 rounded-full object-cover ring-2 ring-cream-200 transition-opacity ${photoUploading ? 'opacity-50' : ''}`}
-                    />
-                  ) : provider === 'kakao' ? (
-                    <div
-                      className={`w-14 h-14 rounded-full flex items-center justify-center ring-2 ring-cream-200 transition-opacity ${photoUploading ? 'opacity-50' : ''}`}
-                      style={{ background: '#FEE500' }}
-                    >
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="#3C1E1E">
-                        <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.79 1.63 5.24 4.1 6.73l-1.05 3.85a.25.25 0 0 0 .38.27L9.7 19.2a11.2 11.2 0 0 0 2.3.24C17.523 19.44 22 15.963 22 11.64 22 7.317 17.523 3 12 3z" />
-                      </svg>
-                    </div>
-                  ) : (
-                    <div
-                      className={`w-14 h-14 rounded-full flex items-center justify-center ring-2 ring-cream-200 transition-opacity ${photoUploading ? 'opacity-50' : ''}`}
-                      style={{ background: 'rgba(107,79,58,0.15)' }}
-                    >
-                      <svg className="w-7 h-7 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                    </div>
-                  )}
+                  <Avatar
+                    url={rawAvatarUrl}
+                    nickname={nickname}
+                    size="lg"
+                    className={`ring-2 ring-cream-200 transition-opacity ${photoUploading ? 'opacity-50' : ''}`}
+                  />
                   {/* 카메라 배지 */}
                   <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-warm-brown border-2 border-white flex items-center justify-center">
                     {photoUploading ? (
