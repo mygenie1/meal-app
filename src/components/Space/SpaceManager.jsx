@@ -9,6 +9,21 @@ import Avatar from '../common/Avatar'
 
 const EMOJIS = ['🍽️', '🍜', '🍕', '🍱', '🍰', '☕', '🥗', '🍣', '🌮', '🥘']
 
+// 초대 메시지 브라우저 안내 문구 — 여기서 한 곳에서만 수정
+const BROWSER_GUIDE = '👉 안드로이드는 Chrome, 아이폰은 Safari로 열어주세요.'
+
+function buildInviteMessage(origin, code) {
+  return [
+    '[식탁일기] 우리 식탁에 초대할게요 🍽',
+    '',
+    '아래 링크를 눌러 참가하세요.',
+    BROWSER_GUIDE,
+    `${origin}/join?code=${code}`,
+    '',
+    `(링크가 안 열리면 식탁일기 앱에서 코드 입력: ${code})`,
+  ].join('\n')
+}
+
 function lastRecordLabel(space) {
   const dates = (space.meals || []).map(m => m.date).filter(Boolean)
   if (dates.length === 0) return ''
@@ -72,12 +87,12 @@ export default function SpaceManager() {
   }
 
   async function copyInviteLink(spaceCode) {
-    const link = `${window.location.origin}/join?code=${spaceCode}`
+    const message = buildInviteMessage(window.location.origin, spaceCode)
     try {
-      await navigator.clipboard.writeText(link)
+      await navigator.clipboard.writeText(message)
     } catch {
       const ta = document.createElement('textarea')
-      ta.value = link
+      ta.value = message
       ta.style.cssText = 'position:fixed;left:-9999px'
       document.body.appendChild(ta)
       ta.select()
@@ -177,7 +192,7 @@ export default function SpaceManager() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                   </svg>
-                  링크 복사
+                  초대 링크 복사
                 </>
               )}
             </button>
