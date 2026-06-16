@@ -87,9 +87,16 @@ function AppContent() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
   const [errorDismissed, setErrorDismissed] = useState(false)
   const [updateReady, setUpdateReady] = useState(false)
-  const [tutorialCompleted, setTutorialCompleted] = useState(
-    () => !!localStorage.getItem('tutorial_completed')
-  )
+  const [tutorialCompleted, setTutorialCompleted] = useState(false)
+
+  // 로그인한 user.id 기반으로 튜토리얼 완료 여부 확인
+  useEffect(() => {
+    if (user?.id) {
+      setTutorialCompleted(!!localStorage.getItem(`tutorial_completed_${user.id}`))
+    } else {
+      setTutorialCompleted(false)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     const goOnline  = () => setIsOffline(false)
@@ -185,7 +192,7 @@ function AppContent() {
     return (
       <TutorialFlow
         onComplete={() => {
-          localStorage.setItem('tutorial_completed', 'true')
+          localStorage.setItem(`tutorial_completed_${user.id}`, 'true')
           setTutorialCompleted(true)
         }}
       />

@@ -6,6 +6,14 @@ const AppContext = createContext(null)
 
 const SPACE_KEY = 'mealapp_current_space'
 
+// 이메일 계정의 카카오 CDN URL은 빈 문자열로 반환
+function getUserAvatarUrl(user) {
+  const provider = user?.app_metadata?.provider
+  const raw = user?.user_metadata?.avatar_url || ''
+  const isKakaoUrl = raw.includes('kakaocdn') || raw.includes('k.kakaocdn')
+  return provider !== 'kakao' && isKakaoUrl ? '' : raw
+}
+
 // DB row → 앱 내부 meal 객체
 // photosLoaded: false → 목록 조회 시 photos 컬럼 미포함, 상세 클릭 시 별도 로드
 function rowToMeal(row, { photosLoaded = true } = {}) {
@@ -678,7 +686,7 @@ export function AppProvider({ children }) {
     if (user) {
       rowData.user_id = user.id
       rowData.nickname = user.user_metadata?.name || user.user_metadata?.full_name || ''
-      rowData.avatar_url = user.user_metadata?.avatar_url || ''
+      rowData.avatar_url = getUserAvatarUrl(user)
     }
 
     // Optimistic update: INSERT 완료 전에 즉시 목록에 표시
@@ -959,7 +967,7 @@ export function AppProvider({ children }) {
       wishlist_id: wishlistId,
       user_id: user.id,
       nickname: user.user_metadata?.name || user.user_metadata?.full_name || '',
-      avatar_url: user.user_metadata?.avatar_url || '',
+      avatar_url: getUserAvatarUrl(user),
     }
     // 낙관적 업데이트
     const optimistic = { id: `temp-${Date.now()}`, ...row }

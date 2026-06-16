@@ -1,11 +1,18 @@
 import { supabase } from './supabase'
 
+function getUserAvatarUrl(user) {
+  const provider = user?.app_metadata?.provider
+  const raw = user?.user_metadata?.avatar_url || ''
+  const isKakaoUrl = raw.includes('kakaocdn') || raw.includes('k.kakaocdn')
+  return provider !== 'kakao' && isKakaoUrl ? '' : raw
+}
+
 export function buildFromUser(user) {
   if (!user) return null
   return {
     id: user.id,
     nickname: user.user_metadata?.name || user.user_metadata?.full_name || '멤버',
-    avatar_url: user.user_metadata?.avatar_url || '',
+    avatar_url: getUserAvatarUrl(user),
   }
 }
 
