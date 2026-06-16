@@ -576,13 +576,8 @@ export function AppProvider({ children }) {
       throw new Error(error.message || '탈퇴 처리에 실패했어요')
     }
 
-    console.log('[deleteAccount] 삭제 완료 — 로컬 세션 정리')
-    try {
-      await supabase.auth.signOut()
-    } catch (e) {
-      console.warn('[deleteAccount] signOut 실패 (무시):', e)
-    }
-    // signOut이 onAuthStateChange를 트리거하지 않을 경우 강제 초기화
+    console.log('[deleteAccount] 삭제 완료 — 로컬 상태 초기화')
+    // 로컬 상태 강제 초기화 (signOut은 호출부에서 처리)
     setUser(null)
     setSpaces([])
     setCurrentSpaceId(null)

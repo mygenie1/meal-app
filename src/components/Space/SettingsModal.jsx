@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Modal from '../common/Modal'
 import { useApp } from '../../context/AppContext'
 import { uploadAvatar } from '../../lib/uploadPhoto'
@@ -6,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { version } from '../../../package.json'
 
 export default function SettingsModal({ isOpen, onClose }) {
+  const navigate = useNavigate()
   const { user, signOut, deleteAccount, updateProfile, notifEnabled, setNotifEnabledPref } = useApp()
 
   const [nickname, setNickname] = useState('')
@@ -180,15 +182,21 @@ export default function SettingsModal({ isOpen, onClose }) {
     setDeleteError('')
     try {
       await deleteAccount()
-      // signOut 완료 → onAuthStateChange → 앱이 로그인 화면으로 전환
     } catch (err) {
       console.error('[SettingsModal] 탈퇴 오류:', err)
       setDeleteError('탈퇴 처리 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.')
       setDeleteStep('idle')
       setDeleteInput('')
-    } finally {
       setDeleting(false)
+      return
     }
+    // 탈퇴 완료 — signOut 에러 무시하고 로그인 페이지로 이동
+    try {
+      await supabase.auth.signOut()
+    } catch (e) {
+      // 이미 탈퇴된 계정은 로그아웃 에러 무시
+    }
+    navigate('/login')
   }
 
   const modalTitle = deleteStep === 'idle' ? '설정' : '회원 탈퇴'
