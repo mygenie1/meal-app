@@ -560,19 +560,23 @@ export function AppProvider({ children }) {
     // onAuthStateChange SIGNED_OUT 이벤트에서 상태 초기화
   }
 
-  // 회원 탈퇴: Edge Function 호출 → auth.users 삭제 → 로컬 세션 정리
+  // 회원 탈퇴: RPC로 auth.users 직접 삭제 → 로컬 세션 정리
   async function deleteAccount() {
-    const { data, error } = await supabase.functions.invoke('delete-account')
-    console.log('[deleteAccount] Edge Function 응답:', { data, error })
+    if (!user) throw new Error('로그인 상태가 아닙니다')
+
+    // 관련 데이터 먼저 정리
+    await supabase.from('space_members').delete().eq('user_id', user.id)
+    await supabase.from('fcm_tokens').delete().eq('user_id', user.id)
+    await supabase.from('notifications').delete().eq('user_id', user.id)
+
+    // RPC로 auth.users 삭제
+    const { error } = await supabase.rpc('delete_user_account', { user_id: user.id })
     if (error) {
-      console.error('[deleteAccount] invoke 오류:', error)
+      console.error('[deleteAccount] RPC 실패:', error)
       throw new Error(error.message || '탈퇴 처리에 실패했어요')
     }
-    if (data?.error) {
-      console.error('[deleteAccount] 서버 오류:', data.error)
-      throw new Error(data.error)
-    }
-    console.log('[deleteAccount] 서버 삭제 완료 — 로컬 세션 정리')
+
+    console.log('[deleteAccount] 삭제 완료 — 로컬 세션 정리')
     try {
       await supabase.auth.signOut()
     } catch (e) {
