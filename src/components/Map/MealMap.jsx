@@ -1137,6 +1137,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
   const [nearbyWish, setNearbyWish] = useState(null)
   const [nearbyDismissed, setNearbyDismissed] = useState(false)
   const [bannerVisible, setBannerVisible] = useState(false)
+  const [hasRealLocation, setHasRealLocation] = useState(false)
   const hasCheckedNearbyRef = useRef(false)
 
   // ── 추가/수정/상세 모달 ─────────────────────────────────────────
@@ -1586,6 +1587,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
     navigator.geolocation.getCurrentPosition(
       pos => {
         const { latitude, longitude } = pos.coords
+        setHasRealLocation(true)
         let closest = null, closestDist = Infinity
         candidates.forEach(w => {
           const d = haversineKm(latitude, longitude, w.lat, w.lng)
@@ -1795,7 +1797,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
         <>
           {/* 필터 + 배너 */}
           <div className="shrink-0 px-4 pb-2">
-            {nearbyWish && !nearbyDismissed && (
+            {nearbyWish && !nearbyDismissed && hasRealLocation && (
               <div
                 className="mb-2"
                 style={{ transform: bannerVisible ? 'translateY(0)' : 'translateY(-6px)', opacity: bannerVisible ? 1 : 0, transition: 'transform 0.35s ease, opacity 0.35s ease' }}
@@ -1806,7 +1808,16 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
                     </svg>
                   </div>
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setFlyTarget([nearbyWish.item.lat, nearbyWish.item.lng])}>
+                  <div
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => {
+                      setActiveTab('wishlist')
+                      onTabChange?.('wishlist')
+                      setWishFlyTarget([nearbyWish.item.lat, nearbyWish.item.lng])
+                      setHighlightedWishId(nearbyWish.item.id)
+                      setNearbyDismissed(true)
+                    }}
+                  >
                     <p className="text-[11px] text-warm-light font-medium mb-0.5">근처에 가고 싶은 곳이 있어요</p>
                     <p className="text-sm font-semibold text-warm-dark truncate">
                       {nearbyWish.item.name}
