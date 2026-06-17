@@ -20,13 +20,7 @@ const TAG_STYLES = {
   '배달': 'bg-blue-50 text-blue-700',
 }
 
-// 태그 비율 바 색상
-const TAG_BG = {
-  '집밥': '#86efac',
-  '외식': '#fcd34d',
-  '카페': '#f9a8d4',
-  '배달': '#93c5fd',
-}
+const CAT_COLOR = { '집밥': '#2f9e5f', '외식': '#d6862c', '카페': '#d15c87', '배달': '#5276c4' }
 const TAG_ORDER = ['집밥', '외식', '카페', '배달']
 
 const PAGE_SIZE = 20
@@ -707,17 +701,23 @@ export default function HomePage() {
             {/* 태그 비율 바 */}
             {report.tagSegments.length > 0 ? (
               <div className="mt-4">
-                <div className="flex h-2.5 rounded-full overflow-hidden bg-cream-100">
+                <div className="flex h-3 rounded-full overflow-hidden bg-cream-100 gap-[2px]">
                   {report.tagSegments.map(seg => (
-                    <div key={seg.tag} style={{ width: `${seg.pct}%`, background: TAG_BG[seg.tag] }} />
+                    <div key={seg.tag} style={{ width: `${seg.pct}%`, background: CAT_COLOR[seg.tag] }} />
                   ))}
                 </div>
-                <p className="text-[11px] text-warm-light mt-2">
-                  {report.tagSegments.map(seg => `${seg.tag} ${seg.pct}%`).join(' · ')}
-                </p>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2.5">
+                  {report.tagSegments.map(seg => (
+                    <div key={seg.tag} className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CAT_COLOR[seg.tag] }} />
+                      <span className="text-[11px] text-warm-light">{seg.tag}</span>
+                      <span className="text-[11px] font-semibold text-warm-dark">{seg.pct}%</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
-              <div className="mt-4 h-2.5 rounded-full bg-cream-100" />
+              <div className="mt-4 h-3 rounded-full bg-cream-100" />
             )}
 
             {/* 서브 스탯 3개 */}
