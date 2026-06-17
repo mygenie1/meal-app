@@ -15,11 +15,12 @@ const messaging = firebase.messaging()
 // 백그라운드 메시지 수신 (앱이 닫혀 있거나 백그라운드일 때)
 messaging.onBackgroundMessage(payload => {
   const data = payload.data || {}
+  const origin = self.location.origin
 
   self.registration.showNotification(data.title || '식탁일기', {
     body: data.body || '',
-    icon: '/icon-192x192.png',
-    badge: '/icon-192x192.png',
+    icon: `${origin}/icon-192x192.png`,
+    badge: `${origin}/icon-192x192.png`,
     tag: `meal-${data.type || 'notification'}`,
     data,
     requireInteraction: false,
