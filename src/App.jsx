@@ -130,6 +130,12 @@ function AppContent() {
 
     // SKIP_WAITING 후 새 SW가 control을 잡으면 1회만 reload
     const handleControllerChange = () => {
+      // [진단 로그] 원인 파악용 — 확인 후 제거 예정
+      console.log('[SW-DIAG] controllerchange 발생', {
+        time: new Date().toISOString(),
+        isReloading,
+        controller: navigator.serviceWorker.controller?.scriptURL ?? null,
+      })
       if (isReloading) return
       isReloading = true
       window.location.reload()
@@ -148,7 +154,9 @@ function AppContent() {
 
       // [진단 로그] 원인 파악용 — 확인 후 제거 예정
       console.log('[SW-DIAG] attachUpdateListener', {
+        time: new Date().toISOString(),
         waiting: reg.waiting?.scriptURL ?? null,
+        installing: reg.installing?.scriptURL ?? null,   // 설치 진행 중인 SW 여부
         active: reg.active?.scriptURL ?? null,
         controller: navigator.serviceWorker.controller?.scriptURL ?? null,
         isVite: isViteSW(reg.waiting),
@@ -190,7 +198,9 @@ function AppContent() {
         .then(reg => {
           // [진단 로그] 원인 파악용 — 확인 후 제거 예정
           console.log('[SW-DIAG] visibilitychange 체크', {
+            time: new Date().toISOString(),
             waiting: reg?.waiting?.scriptURL ?? null,
+            installing: reg?.installing?.scriptURL ?? null,
             isVite: isViteSW(reg?.waiting),
             controller: !!navigator.serviceWorker.controller,
           })
