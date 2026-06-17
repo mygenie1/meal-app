@@ -127,7 +127,7 @@ export default function CalendarPage() {
         {currentSpace && <StatBanner space={currentSpace} displayMonth={displayMonth} />}
 
         {/* 카테고리 범례 + 태그 필터 (한 줄) */}
-        <div className="px-4 mb-3 flex items-center justify-between gap-3">
+        <div className="px-4 mb-1 flex items-end justify-between gap-3">
           <div className="flex gap-3 overflow-x-auto flex-1 min-w-0">
             {[
               { tag: '집밥', color: '#2f9e5f' },
