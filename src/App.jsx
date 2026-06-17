@@ -141,7 +141,8 @@ function AppContent() {
       if (!reg) return
 
       // 이미 waiting SW가 있으면 즉시 배너 (탭 재오픈 등)
-      if (reg.waiting) {
+      // controller 체크: 첫 설치 or FCM SW 경쟁으로 인한 오탐 방지
+      if (reg.waiting && navigator.serviceWorker.controller) {
         setUpdateReady(true)
         return
       }

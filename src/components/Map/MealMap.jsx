@@ -1277,28 +1277,20 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
         }
       }
 
+      // GPS 대기 없이 즉시 서울로 초기화 → 위시 지도와 동일 패턴
+      initMap(SEOUL.lat, SEOUL.lng)
+      // GPS 취득 후 panTo 이동 + 블루닷 표시
       if (navigator.geolocation) {
-        const geoTimer = setTimeout(() => {
-          if (!destroyed && !kakaoMapRef.current) initMap(SEOUL.lat, SEOUL.lng)
-        }, 4000)
-
         navigator.geolocation.getCurrentPosition(
           pos => {
-            clearTimeout(geoTimer)
+            if (destroyed || !kakaoMapRef.current) return
             const { latitude, longitude } = pos.coords
-            if (!destroyed && !kakaoMapRef.current) {
-              initMap(latitude, longitude)
-              setUserLocation([latitude, longitude])
-            }
+            setUserLocation([latitude, longitude])
+            kakaoMapRef.current.panTo(new window.kakao.maps.LatLng(latitude, longitude))
           },
-          () => {
-            clearTimeout(geoTimer)
-            if (!destroyed && !kakaoMapRef.current) initMap(SEOUL.lat, SEOUL.lng)
-          },
+          () => {},   // 실패 시 서울 그대로
           { enableHighAccuracy: false, timeout: 4000, maximumAge: 60000 }
         )
-      } else {
-        initMap(SEOUL.lat, SEOUL.lng)
       }
     })
 
