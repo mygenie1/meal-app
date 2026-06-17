@@ -39,6 +39,6 @@ export async function sendNotification({ toUserIds, spaceId, mealId, fromUser, t
 }
 
 export async function getSpaceMemberIds(spaceId) {
-  const { data } = await supabase.from('space_members').select('user_id').eq('space_id', spaceId)
-  return data?.map(m => m.user_id) || []
+  const { data } = await supabase.rpc('get_space_member_ids', { p_space_id: spaceId })
+  return data?.map(row => row.user_id) || []
 }

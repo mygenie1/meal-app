@@ -7,7 +7,7 @@ import Modal from '../common/Modal'
 import MealForm from '../MealRecord/MealForm'
 import FullscreenViewer from '../common/FullscreenViewer'
 import { linkify } from '../../lib/linkify'
-import { sendNotification, buildFromUser } from '../../lib/notify'
+import { sendNotification, buildFromUser, getSpaceMemberIds } from '../../lib/notify'
 
 // ── 상수 ──────────────────────────────────────────────────────
 const TAG_COLORS = { 집밥: '#86efac', 외식: '#fcd34d', 카페: '#f9a8d4', 배달: '#93c5fd' }
@@ -315,18 +315,16 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
       const ok = await addWishlistInterest(item.id)
       if (ok) {
         try {
-          const { data: members } = await supabase.from('space_members').select('user_id').eq('space_id', currentSpace?.id)
-          if (members?.length > 0) {
-            const fromUser = buildFromUser(user)
-            const nick = user.user_metadata?.name || user.user_metadata?.full_name || '누군가'
-            await sendNotification({
-              toUserIds: members.map(m => m.user_id),
-              spaceId: currentSpace?.id,
-              fromUser,
-              type: 'wishlist_interest',
-              message: `${nick}님도 "${item.name}"에 가고 싶어해요`,
-            })
-          }
+          const fromUser = buildFromUser(user)
+          const nick = user.user_metadata?.name || user.user_metadata?.full_name || '누군가'
+          const memberIds = await getSpaceMemberIds(currentSpace?.id)
+          await sendNotification({
+            toUserIds: memberIds,
+            spaceId: currentSpace?.id,
+            fromUser,
+            type: 'wishlist_interest',
+            message: `${nick}님도 "${item.name}"에 가고 싶어해요`,
+          })
         } catch {}
       }
     }
@@ -1678,22 +1676,16 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
       try { await addWishlistInterest(newItem.id) } catch {}
       // 같은 스페이스 다른 멤버들에게 알림 (메인 기능과 분리: try/catch)
       try {
-        const { data: members } = await supabase
-          .from('space_members')
-          .select('user_id')
-          .eq('space_id', currentSpace?.id)
-          .neq('user_id', user?.id)
-        if (members?.length > 0) {
-          const fromUser = buildFromUser(user)
-          const nick = user?.user_metadata?.name || user?.user_metadata?.full_name || '누군가'
-          await sendNotification({
-            toUserIds: members.map(m => m.user_id),
-            spaceId: currentSpace?.id,
-            fromUser,
-            type: 'new_wishlist',
-            message: `${nick}님이 가고 싶은 곳을 추가했어요: ${newItem.name}`,
-          })
-        }
+        const fromUser = buildFromUser(user)
+        const nick = user?.user_metadata?.name || user?.user_metadata?.full_name || '누군가'
+        const memberIds = await getSpaceMemberIds(currentSpace?.id)
+        await sendNotification({
+          toUserIds: memberIds,
+          spaceId: currentSpace?.id,
+          fromUser,
+          type: 'new_wishlist',
+          message: `${nick}님이 가고 싶은 곳을 추가했어요: ${newItem.name}`,
+        })
       } catch {}
     }
     setShowAddModal(false)
@@ -2112,18 +2104,16 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
                               const ok = await addWishlistInterest(item.id)
                               if (ok) {
                                 try {
-                                  const { data: members } = await supabase.from('space_members').select('user_id').eq('space_id', currentSpace?.id)
-                                  if (members?.length > 0) {
-                                    const fromUser = buildFromUser(user)
-                                    const nick = user?.user_metadata?.name || user?.user_metadata?.full_name || '누군가'
-                                    await sendNotification({
-                                      toUserIds: members.map(m => m.user_id),
-                                      spaceId: currentSpace?.id,
-                                      fromUser,
-                                      type: 'wishlist_interest',
-                                      message: `${nick}님도 "${item.name}"에 가고 싶어해요`,
-                                    })
-                                  }
+                                  const fromUser = buildFromUser(user)
+                                  const nick = user?.user_metadata?.name || user?.user_metadata?.full_name || '누군가'
+                                  const memberIds = await getSpaceMemberIds(currentSpace?.id)
+                                  await sendNotification({
+                                    toUserIds: memberIds,
+                                    spaceId: currentSpace?.id,
+                                    fromUser,
+                                    type: 'wishlist_interest',
+                                    message: `${nick}님도 "${item.name}"에 가고 싶어해요`,
+                                  })
                                 } catch {}
                               }
                             }

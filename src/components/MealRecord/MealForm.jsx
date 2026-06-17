@@ -6,7 +6,7 @@ import { QtyStepper } from '../Ingredients/QtyStepper'
 import { useApp } from '../../context/AppContext'
 import { uploadPhotoWithThumbnail, getThumbUrl } from '../../lib/uploadPhoto'
 import { supabase } from '../../lib/supabase'
-import { sendNotification, buildFromUser } from '../../lib/notify'
+import { sendNotification, buildFromUser, getSpaceMemberIds } from '../../lib/notify'
 
 // 모바일 여부 — 모바일은 클립보드 paste가 잘 안 되므로 안내 문구 숨김
 const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
@@ -443,25 +443,17 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       // 새 게시글 알림 — 수정이 아닌 신규 등록이고 다른 멤버가 있을 때만
       if (!initial && newMeal?.id && user && currentSpace?.id) {
         try {
-          const { data: members, error: membersErr } = await supabase
-            .from('space_members')
-            .select('user_id')
-            .eq('space_id', currentSpace.id)
-            .neq('user_id', user.id)
-          if (membersErr) {
-            console.error('[MealForm] space_members 조회 실패:', membersErr)
-          } else if (members?.length > 0) {
-            const fromUser = buildFromUser(user)
-            const title = form.title || form.restaurantName || '식사'
-            await sendNotification({
-              toUserIds: members.map(m => m.user_id),
-              spaceId: currentSpace.id,
-              mealId: newMeal.id,
-              fromUser,
-              type: 'new_meal',
-              message: `${fromUser.nickname}님이 새 식사를 기록했어요: ${title}`,
-            })
-          }
+          const fromUser = buildFromUser(user)
+          const title = form.title || form.restaurantName || '식사'
+          const memberIds = await getSpaceMemberIds(currentSpace.id)
+          await sendNotification({
+            toUserIds: memberIds,
+            spaceId: currentSpace.id,
+            mealId: newMeal.id,
+            fromUser,
+            type: 'new_meal',
+            message: `${fromUser.nickname}님이 새 식사를 기록했어요: ${title}`,
+          })
         } catch (e) {
           console.error('[MealForm] 알림 처리 중 오류:', e)
         }
@@ -469,25 +461,17 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       // 수정 게시글 알림 — 수정 시 같은 스페이스 다른 멤버 전원에게
       if (initial?.id && user && currentSpace?.id) {
         try {
-          const { data: members, error: membersErr } = await supabase
-            .from('space_members')
-            .select('user_id')
-            .eq('space_id', currentSpace.id)
-            .neq('user_id', user.id)
-          if (membersErr) {
-            console.error('[MealForm] space_members 조회 실패 (수정 알림):', membersErr)
-          } else if (members?.length > 0) {
-            const fromUser = buildFromUser(user)
-            const title = form.title || form.restaurantName || '식사'
-            await sendNotification({
-              toUserIds: members.map(m => m.user_id),
-              spaceId: currentSpace.id,
-              mealId: initial.id,
-              fromUser,
-              type: 'new_meal',
-              message: `${fromUser.nickname}님이 식사 기록을 수정했어요: ${title}`,
-            })
-          }
+          const fromUser = buildFromUser(user)
+          const title = form.title || form.restaurantName || '식사'
+          const memberIds = await getSpaceMemberIds(currentSpace.id)
+          await sendNotification({
+            toUserIds: memberIds,
+            spaceId: currentSpace.id,
+            mealId: initial.id,
+            fromUser,
+            type: 'new_meal',
+            message: `${fromUser.nickname}님이 식사 기록을 수정했어요: ${title}`,
+          })
         } catch (e) {
           console.error('[MealForm] 수정 알림 처리 중 오류:', e)
         }
