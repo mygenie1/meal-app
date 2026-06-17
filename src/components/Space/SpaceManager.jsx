@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useApp } from '../../context/AppContext'
 import Modal from '../common/Modal'
@@ -6,6 +6,129 @@ import BulkPhotoUpload from './BulkPhotoUpload'
 import SettingsModal from './SettingsModal'
 import FeedbackModal from './FeedbackModal'
 import Avatar from '../common/Avatar'
+
+const MINI_DISMISSED_KEY = 'install_mini_dismissed'
+
+function isStandaloneMode() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true
+  )
+}
+
+function isIOSSafari() {
+  const ua = navigator.userAgent
+  return /iphone|ipad|ipod/i.test(ua) && !/crios|fxios|opios|mercury/i.test(ua)
+}
+
+function isIOSNonSafari() {
+  const ua = navigator.userAgent
+  return /iphone|ipad|ipod/i.test(ua) && /crios|fxios|opios|mercury/i.test(ua)
+}
+
+function InstallMiniCard() {
+  const [show, setShow] = useState(false)
+  const [mode, setMode] = useState(null) // 'ios' | 'android' | 'ios-other'
+  const [prompt, setPrompt] = useState(null)
+
+  useEffect(() => {
+    if (isStandaloneMode() || localStorage.getItem(MINI_DISMISSED_KEY) === 'true') return
+
+    if (isIOSSafari()) {
+      setMode('ios')
+      setShow(true)
+    } else if (isIOSNonSafari()) {
+      setMode('ios-other')
+      setShow(true)
+    } else if (window.__installPrompt) {
+      setPrompt(window.__installPrompt)
+      setMode('android')
+      setShow(true)
+    }
+    // Android에서 아직 __installPrompt가 없을 경우 대기
+    const handler = (e) => {
+      if (isStandaloneMode() || localStorage.getItem(MINI_DISMISSED_KEY) === 'true') return
+      if (mode === null && !isIOSSafari() && !isIOSNonSafari()) {
+        e.preventDefault()
+        window.__installPrompt = e
+        setPrompt(e)
+        setMode('android')
+        setShow(true)
+      }
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  function handleDismiss() {
+    setShow(false)
+    localStorage.setItem(MINI_DISMISSED_KEY, 'true')
+  }
+
+  async function handleInstall() {
+    if (!prompt) return
+    prompt.prompt()
+    const { outcome } = await prompt.userChoice
+    if (outcome === 'accepted') {
+      setShow(false)
+      window.__installPrompt = null
+    }
+    setPrompt(null)
+  }
+
+  if (!show) return null
+
+  return (
+    <div className="bg-white rounded-2xl border border-cream-200 p-4">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-warm-brown/10 flex items-center justify-center shrink-0">
+          <svg className="w-5 h-5 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.5a6.5 6.5 0 100-13 6.5 6.5 0 000 13zM12 2v1m0 18v1M4.22 4.22l.7.7m14.14 14.14l.7.7M2 12h1m18 0h1M4.22 19.78l.7-.7M19.08 4.92l.7-.7" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-warm-dark text-sm">앱처럼 사용하기</p>
+          {mode === 'ios' && (
+            <p className="text-xs text-warm-light mt-0.5 leading-relaxed">
+              Safari 하단{' '}
+              <svg className="inline w-3 h-3 mb-0.5 align-middle" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              {' '}→ <span className="font-medium text-warm-dark">홈 화면에 추가</span>
+            </p>
+          )}
+          {mode === 'android' && (
+            <p className="text-xs text-warm-light mt-0.5">홈화면에 추가하면 앱처럼 사용해요</p>
+          )}
+          {mode === 'ios-other' && (
+            <p className="text-xs text-warm-light mt-0.5">Safari로 열면 홈 화면에 추가할 수 있어요</p>
+          )}
+        </div>
+        <button
+          onClick={handleDismiss}
+          className="text-cream-400 hover:text-warm-light transition-colors shrink-0 mt-0.5"
+          aria-label="닫기"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      {mode === 'android' && prompt && (
+        <button
+          onClick={handleInstall}
+          className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors active:scale-[0.99]"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          앱 설치하기
+        </button>
+      )}
+    </div>
+  )
+}
 
 const EMOJIS = ['🍽️', '🍜', '🍕', '🍱', '🍰', '☕', '🥗', '🍣', '🌮', '🥘']
 
@@ -394,6 +517,9 @@ export default function SpaceManager() {
           <p className="text-xs text-cream-400">새 스페이스를 만들거나 코드로 참가해보세요</p>
         </div>
       )}
+
+      {/* 설치 미니카드 */}
+      <InstallMiniCard />
 
       {/* 피드백 카드 */}
       <div className="bg-cream-100 rounded-2xl p-4">
