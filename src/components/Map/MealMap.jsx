@@ -2054,8 +2054,13 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
                 }
                 return true
               })
-              const displayUnvisited = filtered.slice(0, wishDisplayCount)
-              const hasMore = filtered.length > wishDisplayCount
+              // 하이라이트된 항목을 최상단 고정 (페이지 범위 밖이어도 항상 표시)
+              const pinnedItem = highlightedWishId ? filtered.find(i => i.id === highlightedWishId) : null
+              const restFiltered = pinnedItem ? filtered.filter(i => i.id !== highlightedWishId) : filtered
+              const displayUnvisited = pinnedItem
+                ? [pinnedItem, ...restFiltered.slice(0, wishDisplayCount)]
+                : restFiltered.slice(0, wishDisplayCount)
+              const hasMore = restFiltered.length > wishDisplayCount
               return unvisited.length === 0 ? (
                 <div className="py-10 text-center mb-6">
                   <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mx-auto mb-3">
@@ -2146,7 +2151,11 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
                   <span className="text-xs text-cream-400">{visited.length}곳</span>
                 </div>
                 <div className="space-y-3">
-                  {visited.map(item => (
+                  {[...visited].sort((a, b) => {
+                    if (a.id === highlightedWishId) return -1
+                    if (b.id === highlightedWishId) return 1
+                    return 0
+                  }).map(item => (
                     <WishListCard key={item.id} item={item}
                       highlighted={item.id === highlightedWishId}
                       onViewDetail={() => setViewingWish(item)}
