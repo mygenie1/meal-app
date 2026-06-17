@@ -332,7 +332,7 @@ export function AppProvider({ children }) {
             reg.showNotification(title, {
               body,
               icon: `${origin}/icon-192x192.png`,
-              badge: `${origin}/icon-192x192.png`,
+              badge: `${origin}/notification-icon-192.png`,
               tag: `meal-${d.type || 'notification'}-fg`,
               data: d,
               requireInteraction: false,

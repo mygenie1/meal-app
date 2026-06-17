@@ -20,7 +20,7 @@ messaging.onBackgroundMessage(payload => {
   self.registration.showNotification(data.title || '식탁일기', {
     body: data.body || '',
     icon: `${origin}/icon-192x192.png`,
-    badge: `${origin}/icon-192x192.png`,
+    badge: `${origin}/notification-icon-192.png`,
     tag: `meal-${data.type || 'notification'}`,
     data,
     requireInteraction: false,
