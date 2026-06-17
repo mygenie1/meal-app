@@ -11,6 +11,8 @@ import LoginPage from './pages/LoginPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import TutorialFlow from './components/Tutorial/TutorialFlow'
 import InstallBanner from './components/common/InstallBanner'
+import AdminLoginPage from './pages/admin/AdminLoginPage'
+import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 
 function OfflineBanner() {
   return (
@@ -307,12 +309,32 @@ function AppContent() {
   )
 }
 
-export default function App() {
+// /admin/* 경로는 AppProvider와 완전 분리 (일반 앱 상태 불필요)
+function AdminRoutes() {
+  return (
+    <Routes>
+      <Route path="/admin/login" element={<AdminLoginPage />} />
+      <Route path="/admin"       element={<AdminDashboardPage />} />
+    </Routes>
+  )
+}
+
+function RootRouter() {
+  const location = useLocation()
+  if (location.pathname.startsWith('/admin')) {
+    return <AdminRoutes />
+  }
   return (
     <AppProvider>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
+      <AppContent />
     </AppProvider>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <RootRouter />
+    </BrowserRouter>
   )
 }
