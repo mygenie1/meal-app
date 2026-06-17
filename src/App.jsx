@@ -120,10 +120,9 @@ function AppContent() {
   }, [loadError])
 
   // Service Worker 업데이트 감지 (배너 방식)
-  // registration.waiting 이 있을 때만 배너를 표시한다:
-  //   - 새 SW가 installed(waiting) 상태이고 기존 SW가 controlling 중인 경우 = 실제 업데이트
-  //   - 첫 설치 시에는 controller가 없으므로 자동 제외
-  // 배너 클릭 → SKIP_WAITING 메시지 → controllerchange → 1회 reload (루프 방지)
+  // VitePWA sw.js 업데이트만 감지. firebase-messaging-sw.js(FCM)가 같은 scope '/'를
+  // 공유하므로 scriptURL로 필터링해 오탐을 근본 차단.
+  // 배너 클릭 → SKIP_WAITING → controllerchange → 1회 reload (무한루프 가드 포함)
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
 
@@ -137,12 +136,19 @@ function AppContent() {
     }
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange)
 
+    // VitePWA sw.js 인지 확인 — firebase-messaging-sw.js 오탐 방지
+    // sw.scriptURL 예: "https://siktakilgi.com/sw.js"
+    const isViteSW = (sw) => {
+      const url = sw?.scriptURL || ''
+      return url.endsWith('/sw.js') || url.includes('/sw.js?')
+    }
+
     const attachUpdateListener = (reg) => {
       if (!reg) return
 
       // 이미 waiting SW가 있으면 즉시 배너 (탭 재오픈 등)
-      // controller 체크: 첫 설치 or FCM SW 경쟁으로 인한 오탐 방지
-      if (reg.waiting && navigator.serviceWorker.controller) {
+      // VitePWA sw.js인지 + controller 존재 여부 둘 다 확인
+      if (isViteSW(reg.waiting) && navigator.serviceWorker.controller) {
         setUpdateReady(true)
         return
       }
@@ -152,8 +158,8 @@ function AppContent() {
         const newWorker = reg.installing
         if (!newWorker) return
         newWorker.addEventListener('statechange', () => {
-          // installed(waiting) 상태 + 기존 SW가 controlling = 실제 업데이트
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          // installed(waiting) + controller 존재 + VitePWA sw.js = 실제 업데이트
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller && isViteSW(newWorker)) {
             setUpdateReady(true)
           }
         })
@@ -169,7 +175,7 @@ function AppContent() {
       navigator.serviceWorker.getRegistration()
         .then(reg => {
           reg?.update()
-          if (reg?.waiting && navigator.serviceWorker.controller) setUpdateReady(true)
+          if (isViteSW(reg?.waiting) && navigator.serviceWorker.controller) setUpdateReady(true)
         })
         .catch(() => {})
     }
