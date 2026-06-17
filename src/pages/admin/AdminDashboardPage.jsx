@@ -130,7 +130,7 @@ function Dashboard({ payload }) {
           <div className="grid grid-cols-2 gap-3">
             {[
               { label: '사용자 관리', icon: '👤', key: 'view_users', path: '/admin/users' },
-              { label: '스페이스 관리', icon: '🏠', key: 'view_spaces', path: null },
+              { label: '스페이스 관리', icon: '🏠', key: 'view_spaces', path: '/admin/spaces' },
               { label: '피드백', icon: '💬', key: 'view_feedback', path: null },
               { label: '관리자 관리', icon: '🔑', key: 'manage_admins', path: null },
             ].map(({ label, icon, key, path }) => {
