@@ -119,11 +119,15 @@ export default function SpaceManager() {
     setMemberCount(null)
     setCopied(false)
     setShowLeaveModal(true)
-    const { data: members } = await supabase
-      .from('space_members')
-      .select('user_id')
-      .eq('space_id', space.id)
-    setMemberCount(members?.length ?? 0)
+    // space_members SELECT RLS가 "user_id = auth.uid()" (본인 레코드만) 이므로
+    // 직접 조회하면 항상 1을 반환 → SECURITY DEFINER RPC로 RLS 우회해 실제 멤버 수 조회.
+    // 조회 실패 시 2로 가정해 Case B (일반 확인 문구) 표시 — 오탐(혼자 경고 잘못 표시) 방지.
+    try {
+      const { data: count, error } = await supabase.rpc('get_space_member_count', { p_space_id: space.id })
+      setMemberCount(error ? 2 : (count ?? 1))
+    } catch {
+      setMemberCount(2)
+    }
   }
 
   async function handleLeaveSpace() {
