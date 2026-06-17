@@ -146,9 +146,19 @@ function AppContent() {
     const attachUpdateListener = (reg) => {
       if (!reg) return
 
+      // [진단 로그] 원인 파악용 — 확인 후 제거 예정
+      console.log('[SW-DIAG] attachUpdateListener', {
+        waiting: reg.waiting?.scriptURL ?? null,
+        active: reg.active?.scriptURL ?? null,
+        controller: navigator.serviceWorker.controller?.scriptURL ?? null,
+        isVite: isViteSW(reg.waiting),
+      })
+
       // 이미 waiting SW가 있으면 즉시 배너 (탭 재오픈 등)
       // VitePWA sw.js인지 + controller 존재 여부 둘 다 확인
       if (isViteSW(reg.waiting) && navigator.serviceWorker.controller) {
+        // [진단 로그] 원인 파악용 — 확인 후 제거 예정
+        console.log('[SW-DIAG] 배너 트리거: attachUpdateListener 즉시체크 (waiting 이미 존재)')
         setUpdateReady(true)
         return
       }
@@ -157,9 +167,13 @@ function AppContent() {
       const handleUpdateFound = () => {
         const newWorker = reg.installing
         if (!newWorker) return
+        // [진단 로그] 원인 파악용 — 확인 후 제거 예정
+        console.log('[SW-DIAG] updatefound 감지, installing:', newWorker.scriptURL)
         newWorker.addEventListener('statechange', () => {
           // installed(waiting) + controller 존재 + VitePWA sw.js = 실제 업데이트
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller && isViteSW(newWorker)) {
+            // [진단 로그] 원인 파악용 — 확인 후 제거 예정
+            console.log('[SW-DIAG] 배너 트리거: updatefound→statechange (새 SW 설치 완료)')
             setUpdateReady(true)
           }
         })
@@ -174,8 +188,18 @@ function AppContent() {
       if (document.visibilityState !== 'visible') return
       navigator.serviceWorker.getRegistration()
         .then(reg => {
+          // [진단 로그] 원인 파악용 — 확인 후 제거 예정
+          console.log('[SW-DIAG] visibilitychange 체크', {
+            waiting: reg?.waiting?.scriptURL ?? null,
+            isVite: isViteSW(reg?.waiting),
+            controller: !!navigator.serviceWorker.controller,
+          })
           reg?.update()
-          if (isViteSW(reg?.waiting) && navigator.serviceWorker.controller) setUpdateReady(true)
+          if (isViteSW(reg?.waiting) && navigator.serviceWorker.controller) {
+            // [진단 로그] 원인 파악용 — 확인 후 제거 예정
+            console.log('[SW-DIAG] 배너 트리거: visibilitychange waiting 재체크 ← 오탐 의심 경로')
+            setUpdateReady(true)
+          }
         })
         .catch(() => {})
     }
