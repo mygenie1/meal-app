@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { requestFCMToken } from '../lib/firebase'
+import { requestFCMToken, onFCMMessage } from '../lib/firebase'
 
 const AppContext = createContext(null)
 
@@ -340,6 +340,25 @@ export function AppProvider({ children }) {
       } else {
         console.log('[FCM] 토큰 저장 완료')
       }
+      // 포그라운드 알림 핸들러 — 앱이 열려 있을 때도 알림 표시
+      onFCMMessage((payload) => {
+        const d = payload.data || {}
+        const title = d.title || '식탁일기'
+        const body = d.body || ''
+        if ('serviceWorker' in navigator && Notification.permission === 'granted') {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.showNotification(title, {
+              body,
+              icon: '/icon-192x192.png',
+              badge: '/icon-192x192.png',
+              tag: `meal-${d.type || 'notification'}-fg`,
+              data: d,
+              requireInteraction: false,
+              vibrate: [200, 100, 200],
+            })
+          })
+        }
+      })
     } catch (e) {
       console.error('[FCM] 토큰 등록 오류:', e)
     }

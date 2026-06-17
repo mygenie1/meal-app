@@ -144,20 +144,15 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           message: {
             token,
-            notification: { title: notifTitle, body: notifBody },
             webpush: {
-              notification: {
-                icon: 'https://siktakilgi.com/icon-192x192.png',
-                badge: 'https://siktakilgi.com/icon-192x192.png',
-                requireInteraction: false,
-                vibrate: [200, 100, 200],
-              },
               fcm_options: { link: '/' },
             },
             data: {
               meal_id: String(record.meal_id ?? ''),
               type: String(record.type ?? ''),
               space_id: String(record.space_id ?? ''),
+              title: notifTitle,
+              body: notifBody,
             },
           },
         }),
