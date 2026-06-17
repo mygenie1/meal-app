@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       // — 목록과 동일한 방식: DB `.eq()` 필터 대신 JS 비교로 일관성 보장
       const [spaceRes, allMembersRes, totalMealsRes, mealsRes] = await Promise.all([
         supabase.from('spaces').select('id, name, emoji, code, created_at').eq('id', spaceId).single(),
-        supabase.from('space_members').select('space_id, user_id, created_at'),
+        supabase.from('space_members').select('space_id, user_id, joined_at'),
         supabase.from('meals').select('id', { count: 'exact', head: true }).eq('space_id', spaceId),
         supabase.from('meals')
           .select('id, date, title, restaurant_name, tag, meal_time, rating, review, user_id, photos, photo, created_at')
@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
         return {
           user_id:      uid,
           display_name: userMap[uid] ?? (uid ? `user_${uid.slice(0, 8)}` : '(알 수 없음)'),
-          joined_at:    m.created_at,
+          joined_at:    m.joined_at ?? null,
         }
       })
 
