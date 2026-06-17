@@ -130,12 +130,6 @@ function AppContent() {
 
     // SKIP_WAITING 후 새 SW가 control을 잡으면 1회만 reload
     const handleControllerChange = () => {
-      // [진단 로그] 원인 파악용 — 확인 후 제거 예정
-      console.log('[SW-DIAG] controllerchange 발생', {
-        time: new Date().toISOString(),
-        isReloading,
-        controller: navigator.serviceWorker.controller?.scriptURL ?? null,
-      })
       if (isReloading) return
       isReloading = true
       window.location.reload()
@@ -152,36 +146,15 @@ function AppContent() {
     const attachUpdateListener = (reg) => {
       if (!reg) return
 
-      // [진단 로그] 원인 파악용 — 확인 후 제거 예정
-      console.log('[SW-DIAG] attachUpdateListener', {
-        time: new Date().toISOString(),
-        waiting: reg.waiting?.scriptURL ?? null,
-        installing: reg.installing?.scriptURL ?? null,   // 설치 진행 중인 SW 여부
-        active: reg.active?.scriptURL ?? null,
-        controller: navigator.serviceWorker.controller?.scriptURL ?? null,
-        isVite: isViteSW(reg.waiting),
-      })
-
-      // 이미 waiting SW가 있으면 즉시 배너 (탭 재오픈 등)
-      // VitePWA sw.js인지 + controller 존재 여부 둘 다 확인
-      if (isViteSW(reg.waiting) && navigator.serviceWorker.controller) {
-        // [진단 로그] 원인 파악용 — 확인 후 제거 예정
-        console.log('[SW-DIAG] 배너 트리거: attachUpdateListener 즉시체크 (waiting 이미 존재)')
-        setUpdateReady(true)
-        return
-      }
-
-      // 새 SW 설치 감지
+      // 앱 사용 중 새 SW가 실제로 설치되는 것을 목격했을 때만 배너 표시.
+      // 페이지 로드 시점에 이미 존재하는 reg.waiting(모바일 새로고침 시
+      // SW 재설치 잔여물)은 무시 — 즉시 체크 분기 없음.
       const handleUpdateFound = () => {
         const newWorker = reg.installing
         if (!newWorker) return
-        // [진단 로그] 원인 파악용 — 확인 후 제거 예정
-        console.log('[SW-DIAG] updatefound 감지, installing:', newWorker.scriptURL)
         newWorker.addEventListener('statechange', () => {
           // installed(waiting) + controller 존재 + VitePWA sw.js = 실제 업데이트
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller && isViteSW(newWorker)) {
-            // [진단 로그] 원인 파악용 — 확인 후 제거 예정
-            console.log('[SW-DIAG] 배너 트리거: updatefound→statechange (새 SW 설치 완료)')
             setUpdateReady(true)
           }
         })
@@ -191,26 +164,12 @@ function AppContent() {
 
     navigator.serviceWorker.ready.then(attachUpdateListener).catch(() => {})
 
-    // 포그라운드 복귀 시 업데이트 체크
+    // 포그라운드 복귀 시 업데이트 체크 — update()만 호출, waiting 즉시 체크 없음
+    // (새 버전 감지는 updatefound → statechange 경로가 담당)
     const handleVisibility = () => {
       if (document.visibilityState !== 'visible') return
       navigator.serviceWorker.getRegistration()
-        .then(reg => {
-          // [진단 로그] 원인 파악용 — 확인 후 제거 예정
-          console.log('[SW-DIAG] visibilitychange 체크', {
-            time: new Date().toISOString(),
-            waiting: reg?.waiting?.scriptURL ?? null,
-            installing: reg?.installing?.scriptURL ?? null,
-            isVite: isViteSW(reg?.waiting),
-            controller: !!navigator.serviceWorker.controller,
-          })
-          reg?.update()
-          if (isViteSW(reg?.waiting) && navigator.serviceWorker.controller) {
-            // [진단 로그] 원인 파악용 — 확인 후 제거 예정
-            console.log('[SW-DIAG] 배너 트리거: visibilitychange waiting 재체크 ← 오탐 의심 경로')
-            setUpdateReady(true)
-          }
-        })
+        .then(reg => reg?.update())
         .catch(() => {})
     }
     document.addEventListener('visibilitychange', handleVisibility)
