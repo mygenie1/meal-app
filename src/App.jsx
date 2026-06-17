@@ -13,6 +13,7 @@ import TutorialFlow from './components/Tutorial/TutorialFlow'
 import InstallBanner from './components/common/InstallBanner'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
+import AdminUsersPage from './pages/admin/AdminUsersPage'
 
 function OfflineBanner() {
   return (
@@ -317,8 +318,9 @@ function AppContent() {
 function AdminRoutes() {
   return (
     <Routes>
-      <Route path="/admin/login" element={<AdminLoginPage />} />
-      <Route path="/admin"       element={<AdminDashboardPage />} />
+      <Route path="/admin/login"  element={<AdminLoginPage />} />
+      <Route path="/admin"        element={<AdminDashboardPage />} />
+      <Route path="/admin/users"  element={<AdminUsersPage />} />
     </Routes>
   )
 }

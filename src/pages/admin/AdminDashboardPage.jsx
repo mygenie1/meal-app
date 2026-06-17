@@ -121,30 +121,37 @@ function Dashboard({ payload }) {
           </div>
         </div>
 
-        {/* 대시보드 기능 (준비중) */}
+        {/* 대시보드 기능 */}
         <div className="bg-white rounded-2xl shadow-sm p-5">
           <h2 className="text-sm font-semibold text-warm-dark mb-3">관리 기능</h2>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: '사용자 관리', icon: '👤', key: 'view_users' },
-              { label: '스페이스 관리', icon: '🏠', key: 'view_spaces' },
-              { label: '피드백', icon: '💬', key: 'view_feedback' },
-              { label: '관리자 관리', icon: '🔑', key: 'manage_admins' },
-            ].map(({ label, icon, key }) => {
-              const available = isSuper || payload.permissions?.[key] === true
+              { label: '사용자 관리', icon: '👤', key: 'view_users', path: '/admin/users' },
+              { label: '스페이스 관리', icon: '🏠', key: 'view_spaces', path: null },
+              { label: '피드백', icon: '💬', key: 'view_feedback', path: null },
+              { label: '관리자 관리', icon: '🔑', key: 'manage_admins', path: null },
+            ].map(({ label, icon, key, path }) => {
+              const available  = isSuper || payload.permissions?.[key] === true
+              const actionable = available && path
+              const Tag        = actionable ? 'button' : 'div'
               return (
-                <div
+                <Tag
                   key={key}
-                  className={`p-4 rounded-xl border text-center ${
-                    available
-                      ? 'border-cream-300 bg-cream-50 text-warm-dark'
-                      : 'border-stone-100 bg-stone-50 text-stone-300'
+                  {...(actionable ? { onClick: () => navigate(path) } : {})}
+                  className={`p-4 rounded-xl border text-center transition-all ${
+                    actionable
+                      ? 'border-warm-brown/30 bg-cream-50 text-warm-dark hover:bg-cream-100 active:scale-95 cursor-pointer'
+                      : available
+                        ? 'border-cream-300 bg-cream-50 text-warm-dark'
+                        : 'border-stone-100 bg-stone-50 text-stone-300'
                   }`}
                 >
                   <div className="text-xl mb-1">{icon}</div>
                   <p className="text-xs font-medium">{label}</p>
-                  <p className="text-[10px] mt-0.5 text-current opacity-60">준비중</p>
-                </div>
+                  {!actionable && (
+                    <p className="text-[10px] mt-0.5 text-current opacity-60">준비중</p>
+                  )}
+                </Tag>
               )
             })}
           </div>
