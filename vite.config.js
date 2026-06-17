@@ -11,7 +11,7 @@ export default defineConfig({
       // autoUpdate는 자동으로 SKIP_WAITING을 처리해 배너 없이 controllerchange가 발생하므로
       // 배너 방식과 충돌함 (오탐 및 무한 reload 원인).
       registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icon.svg'],
+      includeAssets: ['favicon.svg', 'icon.svg', 'icon-32.png', 'icon-180.png', 'icon-192.png', 'icon-512.png'],
       manifest: {
         name: '식탁일기',
         short_name: '식탁일기',
@@ -24,17 +24,17 @@ export default defineConfig({
         lang: 'ko',
         icons: [
           {
-            src: 'icon-192x192.png',
+            src: 'icon-192.png',
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: 'icon-512x512.png',
+            src: 'icon-512.png',
             sizes: '512x512',
             type: 'image/png',
           },
           {
-            src: 'icon-512x512.png',
+            src: 'icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable',
