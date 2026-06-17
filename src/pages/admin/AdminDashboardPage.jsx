@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import AdminGuard, { clearAdminToken, getAdminToken } from './AdminGuard'
 
-const ADMIN_VERIFY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-verify`
+const ADMIN_VERIFY_URL  = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-verify`
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const PERMISSION_LABELS = {
   view_users:         '사용자 목록 조회',
@@ -30,6 +31,7 @@ function Dashboard({ payload }) {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type':  'application/json',
+          'apikey':        SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ permission: 'view_users' }),
       })

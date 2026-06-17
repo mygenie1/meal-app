@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { decodeAdminToken } from './AdminGuard'
 
-const ADMIN_AUTH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-auth`
+const ADMIN_AUTH_URL  = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-auth`
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export default function AdminLoginPage() {
   const navigate = useNavigate()
@@ -20,7 +21,11 @@ export default function AdminLoginPage() {
     try {
       const res = await fetch(ADMIN_AUTH_URL, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey':        SUPABASE_ANON_KEY,
+        },
         body:    JSON.stringify({ username: username.trim(), password }),
       })
       const data = await res.json()
