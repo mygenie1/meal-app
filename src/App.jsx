@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import BottomNav from './components/common/BottomNav'
 import HomePage from './pages/HomePage'
@@ -94,6 +94,15 @@ function AppContent() {
   const [updateReady, setUpdateReady] = useState(false)
   const [tutorialCompleted, setTutorialCompleted] = useState(false)
 
+  // ★ 임시 진단 오버레이 상태 — 확인 후 제거 예정
+  const swLogsRef = useRef([])
+  const [, setSwLogVer] = useState(0)
+  function addSwLog(msg) {
+    const t = new Date().toLocaleTimeString('ko', { hour12: false })
+    swLogsRef.current = [`${t} ${msg}`, ...swLogsRef.current].slice(0, 14)
+    setSwLogVer(v => v + 1)
+  }
+
   // 로그인한 user.id 기반으로 튜토리얼 완료 여부 확인
   useEffect(() => {
     if (user?.id) {
@@ -126,10 +135,28 @@ function AppContent() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
 
+    // ★ 임시 진단 로그 — 확인 후 제거 예정
+    const sh = (sw) => sw?.scriptURL?.split('/').pop() ?? 'null'
+    addSwLog(`[MOUNT] ready=${document.readyState} ctrl=${sh(navigator.serviceWorker.controller)}`)
+
+    // ★ registerSW.js가 window.load 시점에 register()를 호출하는 순간의 SW 상태 포착
+    const logAtLoad = () => {
+      navigator.serviceWorker.getRegistration().then(r => {
+        addSwLog(`[load-evt] w=${sh(r?.waiting)} i=${sh(r?.installing)} a=${sh(r?.active)}`)
+      }).catch(() => addSwLog('[load-evt] getRegistration failed'))
+    }
+    if (document.readyState === 'complete') {
+      logAtLoad()
+    } else {
+      window.addEventListener('load', logAtLoad, { once: true })
+    }
+
     let isReloading = false
 
     // SKIP_WAITING 후 새 SW가 control을 잡으면 1회만 reload
     const handleControllerChange = () => {
+      // ★ 임시 진단 로그
+      addSwLog(`[ctrl-chg] reloading=${isReloading} newCtrl=${sh(navigator.serviceWorker.controller)}`)
       if (isReloading) return
       isReloading = true
       window.location.reload()
@@ -146,15 +173,26 @@ function AppContent() {
     const attachUpdateListener = (reg) => {
       if (!reg) return
 
+      // ★ 임시 진단 로그
+      addSwLog(`[attach] w=${sh(reg.waiting)} i=${sh(reg.installing)} a=${sh(reg.active)} ctrl=${sh(navigator.serviceWorker.controller)}`)
+
       // 앱 사용 중 새 SW가 실제로 설치되는 것을 목격했을 때만 배너 표시.
       // 페이지 로드 시점에 이미 존재하는 reg.waiting(모바일 새로고침 시
       // SW 재설치 잔여물)은 무시 — 즉시 체크 분기 없음.
       const handleUpdateFound = () => {
         const newWorker = reg.installing
         if (!newWorker) return
+        // ★ 임시 진단 로그
+        addSwLog(`[found] installing=${sh(newWorker)}`)
         newWorker.addEventListener('statechange', () => {
+          const ctrl = !!navigator.serviceWorker.controller
+          const vite = isViteSW(newWorker)
+          // ★ 임시 진단 로그
+          addSwLog(`[state→${newWorker.state}] ctrl=${ctrl} isVite=${vite}`)
           // installed(waiting) + controller 존재 + VitePWA sw.js = 실제 업데이트
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller && isViteSW(newWorker)) {
+          if (newWorker.state === 'installed' && ctrl && vite) {
+            // ★ 임시 진단 로그 — 배너 트리거 지점
+            addSwLog('⚡ BANNER SET TRUE via updatefound→installed')
             setUpdateReady(true)
           }
         })
@@ -162,14 +200,22 @@ function AppContent() {
       reg.addEventListener('updatefound', handleUpdateFound)
     }
 
-    navigator.serviceWorker.ready.then(attachUpdateListener).catch(() => {})
+    navigator.serviceWorker.ready.then(reg => {
+      // ★ 임시 진단 로그
+      addSwLog(`[ready] w=${sh(reg?.waiting)} i=${sh(reg?.installing)} a=${sh(reg?.active)}`)
+      attachUpdateListener(reg)
+    }).catch(() => addSwLog('[ready] failed'))
 
     // 포그라운드 복귀 시 업데이트 체크 — update()만 호출, waiting 즉시 체크 없음
     // (새 버전 감지는 updatefound → statechange 경로가 담당)
     const handleVisibility = () => {
       if (document.visibilityState !== 'visible') return
       navigator.serviceWorker.getRegistration()
-        .then(reg => reg?.update())
+        .then(reg => {
+          // ★ 임시 진단 로그
+          addSwLog(`[vis] w=${sh(reg?.waiting)} i=${sh(reg?.installing)} ctrl=${sh(navigator.serviceWorker.controller)}`)
+          reg?.update()
+        })
         .catch(() => {})
     }
     document.addEventListener('visibilitychange', handleVisibility)
@@ -226,6 +272,8 @@ function AppContent() {
     setUpdateReady(false)
     navigator.serviceWorker.getRegistration()
       .then(reg => {
+        // ★ 임시 진단 로그
+        addSwLog(`[handle-update] w=${reg?.waiting?.scriptURL?.split('/').pop() ?? 'null'} → ${reg?.waiting ? 'SKIP_WAITING' : 'direct-reload'}`)
         if (reg?.waiting) {
           reg.waiting.postMessage({ type: 'SKIP_WAITING' })
         } else {
@@ -281,6 +329,41 @@ function AppContent() {
   return (
     <div className="min-h-svh max-w-lg mx-auto flex flex-col bg-cream-50">
       {updateReady && <UpdateBanner onReload={handleUpdate} />}
+
+      {/* ★ 임시 SW 진단 오버레이 — 확인 후 제거 예정 */}
+      <div style={{
+        position: 'fixed', top: '3.5rem', right: '4px',
+        zIndex: 99999, maxWidth: '92vw', width: '320px',
+        maxHeight: '40vh', overflowY: 'auto',
+        background: 'rgba(0,0,0,0.88)', borderRadius: '8px',
+        padding: '6px 8px', pointerEvents: 'auto',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+          <span style={{ color: updateReady ? '#f87171' : '#86efac', fontSize: '9px', fontFamily: 'monospace', fontWeight: 'bold' }}>
+            SW-DBG | banner={String(updateReady)}
+          </span>
+          <button
+            onClick={() => { swLogsRef.current = []; setSwLogVer(v => v + 1) }}
+            style={{ color: '#94a3b8', fontSize: '9px', fontFamily: 'monospace', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}
+          >
+            clear
+          </button>
+        </div>
+        {swLogsRef.current.length === 0 && (
+          <div style={{ color: '#64748b', fontSize: '9px', fontFamily: 'monospace' }}>대기 중...</div>
+        )}
+        {swLogsRef.current.map((log, i) => (
+          <div key={i} style={{
+            color: log.includes('BANNER') ? '#fbbf24' : log.includes('⚡') ? '#f87171' : '#cbd5e1',
+            fontSize: '9px', fontFamily: 'monospace', lineHeight: '1.5',
+            borderBottom: '1px solid #1e293b', paddingBottom: '1px', marginBottom: '1px',
+            wordBreak: 'break-all',
+          }}>
+            {log}
+          </div>
+        ))}
+      </div>
+
       {loadError && !errorDismissed && (
         <ConnectErrorBanner
           message={loadError}
