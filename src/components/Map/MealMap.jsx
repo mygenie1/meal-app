@@ -10,7 +10,7 @@ import { linkify } from '../../lib/linkify'
 import { sendNotification, buildFromUser, getSpaceMemberIds } from '../../lib/notify'
 
 // ── 상수 ──────────────────────────────────────────────────────
-const TAG_COLORS = { 집밥: '#86efac', 외식: '#fcd34d', 카페: '#f9a8d4', 배달: '#93c5fd' }
+const TAG_COLORS = { 집밥: '#2f9e5f', 외식: '#d6862c', 카페: '#d15c87', 배달: '#5276c4' }
 const MAP_FILTERS = ['전체', '외식', '카페']
 const ROUND = 1e4
 const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
@@ -1853,7 +1853,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
 
           {/* 지도 — 고정 높이 */}
           <div className="shrink-0 px-4">
-            <div className="relative rounded-2xl shadow-sm overflow-hidden" style={{ height: '35vh', minHeight: 240 }}>
+            <div className="relative rounded-2xl shadow-sm overflow-hidden" style={{ height: '32vh', minHeight: 240 }}>
               <div ref={setMapContainerRef} style={{ width: '100%', height: '100%' }} />
               <div className="absolute top-3 left-3 z-10 pointer-events-none bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
                 <p className="text-xs font-medium text-warm-dark">우리가 기록한 곳 {clusters.length}곳</p>
@@ -1946,7 +1946,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
           {/* 위시리스트 지도 */}
           {wishlistWithCoords.length > 0 && (
             <div ref={wishMapContainerRef} className="shrink-0 px-4 pb-2">
-              <div className="relative rounded-2xl shadow-sm overflow-hidden" style={{ height: '38vh', minHeight: 220 }}>
+              <div className="relative rounded-2xl shadow-sm overflow-hidden" style={{ height: '32vh', minHeight: 220 }}>
                 <div ref={setWishMapNodeRef} style={{ width: '100%', height: '100%' }} />
                 <div className="absolute top-3 left-3 z-10 pointer-events-none bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
                   <p className="text-xs font-medium text-warm-dark">가고 싶은 곳 {wishlistWithCoords.length}곳</p>
