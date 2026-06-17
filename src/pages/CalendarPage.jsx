@@ -8,6 +8,8 @@ import DayDetail from '../components/MealRecord/DayDetail'
 import MealDetailModal from '../components/MealRecord/MealDetailModal'
 import { useNavigate } from 'react-router-dom'
 
+const TAG_COLOR = { '집밥': '#2f9e5f', '외식': '#d6862c', '카페': '#d15c87', '배달': '#5276c4' }
+
 function StatBanner({ space, displayMonth }) {
   const base = displayMonth || new Date()
   const count = (space.meals || []).filter(m => isSameMonth(new Date(m.date), base)).length
@@ -127,10 +129,16 @@ export default function CalendarPage() {
         {/* 태그 필터 드롭다운 */}
         <div className="px-4 mb-2 flex items-center justify-end">
           <div className="relative">
+            {filter !== '전체' && (
+              <span
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full pointer-events-none z-10"
+                style={{ background: TAG_COLOR[filter] }}
+              />
+            )}
             <select
               value={filter}
               onChange={e => setFilter(e.target.value)}
-              className="text-sm border border-cream-300 rounded-xl pl-3 pr-7 py-1.5 bg-cream-50 text-warm-dark focus:outline-none focus:border-warm-light appearance-none cursor-pointer"
+              className={`text-sm border border-cream-300 rounded-xl ${filter !== '전체' ? 'pl-7' : 'pl-3'} pr-7 py-1.5 bg-cream-50 text-warm-dark focus:outline-none focus:border-warm-light appearance-none cursor-pointer`}
             >
               {['전체', '집밥', '외식', '카페', '배달'].map(t => (
                 <option key={t} value={t}>{t}</option>
@@ -140,6 +148,21 @@ export default function CalendarPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </div>
+        </div>
+
+        {/* 카테고리 범례 */}
+        <div className="px-4 mb-3 flex gap-3 overflow-x-auto">
+          {[
+            { tag: '집밥', color: '#2f9e5f' },
+            { tag: '외식', color: '#d6862c' },
+            { tag: '카페', color: '#d15c87' },
+            { tag: '배달', color: '#5276c4' },
+          ].map(({ tag, color }) => (
+            <div key={tag} className="flex items-center gap-1 shrink-0">
+              <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+              <span className="text-[10px] text-warm-light">{tag}</span>
+            </div>
+          ))}
         </div>
 
         <CalendarGrid

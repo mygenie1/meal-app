@@ -10,6 +10,7 @@ import { ko } from 'date-fns/locale'
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 const MONTH_NAMES = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월']
+const TAG_COLOR = { '집밥': '#2f9e5f', '외식': '#d6862c', '카페': '#d15c87', '배달': '#5276c4' }
 
 const THIS_YEAR = getYear(new Date())
 const YEARS = Array.from({ length: THIS_YEAR + 3 - 2020 }, (_, i) => 2020 + i)
@@ -201,6 +202,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
           const displayMeal = repMeal || dayMeals.find(m => m.photos?.[0]) || dayMeals[0]
           const thumbPhoto = displayMeal ? getThumbUrl(displayMeal.photos?.[0] || '') : ''
           const displayTitle = displayMeal?.title || displayMeal?.restaurantName || '식사'
+          const tagColors = [...new Set(dayMeals.map(m => TAG_COLOR[m.tag]).filter(Boolean))].slice(0, 3)
           const inMonth = isSameMonth(day, current)
           const today = isToday(day)
           const dayOfWeek = idx % 7
@@ -214,6 +216,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
                 ${inMonth ? '' : 'opacity-25'}
                 ${hasMeals ? 'h-[96px]' : 'h-[56px]'}
                 ${today && !hasMeals ? 'ring-1 ring-warm-brown/40 bg-warm-brown/5' : ''}
+                ${today && hasMeals ? 'ring-2 ring-warm-brown' : ''}
                 ${!hasMeals ? 'hover:bg-cream-100' : ''}
               `}
             >
@@ -230,7 +233,7 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
               {thumbPhoto && (
                 <div className="absolute inset-0">
                   <LazyImage src={thumbPhoto} alt="" className="w-full h-full" />
-                  <div className="absolute inset-0 bg-black/25" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-transparent to-transparent" />
                 </div>
               )}
               {hasMeals && !thumbPhoto && (
@@ -268,6 +271,13 @@ export default function CalendarGrid({ meals = [], onDayClick, onMonthChange, fi
                   >
                     {displayTitle}
                   </span>
+                </div>
+              )}
+              {hasMeals && tagColors.length > 0 && (
+                <div className="absolute bottom-1 right-1 z-20 flex gap-0.5">
+                  {tagColors.map((c, i) => (
+                    <span key={i} className="w-1.5 h-1.5 rounded-full ring-1 ring-white/80" style={{ background: c }} />
+                  ))}
                 </div>
               )}
             </button>
