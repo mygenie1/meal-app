@@ -130,7 +130,7 @@ export default function CalendarPage() {
             <select
               value={filter}
               onChange={e => setFilter(e.target.value)}
-              className="text-xs border border-cream-300 rounded-xl pl-3 pr-7 py-1.5 bg-cream-50 text-warm-dark focus:outline-none focus:border-warm-light appearance-none cursor-pointer"
+              className="text-sm border border-cream-300 rounded-xl pl-3 pr-7 py-1.5 bg-cream-50 text-warm-dark focus:outline-none focus:border-warm-light appearance-none cursor-pointer"
             >
               {['전체', '집밥', '외식', '카페', '배달'].map(t => (
                 <option key={t} value={t}>{t}</option>

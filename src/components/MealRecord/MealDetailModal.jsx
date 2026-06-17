@@ -486,7 +486,7 @@ export default function MealDetailModal({ meal, onClose }) {
               onChange={e => setCommentText(e.target.value)}
               placeholder="댓글 달기..."
               maxLength={200}
-              className="flex-1 bg-transparent text-sm text-warm-dark placeholder-cream-400 focus:outline-none"
+              className="flex-1 bg-transparent text-base text-warm-dark placeholder-cream-400 focus:outline-none"
             />
             <button
               type="submit"

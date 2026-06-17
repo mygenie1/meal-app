@@ -40,7 +40,7 @@ function Section({ title, emoji, type, items, onAdd, onCheck, onChangeQty, onDel
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder="재료명 입력"
-          className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-cream-50 border border-cream-300 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
+          className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-cream-50 border border-cream-300 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
         />
         <QtyStepper
           quantity={qty}

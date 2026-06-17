@@ -90,7 +90,7 @@ const TAGS = [
 ]
 
 const MEAL_TIMES = ['아침', '점심', '저녁']
-const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
+const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
 const LABEL_CLS = 'text-xs text-warm-light mb-1.5 block font-medium'
 
 // ─── TagIcon ──────────────────────────────────────────────────────────────
@@ -899,7 +899,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
                     onChange={e => setIngInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddIngredient(e) } }}
                     placeholder="재료 추가하기"
-                    className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
+                    className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-cream-100 border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
                   />
                   <QtyStepper
                     quantity={ingQty}

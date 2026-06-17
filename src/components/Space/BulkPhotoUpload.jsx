@@ -48,7 +48,7 @@ const TAG_STYLE = {
   배달: { active: 'bg-blue-100 text-blue-700 border-blue-400', idle: 'bg-white text-blue-600 border-blue-200' },
 }
 
-const INPUT_CLS = 'w-full px-3 py-2 rounded-xl bg-white border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
+const INPUT_CLS = 'w-full px-3 py-2 rounded-xl bg-white border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
 
 export default function BulkPhotoUpload({ onClose }) {
   const { currentSpace, addMeal } = useApp()

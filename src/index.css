@@ -70,9 +70,12 @@ body {
 
 /* ── iOS Safari: 입력창 자동 확대 방지 ──────────────────────── */
 /* font-size < 16px인 input에 포커스 시 Safari가 자동 줌 발생.
-   !important로 Tailwind text-sm(14px) 오버라이드. */
-input, textarea, select {
-  font-size: 16px !important;
+   개별 입력 필드는 text-base(16px) 이상으로 직접 지정.
+   이 규칙은 모바일 한정 안전망 — 누락된 요소를 커버. */
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
 }
 
 /* ── iOS Safe Area ─────────────────────────── */

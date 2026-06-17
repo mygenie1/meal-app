@@ -331,7 +331,7 @@ export default function SpaceManager() {
             value={name}
             onChange={e => { setName(e.target.value); setCreateError('') }}
             placeholder="스페이스 이름 (예: 우리 가족 식탁)"
-            className="w-full px-3 py-2 rounded-xl bg-white border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
+            className="w-full px-3 py-2 rounded-xl bg-white border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
             autoFocus
           />
           {createError && (
@@ -366,7 +366,7 @@ export default function SpaceManager() {
             onChange={e => { setCode(e.target.value.toUpperCase()); setJoinError('') }}
             placeholder="6자리 코드 입력"
             maxLength={6}
-            className="w-full px-3 py-2 rounded-xl bg-white border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light font-mono tracking-widest text-center uppercase"
+            className="w-full px-3 py-2 rounded-xl bg-white border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light font-mono tracking-widest text-center uppercase"
             autoFocus
           />
           {joinError && <p className="text-xs text-red-400">{joinError}</p>}

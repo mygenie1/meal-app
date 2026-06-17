@@ -13,7 +13,7 @@ import { sendNotification, buildFromUser } from '../../lib/notify'
 const TAG_COLORS = { 집밥: '#86efac', 외식: '#fcd34d', 카페: '#f9a8d4', 배달: '#93c5fd' }
 const MAP_FILTERS = ['전체', '외식', '카페']
 const ROUND = 1e4
-const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
+const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
 const WISH_CATEGORY_COLORS = { 한식: '#fca5a5', 일식: '#93c5fd', 양식: '#86efac', 중식: '#fcd34d', 카페: '#f9a8d4', 기타: '#d1b89a' }
 const MOOD_TAGS = ['🔥 핫플', '💕 로맨틱', '🌿 힐링', '📸 인생샷', '✨ 특별한 날', '🍽️ 맛집 예감']
 const EMPTY_WISH_FORM = { name: '', location: '', memo: '', moodTags: [], lat: null, lng: null }
@@ -587,7 +587,7 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
               onChange={e => setCommentText(e.target.value)}
               placeholder="댓글 달기..."
               maxLength={200}
-              className="flex-1 bg-transparent text-sm text-warm-dark placeholder-cream-400 focus:outline-none"
+              className="flex-1 bg-transparent text-base text-warm-dark placeholder-cream-400 focus:outline-none"
             />
             <button
               type="submit"

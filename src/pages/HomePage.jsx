@@ -506,7 +506,7 @@ export default function HomePage() {
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="제목, 식당명, 한줄평, 메모 검색"
             autoFocus
-            className="flex-1 bg-transparent text-sm text-warm-dark outline-none placeholder-cream-400"
+            className="flex-1 bg-transparent text-base text-warm-dark outline-none placeholder-cream-400"
           />
           {searchQuery && (
             <button

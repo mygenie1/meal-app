@@ -204,7 +204,7 @@ export default function SettingsModal({ isOpen, onClose }) {
             value={deleteInput}
             onChange={e => setDeleteInput(e.target.value)}
             placeholder="탈퇴"
-            className="w-full px-4 py-3 rounded-xl border border-cream-200 bg-cream-50 text-sm text-warm-dark placeholder-cream-300 focus:outline-none focus:border-red-300 transition-colors"
+            className="w-full px-4 py-3 rounded-xl border border-cream-200 bg-cream-50 text-base text-warm-dark placeholder-cream-300 focus:outline-none focus:border-red-300 transition-colors"
           />
           {deleteError && <p className="text-xs text-red-500">{deleteError}</p>}
           <div className="flex gap-2">
@@ -294,7 +294,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                     onKeyDown={e => e.key === 'Enter' && handleSaveNickname()}
                     placeholder="닉네임 입력"
                     maxLength={20}
-                    className="flex-1 px-3 py-2 rounded-xl bg-cream-50 border border-cream-200 text-sm text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors"
+                    className="flex-1 px-3 py-2 rounded-xl bg-cream-50 border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors"
                   />
                   <button
                     onClick={handleSaveNickname}
