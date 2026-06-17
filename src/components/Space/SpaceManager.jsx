@@ -162,7 +162,7 @@ export default function SpaceManager() {
 
       {/* 현재 스페이스 (강조 카드) */}
       {currentSpace && (
-        <div className="bg-white rounded-2xl border border-cream-200 p-5">
+        <div className="bg-white rounded-2xl border border-cream-200 shadow-sm p-5">
           <p className="text-xs text-warm-brown font-medium mb-3">현재 스페이스</p>
           <div className="flex items-center gap-3 mb-4">
             <div className="w-14 h-14 bg-warm-brown/10 rounded-2xl flex items-center justify-center text-3xl shrink-0">

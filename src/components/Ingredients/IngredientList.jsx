@@ -32,6 +32,12 @@ function Section({ title, emoji, type, items, onAdd, onCheck, onChangeQty, onDel
           {items.length}
         </span>
       </div>
+      {checkHint && (
+        <p className="text-[11px] text-warm-light -mt-1 mb-2 flex items-center gap-1">
+          <span className="w-1 h-1 rounded-full bg-warm-brown" />
+          체크하면 <b className="font-semibold text-warm-brown">남은 재료</b>로 이동해요
+        </p>
+      )}
 
       {/* 입력 — 재료명 + 개수 스테퍼 + 추가 */}
       <form onSubmit={handleAdd} className="flex items-center gap-2 mb-3">
