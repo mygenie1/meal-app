@@ -126,9 +126,22 @@ export default function CalendarPage() {
         {/* 단골 멤버 카드 */}
         {currentSpace && <StatBanner space={currentSpace} displayMonth={displayMonth} />}
 
-        {/* 태그 필터 드롭다운 */}
-        <div className="px-4 mb-2 flex items-center justify-end">
-          <div className="relative">
+        {/* 카테고리 범례 + 태그 필터 (한 줄) */}
+        <div className="px-4 mb-3 flex items-center justify-between gap-3">
+          <div className="flex gap-3 overflow-x-auto flex-1 min-w-0">
+            {[
+              { tag: '집밥', color: '#2f9e5f' },
+              { tag: '외식', color: '#d6862c' },
+              { tag: '카페', color: '#d15c87' },
+              { tag: '배달', color: '#5276c4' },
+            ].map(({ tag, color }) => (
+              <div key={tag} className="flex items-center gap-1 shrink-0">
+                <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+                <span className="text-[10px] text-warm-light">{tag}</span>
+              </div>
+            ))}
+          </div>
+          <div className="relative flex-shrink-0">
             {filter !== '전체' && (
               <span
                 className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full pointer-events-none z-10"
@@ -148,21 +161,6 @@ export default function CalendarPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </div>
-        </div>
-
-        {/* 카테고리 범례 */}
-        <div className="px-4 mb-3 flex gap-3 overflow-x-auto">
-          {[
-            { tag: '집밥', color: '#2f9e5f' },
-            { tag: '외식', color: '#d6862c' },
-            { tag: '카페', color: '#d15c87' },
-            { tag: '배달', color: '#5276c4' },
-          ].map(({ tag, color }) => (
-            <div key={tag} className="flex items-center gap-1 shrink-0">
-              <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-              <span className="text-[10px] text-warm-light">{tag}</span>
-            </div>
-          ))}
         </div>
 
         <CalendarGrid
