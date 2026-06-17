@@ -46,7 +46,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // SPA: 오프라인에서도 라우팅 유지
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/offline\.html/],
+        // /admin 경로는 SW 캐시 폴백에서 제외 → 항상 네트워크에서 최신 번들 로드
+        navigateFallbackDenylist: [/^\/offline\.html/, /^\/admin/],
         // 새 SW를 waiting 상태로 유지 (사용자가 배너 클릭 후 SKIP_WAITING 메시지로 활성화)
         skipWaiting: false,
         clientsClaim: true,

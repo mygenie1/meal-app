@@ -239,6 +239,10 @@ function AppContent() {
       .catch(() => window.location.reload())
   }
 
+  // /admin 경로는 RootRouter가 처리해야 함.
+  // SW 캐시로 이전 번들이 로드된 경우에도 관리자 페이지가 일반 앱 레이아웃에 중첩되지 않도록 방어.
+  if (location.pathname.startsWith('/admin')) return null
+
   if (isOffline) return <OfflineBanner />
 
   if (authLoading || loading) {
