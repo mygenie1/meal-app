@@ -69,9 +69,11 @@ Deno.serve(async (req) => {
     }
 
     try {
-      const [spaceRes, membersRes, totalMealsRes, mealsRes] = await Promise.all([
+      // space_members를 전체 조회 후 JS에서 필터링
+      // — 목록과 동일한 방식: DB `.eq()` 필터 대신 JS 비교로 일관성 보장
+      const [spaceRes, allMembersRes, totalMealsRes, mealsRes] = await Promise.all([
         supabase.from('spaces').select('id, name, emoji, code, created_at').eq('id', spaceId).single(),
-        supabase.from('space_members').select('user_id, created_at').eq('space_id', spaceId),
+        supabase.from('space_members').select('space_id, user_id, created_at'),
         supabase.from('meals').select('id', { count: 'exact', head: true }).eq('space_id', spaceId),
         supabase.from('meals')
           .select('id, date, title, restaurant_name, tag, meal_time, rating, review, user_id, photos, photo, created_at')
@@ -84,11 +86,16 @@ Deno.serve(async (req) => {
         return json({ error: '스페이스를 찾을 수 없습니다' }, 404)
       }
 
-      // 멤버 표시이름 조회 (auth.admin)
-      const userIds = (membersRes.data ?? []).map(m => m.user_id)
-      const mealUserIds = (mealsRes.data ?? []).map(m => m.user_id).filter(Boolean)
-      const allNeededIds = [...new Set([...userIds, ...mealUserIds])]
+      // space_members 에러 로그 (data는 [] 폴백으로 계속 진행)
+      if (allMembersRes.error) {
+        console.error('[admin-spaces] space_members 조회 오류:', allMembersRes.error.message)
+      }
 
+      // JS에서 해당 스페이스 멤버만 필터 (목록 방식과 동일)
+      const spaceMembers = (allMembersRes.data ?? []).filter(m => m.space_id === spaceId)
+      console.log(`[admin-spaces] 상세 space_id=${spaceId}: 전체 멤버 rows=${allMembersRes.data?.length ?? 0}, 이 스페이스 멤버=${spaceMembers.length}`)
+
+      // 멤버 표시이름 조회 (auth.admin)
       const { data: authData } = await supabase.auth.admin.listUsers({ page: 1, perPage: 500 })
       const userMap: Record<string, string> = {}
       for (const u of authData?.users ?? []) {
@@ -97,11 +104,15 @@ Deno.serve(async (req) => {
           (u.email ? u.email.split('@')[0] : `user_${u.id.slice(0, 8)}`)
       }
 
-      const members = (membersRes.data ?? []).map(m => ({
-        user_id:      m.user_id,
-        display_name: userMap[m.user_id] ?? `user_${m.user_id.slice(0, 8)}`,
-        joined_at:    m.created_at,
-      }))
+      // user_id null-safe 매핑: 매핑 실패해도 멤버 누락 없이 표시
+      const members = spaceMembers.map(m => {
+        const uid = m.user_id ?? ''
+        return {
+          user_id:      uid,
+          display_name: userMap[uid] ?? (uid ? `user_${uid.slice(0, 8)}` : '(알 수 없음)'),
+          joined_at:    m.created_at,
+        }
+      })
 
       const meals = (mealsRes.data ?? []).map(m => ({
         id:              m.id,
