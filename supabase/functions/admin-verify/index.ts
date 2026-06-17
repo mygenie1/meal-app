@@ -25,10 +25,14 @@ Deno.serve(async (req) => {
     return json({ valid: false, error: '서버 설정 오류' }, 500)
   }
 
-  const authHeader = req.headers.get('authorization') ?? ''
-  const token = authHeader.startsWith('Bearer ')
-    ? authHeader.slice(7).trim()
-    : null
+  // x-admin-token 헤더 우선 (게이트웨이 anon key와 충돌 방지)
+  // fallback: Authorization: Bearer <token>
+  const token =
+    req.headers.get('x-admin-token') ??
+    (() => {
+      const h = req.headers.get('authorization') ?? ''
+      return h.startsWith('Bearer ') ? h.slice(7).trim() : null
+    })()
 
   if (!token) {
     return json({ valid: false, error: '토큰이 없습니다' }, 401)

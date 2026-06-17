@@ -22,9 +22,15 @@ Deno.serve(async (req) => {
     return json({ error: '서버 설정 오류' }, 500)
   }
 
-  // 관리자 세션 토큰 검증
-  const authHeader   = req.headers.get('authorization') ?? ''
-  const sessionToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null
+  // 관리자 세션 토큰 읽기
+  // x-admin-token 헤더 우선 (게이트웨이 anon key와 충돌 방지)
+  // fallback: Authorization: Bearer <token>
+  const sessionToken =
+    req.headers.get('x-admin-token') ??
+    (() => {
+      const h = req.headers.get('authorization') ?? ''
+      return h.startsWith('Bearer ') ? h.slice(7).trim() : null
+    })()
   if (!sessionToken) return json({ error: '토큰이 없습니다' }, 401)
 
   try {

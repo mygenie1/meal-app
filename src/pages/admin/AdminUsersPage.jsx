@@ -51,9 +51,12 @@ function UsersPage({ payload }) {
     try {
       const res = await fetch(ADMIN_USERS_URL, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type':  'application/json',
+          // 게이트웨이 통과: anon key (유효한 Supabase JWT)
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey':        SUPABASE_ANON_KEY,
+          // 함수 인증: 관리자 세션 토큰 (커스텀 헤더로 분리)
+          'x-admin-token': token,
+          'Content-Type':  'application/json',
         },
       })
       const body = await res.json()
