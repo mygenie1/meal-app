@@ -68,7 +68,7 @@ export default function BottomNav() {
             replace
             end={tab.to === '/'}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center py-3 gap-1 transition-colors ${
+              `flex-1 flex flex-col items-center py-3 gap-1 transition-colors active:scale-95 ${
                 isActive ? 'text-warm-brown' : 'text-cream-400 hover:text-warm-light'
               }`
             }

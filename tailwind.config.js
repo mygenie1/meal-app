@@ -17,6 +17,12 @@ export default {
           dark: '#3d2b1f',
           light: '#a07850',
         },
+        cat: {
+          home: '#2f9e5f',
+          eatout: '#d6862c',
+          cafe: '#d15c87',
+          delivery: '#5276c4',
+        },
       },
       fontFamily: {
         sans: ['Pretendard', 'Noto Sans KR', 'system-ui', 'sans-serif'],
