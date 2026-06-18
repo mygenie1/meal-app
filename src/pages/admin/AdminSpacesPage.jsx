@@ -25,10 +25,12 @@ function formatDate(dateStr) {
 
 function SpacesContent({ payload }) {
   const navigate = useNavigate()
-  const [spaces, setSpaces]   = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
-  const [filter, setFilter]   = useState('all') // 'all' | 'empty'
+  const [spaces, setSpaces]         = useState(null)
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState(null)
+  const [memberFilter, setMemberFilter] = useState('all')    // 'all' | 'empty'
+  const [statusFilter, setStatusFilter] = useState('all')    // 'all' | 'active' | 'inactive'
+  const [sortBy, setSortBy]             = useState('meal_desc') // 'meal_desc'|'created_desc'|'member_desc'
 
   useEffect(() => { load() }, [])
 
@@ -101,53 +103,87 @@ function SpacesContent({ payload }) {
 
         {/* 필터 탭 + 목록 헤더 */}
         {spaces && (() => {
-          const emptyCount   = spaces.filter(s => s.member_count === 0).length
-          const visibleSpaces = filter === 'empty'
-            ? spaces.filter(s => s.member_count === 0)
-            : spaces
+          const emptyCount    = spaces.filter(s => s.member_count === 0).length
+          const inactiveCount = spaces.filter(s => s.is_active === false).length
+
+          let visibleSpaces = [...spaces]
+          if (memberFilter === 'empty')    visibleSpaces = visibleSpaces.filter(s => s.member_count === 0)
+          if (statusFilter === 'active')   visibleSpaces = visibleSpaces.filter(s => s.is_active !== false)
+          if (statusFilter === 'inactive') visibleSpaces = visibleSpaces.filter(s => s.is_active === false)
+          visibleSpaces.sort((a, b) => {
+            if (sortBy === 'created_desc') return (b.created_at ?? '').localeCompare(a.created_at ?? '')
+            if (sortBy === 'member_desc')  return b.member_count - a.member_count
+            return b.meal_count - a.meal_count  // meal_desc (기본)
+          })
 
           return (
             <>
-              {/* 필터 탭 */}
-              <div className="flex items-center gap-2 px-1">
-                <button
-                  onClick={() => setFilter('all')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                    filter === 'all'
-                      ? 'bg-warm-brown text-white'
-                      : 'bg-white text-warm-light hover:text-warm-dark border border-cream-200'
-                  }`}
-                >
-                  전체 {spaces.length}
-                </button>
-                <button
-                  onClick={() => setFilter('empty')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                    filter === 'empty'
-                      ? 'bg-stone-600 text-white'
-                      : 'bg-white text-warm-light hover:text-warm-dark border border-cream-200'
-                  }`}
-                >
-                  멤버 0명
-                  {emptyCount > 0 && (
-                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                      filter === 'empty'
-                        ? 'bg-white/20 text-white'
-                        : 'bg-stone-100 text-stone-600'
-                    }`}>
-                      {emptyCount}
-                    </span>
-                  )}
-                </button>
+              {/* 필터 탭 + 정렬 */}
+              <div className="flex flex-col gap-2 px-1">
+                {/* 상태 필터 + 정렬 select */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { v: 'all',      label: `전체 ${spaces.length}` },
+                    { v: 'active',   label: `활성 ${spaces.length - inactiveCount}` },
+                    { v: 'inactive', label: `비활성 ${inactiveCount}` },
+                  ].map(({ v, label }) => (
+                    <button key={v}
+                      onClick={() => setStatusFilter(v)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                        statusFilter === v
+                          ? v === 'inactive' ? 'bg-red-500 text-white' : 'bg-warm-brown text-white'
+                          : 'bg-white text-warm-light hover:text-warm-dark border border-cream-200'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  <select
+                    value={sortBy}
+                    onChange={e => setSortBy(e.target.value)}
+                    className="ml-auto text-xs text-warm-dark bg-white border border-cream-200
+                      rounded-lg px-2 py-1.5 focus:outline-none focus:border-warm-brown"
+                  >
+                    <option value="meal_desc">기록 많은순</option>
+                    <option value="created_desc">최신 생성순</option>
+                    <option value="member_desc">멤버 많은순</option>
+                  </select>
+                </div>
+                {/* 멤버 0명 필터 */}
+                <div>
+                  <button
+                    onClick={() => setMemberFilter(memberFilter === 'empty' ? 'all' : 'empty')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                      memberFilter === 'empty'
+                        ? 'bg-stone-600 text-white'
+                        : 'bg-white text-warm-light hover:text-warm-dark border border-cream-200'
+                    }`}
+                  >
+                    멤버 0명
+                    {emptyCount > 0 && (
+                      <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                        memberFilter === 'empty'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-stone-100 text-stone-600'
+                      }`}>
+                        {emptyCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* 목록 헤더 */}
               <div className="flex items-center justify-between px-1">
                 <h2 className="text-sm font-semibold text-warm-dark">
-                  {filter === 'empty' ? '멤버 없는 스페이스' : '전체 스페이스'}
+                  {memberFilter === 'empty' && statusFilter === 'all'
+                    ? '멤버 없는 스페이스'
+                    : statusFilter === 'inactive' ? '비활성 스페이스'
+                    : statusFilter === 'active'   ? '활성 스페이스'
+                    : '전체 스페이스'
+                  }
                   <span className="ml-2 font-normal text-warm-light">{visibleSpaces.length}개</span>
                 </h2>
-                <span className="text-[11px] text-warm-light">기록 수 많은 순</span>
               </div>
 
               {/* 스페이스 카드 목록 */}
@@ -228,7 +264,13 @@ function SpacesContent({ payload }) {
               {visibleSpaces.length === 0 && (
                 <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
                   <p className="text-sm text-warm-light">
-                    {filter === 'empty' ? '멤버 없는 스페이스가 없어요' : '스페이스가 없어요'}
+                    {memberFilter === 'empty'
+                      ? '멤버 없는 스페이스가 없어요'
+                      : statusFilter === 'inactive'
+                      ? '비활성 스페이스가 없어요'
+                      : statusFilter === 'active'
+                      ? '활성 스페이스가 없어요'
+                      : '스페이스가 없어요'}
                   </p>
                 </div>
               )}

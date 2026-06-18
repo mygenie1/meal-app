@@ -109,6 +109,12 @@ function UsersPage({ payload }) {
   const [statsData, setStatsData]         = useState(null)
   const [statsLoading, setStatsLoading]   = useState(true)
 
+  // 필터·정렬·확장 상태
+  const [statusFilter, setStatusFilter]     = useState('all')       // 'all'|'active'|'inactive'
+  const [providerFilter, setProviderFilter] = useState('all')       // 'all'|'kakao'|'email'
+  const [sortBy, setSortBy]                 = useState('joined_desc')
+  const [expandedId, setExpandedId]         = useState(null)
+
   // delete_users 권한 또는 super이면 비활성화/복구 가능
   const canDelete = payload.role === 'super' || payload.permissions?.delete_users === true
 
@@ -273,14 +279,25 @@ function UsersPage({ payload }) {
     }
   }
 
-  const filteredUsers = data?.users.filter(u => {
+  const filteredUsers = (() => {
+    if (!data) return []
+    let list = [...data.users]
     const q = search.trim().toLowerCase()
-    if (!q) return true
-    return (
+    if (q) list = list.filter(u =>
       u.display_name.toLowerCase().includes(q) ||
       (u.masked_email ?? '').toLowerCase().includes(q)
     )
-  }) ?? []
+    if (statusFilter === 'active')   list = list.filter(u => !u.is_banned)
+    if (statusFilter === 'inactive') list = list.filter(u =>  u.is_banned)
+    if (providerFilter !== 'all')    list = list.filter(u => u.provider === providerFilter)
+    list.sort((a, b) => {
+      if (sortBy === 'joined_asc')  return a.created_at.localeCompare(b.created_at)
+      if (sortBy === 'meals_desc')  return b.meal_count  - a.meal_count
+      if (sortBy === 'spaces_desc') return b.space_count - a.space_count
+      return b.created_at.localeCompare(a.created_at)  // joined_desc (기본)
+    })
+    return list
+  })()
 
   return (
     <div className="min-h-svh bg-stone-100">
@@ -382,25 +399,74 @@ function UsersPage({ payload }) {
         {/* 유저 목록 */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           {/* 목록 헤더 */}
-          <div className="px-5 py-4 border-b border-cream-200 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-warm-dark shrink-0">
-              회원 목록
-              {data && (
-                <span className="ml-2 text-xs font-normal text-warm-light">
-                  {data.users.length}명
-                </span>
-              )}
-            </h2>
-            {/* 이름/이메일 검색 */}
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="이름 또는 이메일 검색"
-              className="flex-1 max-w-52 px-3 py-1.5 rounded-lg bg-cream-100 border border-cream-300
-                text-xs text-warm-dark placeholder-cream-400
-                focus:outline-none focus:ring-2 focus:ring-warm-brown/30 focus:border-warm-brown"
-            />
+          <div className="px-5 pt-4 pb-3 border-b border-cream-200 space-y-2.5">
+            {/* 제목 + 정렬 */}
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-warm-dark shrink-0">
+                회원 목록
+                {data && (
+                  <span className="ml-2 text-xs font-normal text-warm-light">
+                    {filteredUsers.length}/{data.users.length}명
+                  </span>
+                )}
+              </h2>
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                className="text-xs text-warm-dark bg-cream-50 border border-cream-300
+                  rounded-lg px-2 py-1 focus:outline-none focus:border-warm-brown shrink-0"
+              >
+                <option value="joined_desc">가입일 최신순</option>
+                <option value="joined_asc">가입일 오래된순</option>
+                <option value="meals_desc">기록 많은순</option>
+                <option value="spaces_desc">스페이스 많은순</option>
+              </select>
+            </div>
+            {/* 상태·방식 필터 + 검색 */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                { v: 'all',      label: '전체',   cnt: data?.users.length ?? 0 },
+                { v: 'active',   label: '활성',   cnt: (data?.users.filter(u => !u.is_banned).length ?? 0) },
+                { v: 'inactive', label: '비활성', cnt: (data?.users.filter(u =>  u.is_banned).length ?? 0) },
+              ].map(({ v, label, cnt }) => (
+                <button key={v}
+                  onClick={() => setStatusFilter(v)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                    statusFilter === v
+                      ? v === 'inactive' ? 'bg-red-500 text-white' : 'bg-warm-brown text-white'
+                      : 'bg-cream-100 text-warm-light hover:text-warm-dark border border-cream-200'
+                  }`}
+                >
+                  {label}{data ? ` ${cnt}` : ''}
+                </button>
+              ))}
+              <span className="text-cream-300 text-xs mx-0.5">|</span>
+              {[
+                { v: 'all',   label: '전체' },
+                { v: 'kakao', label: '카카오' },
+                { v: 'email', label: '이메일' },
+              ].map(({ v, label }) => (
+                <button key={v}
+                  onClick={() => setProviderFilter(v)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-colors ${
+                    providerFilter === v
+                      ? 'bg-stone-600 text-white'
+                      : 'bg-cream-100 text-warm-light hover:text-warm-dark border border-cream-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="이름/이메일"
+                className="flex-1 min-w-[90px] max-w-36 ml-auto px-3 py-1 rounded-lg bg-cream-100
+                  border border-cream-300 text-xs text-warm-dark placeholder-cream-400
+                  focus:outline-none focus:ring-2 focus:ring-warm-brown/30 focus:border-warm-brown"
+              />
+            </div>
           </div>
 
           {/* 로딩 */}
@@ -428,89 +494,138 @@ function UsersPage({ payload }) {
             <>
               {filteredUsers.length === 0 ? (
                 <p className="text-center text-sm text-warm-light py-10">
-                  {search ? '검색 결과가 없어요' : '등록된 회원이 없어요'}
+                  {search || statusFilter !== 'all' || providerFilter !== 'all'
+                    ? '조건에 맞는 회원이 없어요'
+                    : '등록된 회원이 없어요'}
                 </p>
               ) : (
                 <ul className="divide-y divide-cream-100">
-                  {filteredUsers.map((user, idx) => (
-                    <li key={user.id} className="px-4 pr-5 py-3.5 flex items-center gap-3">
-                      {/* 순번 */}
-                      <span className="text-xs text-cream-400 tabular-nums w-5 shrink-0 text-right">
-                        {idx + 1}
-                      </span>
-
-                      {/* 아바타 이니셜 */}
-                      <div className="w-8 h-8 rounded-full bg-warm-brown/10 flex items-center
-                        justify-center text-warm-brown text-xs font-semibold shrink-0">
-                        {user.display_name[0]?.toUpperCase() ?? '?'}
-                      </div>
-
-                      {/* 정보 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium text-warm-dark truncate">
-                            {user.display_name}
+                  {filteredUsers.map((user, idx) => {
+                    const isExpanded = expandedId === user.id
+                    return (
+                      <li key={user.id}>
+                        {/* 메인 행 */}
+                        <div
+                          className="px-4 pr-5 py-3.5 flex items-center gap-3 cursor-pointer
+                            hover:bg-cream-50 transition-colors"
+                          onClick={() => setExpandedId(isExpanded ? null : user.id)}
+                        >
+                          {/* 순번 */}
+                          <span className="text-xs text-cream-400 tabular-nums w-5 shrink-0 text-right">
+                            {idx + 1}
                           </span>
-                          <ProviderBadge provider={user.provider} />
-                          {user.is_banned && (
-                            <span className="inline-block text-[10px] px-1.5 py-0.5 rounded-full
-                              font-medium bg-red-50 text-red-500">
-                              비활성
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-warm-light">
-                          {user.masked_email && <span>{user.masked_email}</span>}
-                          <span>{formatDate(user.created_at)}</span>
-                        </div>
-                      </div>
 
-                      {/* 스페이스·기록 카운트 */}
-                      <div className="text-right shrink-0">
-                        <div className="text-xs text-warm-dark font-medium tabular-nums">
-                          {user.space_count}
-                          <span className="text-cream-400 font-normal">개</span>
-                        </div>
-                        <div className="text-[11px] text-warm-light tabular-nums">
-                          {user.meal_count}건
-                        </div>
-                      </div>
+                          {/* 아바타 이니셜 */}
+                          <div className="w-8 h-8 rounded-full bg-warm-brown/10 flex items-center
+                            justify-center text-warm-brown text-xs font-semibold shrink-0">
+                            {user.display_name[0]?.toUpperCase() ?? '?'}
+                          </div>
 
-                      {/* 액션 버튼 (권한 있을 때만) */}
-                      {canDelete && (
-                        <div className="shrink-0 flex items-center gap-2 ml-2">
-                          {/* 비활성화 / 복구 토글 */}
-                          <button
-                            title={user.is_banned ? '계정 복구' : '계정 비활성화'}
-                            onClick={() => openAction(user.is_banned ? 'reactivate' : 'deactivate', user)}
-                            className={`w-10 h-5 rounded-full relative transition-colors shrink-0 ${
-                              user.is_banned ? 'bg-stone-300' : 'bg-green-400'
-                            }`}
+                          {/* 정보 */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-warm-dark truncate">
+                                {user.display_name}
+                              </span>
+                              <ProviderBadge provider={user.provider} />
+                              {user.is_banned && (
+                                <span className="inline-block text-[10px] px-1.5 py-0.5 rounded-full
+                                  font-medium bg-red-50 text-red-500">
+                                  비활성
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5 text-[11px] text-warm-light">
+                              {user.masked_email && <span className="truncate">{user.masked_email}</span>}
+                              <span className="shrink-0">{formatDate(user.created_at)}</span>
+                            </div>
+                          </div>
+
+                          {/* 스페이스·기록 카운트 */}
+                          <div className="text-right shrink-0">
+                            <div className="text-xs text-warm-dark font-medium tabular-nums">
+                              {user.space_count}
+                              <span className="text-cream-400 font-normal">개</span>
+                            </div>
+                            <div className="text-[11px] text-warm-light tabular-nums">
+                              {user.meal_count}건
+                            </div>
+                          </div>
+
+                          {/* 토글(빠른액션) + 펼침 표시 */}
+                          <div
+                            className="shrink-0 flex items-center gap-2 ml-1"
+                            onClick={e => e.stopPropagation()}
                           >
-                            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow
-                              transition-transform ${user.is_banned ? 'translate-x-0.5' : 'translate-x-5'}`}/>
-                          </button>
-                          {/* 영구삭제 (super 전용) */}
-                          {payload.role === 'super' && (
+                            {canDelete && (
+                              <button
+                                title={user.is_banned ? '계정 복구' : '계정 비활성화'}
+                                onClick={() => openAction(user.is_banned ? 'reactivate' : 'deactivate', user)}
+                                className={`w-10 h-5 rounded-full relative transition-colors shrink-0 ${
+                                  user.is_banned ? 'bg-stone-300' : 'bg-green-400'
+                                }`}
+                              >
+                                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow
+                                  transition-transform ${user.is_banned ? 'translate-x-0.5' : 'translate-x-5'}`}/>
+                              </button>
+                            )}
+                            {/* 펼침 인디케이터 */}
                             <button
-                              title="영구 삭제"
-                              onClick={() => openAction('delete', user)}
-                              className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              onClick={() => setExpandedId(isExpanded ? null : user.id)}
+                              className="p-1 rounded text-cream-400 hover:text-warm-dark transition-colors"
+                              title="상세 보기"
                             >
-                              <svg width="14" height="14" fill="none" stroke="currentColor"
-                                strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
-                                viewBox="0 0 24 24">
-                                <polyline points="3 6 5 6 21 6"/>
-                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                                <path d="M10 11v6M14 11v6"/>
-                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                              <svg
+                                width="14" height="14" fill="none" stroke="currentColor"
+                                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                                viewBox="0 0 24 24"
+                                className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                              >
+                                <path d="M6 9l6 6 6-6"/>
                               </svg>
                             </button>
-                          )}
+                          </div>
                         </div>
-                      )}
-                    </li>
-                  ))}
+
+                        {/* 확장 패널 */}
+                        {isExpanded && (
+                          <div className="px-5 py-3 bg-cream-50 border-t border-cream-100">
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-warm-light mb-3">
+                              {user.masked_email && (
+                                <span>이메일: <span className="text-warm-dark">{user.masked_email}</span></span>
+                              )}
+                              <span>가입일: <span className="text-warm-dark">{formatDate(user.created_at)}</span></span>
+                              <span>스페이스: <span className="text-warm-dark font-medium">{user.space_count}개</span></span>
+                              <span>기록: <span className="text-warm-dark font-medium">{user.meal_count}건</span></span>
+                            </div>
+                            {canDelete && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => openAction(user.is_banned ? 'reactivate' : 'deactivate', user)}
+                                  className={`flex-1 py-2 text-xs font-medium rounded-xl transition-colors ${
+                                    user.is_banned
+                                      ? 'bg-green-600 text-white hover:bg-green-700'
+                                      : 'bg-stone-600 text-white hover:bg-stone-700'
+                                  }`}
+                                >
+                                  {user.is_banned ? '계정 복구' : '계정 비활성화'}
+                                </button>
+                                {payload.role === 'super' && (
+                                  <button
+                                    onClick={() => openAction('delete', user)}
+                                    className="px-4 py-2 text-xs font-medium rounded-xl
+                                      bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                                  >
+                                    영구 삭제
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </>
