@@ -119,6 +119,7 @@ export function makeTokenPayload(account: {
 
 export const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
   // x-admin-token: 관리자 세션 토큰 전용 헤더 (Authorization은 게이트웨이 통과용 anon key에 사용)
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-token',
 }

@@ -1,6 +1,6 @@
 // Edge Function: admin-feedback
 // GET  ?limit=30&offset=0&status=all|new|checked|done → 피드백 목록
-// PATCH { action: 'update_status', feedback_id, status } → 상태 변경
+// POST { action: 'update_status', feedback_id, status } → 상태 변경
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
@@ -44,8 +44,8 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-  // ── PATCH: 상태 변경 ──────────────────────────────────────────
-  if (req.method === 'PATCH') {
+  // ── POST: 상태 변경 ───────────────────────────────────────────
+  if (req.method === 'POST') {
     let body: { action?: string; feedback_id?: string; status?: string }
     try { body = await req.json() } catch { return json({ error: '요청 파싱 실패' }, 400) }
 
@@ -75,6 +75,7 @@ Deno.serve(async (req) => {
 
   // ── GET: 목록 조회 ────────────────────────────────────────────
   if (req.method !== 'GET') return json({ error: 'Method Not Allowed' }, 405)
+
 
   const url     = new URL(req.url)
   const limit   = Math.min(parseInt(url.searchParams.get('limit')  ?? '30'), 100)

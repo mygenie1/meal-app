@@ -15,9 +15,9 @@ function adminGet(url) {
   return fetch(url, { headers: { ...ADMIN_HEADERS, 'x-admin-token': getAdminToken() } })
 }
 
-function adminPatch(url, body) {
+function adminPost(url, body) {
   return fetch(url, {
-    method: 'PATCH',
+    method: 'POST',
     headers: { ...ADMIN_HEADERS, 'x-admin-token': getAdminToken() },
     body: JSON.stringify(body),
   })
@@ -111,7 +111,7 @@ function FeedbackContent({ payload }) {
     setUpdatingId(feedbackId)
     setUpdateError(null)
     try {
-      const res  = await adminPatch(ADMIN_FEEDBACK_URL, {
+      const res  = await adminPost(ADMIN_FEEDBACK_URL, {
         action:      'update_status',
         feedback_id: feedbackId,
         status:      newStatus,
