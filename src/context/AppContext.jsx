@@ -592,6 +592,10 @@ export function AppProvider({ children }) {
   async function deleteAccount() {
     if (!user) throw new Error('로그인 상태가 아닙니다')
 
+    // 오너 승계 먼저 처리 (space_members 삭제 전이어야 다음 오너를 찾을 수 있음)
+    const { error: successionErr } = await supabase.rpc('transfer_owned_spaces', { p_user_id: user.id })
+    if (successionErr) console.error('[deleteAccount] 오너 승계 오류 (계속 진행):', successionErr.message)
+
     // 관련 데이터 먼저 정리
     await supabase.from('space_members').delete().eq('user_id', user.id)
     await supabase.from('fcm_tokens').delete().eq('user_id', user.id)
@@ -666,16 +670,12 @@ export function AppProvider({ children }) {
     setCurrentSpaceId(id)
   }
 
-  // 스페이스 나가기 — space_members에서 내 참가 기록만 제거 (Supabase 데이터 삭제 없음)
+  // 스페이스 나가기 — leave_space RPC (오너면 자동 승계 후 나가기, 일반 멤버면 본인만 제거)
   async function leaveSpace(id) {
     if (!user?.id) return
 
-    const { error } = await supabase
-      .from('space_members')
-      .delete()
-      .eq('space_id', id)
-      .eq('user_id', user.id)
-    console.log('[leaveSpace] DB 삭제 결과:', error ? error.message : '성공')
+    const { error } = await supabase.rpc('leave_space', { p_space_id: id })
+    console.log('[leaveSpace] RPC 결과:', error ? error.message : '성공')
     if (error) { console.error('[leaveSpace] 오류:', error); return }
 
     // 삭제 성공 후 내가 실제로 속한 스페이스만 DB에서 재조회 → stale local state 방지

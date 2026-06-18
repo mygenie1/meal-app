@@ -141,6 +141,13 @@ Deno.serve(async (req) => {
       return json({ error: '이름이 일치하지 않습니다' }, 400)
     }
 
+    // ── 오너 승계 먼저 처리 ───────────────────────────────
+    // space_members CASCADE 삭제 전에 처리해야 다음 오너를 찾을 수 있음
+    const { error: successionErr } = await supabase.rpc('transfer_owned_spaces', { p_user_id: user_id })
+    if (successionErr) {
+      console.error('[admin-user-delete] 오너 승계 오류 (계속 진행):', successionErr.message)
+    }
+
     // ── 개인 데이터 먼저 정리 ─────────────────────────────
     // wishlist_interests: user_id가 auth.users FK 없어 CASCADE 안 됨 → 직접 삭제
     const { error: wiErr } = await supabase

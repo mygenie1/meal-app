@@ -349,6 +349,8 @@ export default function SpaceManager() {
 
   const isOwner = !!(currentSpace?.ownerId && currentSpace.ownerId === user?.id)
   const activeCode = displayCode ?? currentSpace?.code
+  // ownerId가 설정됐지만 그 유저가 더 이상 space_members에 없는 경우 (유령 오너)
+  const isGhostOwner = !!(currentSpace?.ownerId && !membersLoading && members.length > 0 && !members.some(m => m.is_owner))
 
   return (
     <div className="space-y-4">
@@ -460,6 +462,19 @@ export default function SpaceManager() {
                 ))}
               </div>
             )}
+            {/* 유령 오너: ownerId는 있지만 그 유저가 더 이상 멤버가 아닌 경우 */}
+            {isGhostOwner && !isOwner && (
+              <div className="mt-3 flex items-center justify-between bg-amber-50 rounded-xl px-3 py-2">
+                <p className="text-xs text-amber-700">오너 자리가 비었어요</p>
+                <button
+                  onClick={() => handleClaim(currentSpace.id)}
+                  disabled={claimingId === currentSpace.id}
+                  className="text-xs font-medium text-warm-brown hover:text-warm-dark transition-colors disabled:opacity-50"
+                >
+                  {claimingId === currentSpace.id ? '연동 중...' : '내 것으로'}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 스페이스 나가기 */}
@@ -514,7 +529,7 @@ export default function SpaceManager() {
 
                   {/* 연동/나가기 */}
                   <div className="flex items-center gap-1 shrink-0">
-                    {user && !space.ownerId && (
+                    {user && (!space.ownerId || (space.id === currentSpace?.id && isGhostOwner)) && (
                       <button
                         onClick={() => handleClaim(space.id)}
                         disabled={claimingId === space.id}
@@ -756,6 +771,9 @@ export default function SpaceManager() {
             </h3>
             <p className="text-sm text-warm-light mb-6">
               나가도 기록은 그대로 남아요.<br />
+              {leaveTargetSpace?.ownerId === user?.id && (
+                <>오너 권한은 가장 오래된 멤버에게 자동으로 넘어가요.<br /></>
+              )}
               초대 코드로 다시 참가할 수 있어요.
             </p>
             <button
