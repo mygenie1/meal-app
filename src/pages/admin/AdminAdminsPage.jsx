@@ -192,14 +192,14 @@ function AdminsContent({ payload }) {
   }
 
   return (
-    <div className="min-h-svh bg-stone-100">
+    <div className="min-h-svh w-full bg-stone-100 overflow-x-hidden">
 
       {/* 헤더 */}
-      <header className="bg-warm-brown text-white px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3">
+      <header className="bg-warm-brown text-white px-4 py-4 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => navigate('/admin')}
-            className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors"
+            className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors shrink-0"
           >
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"
               strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -207,12 +207,12 @@ function AdminsContent({ payload }) {
             </svg>
             <span className="text-sm">대시보드</span>
           </button>
-          <span className="text-white/30">|</span>
-          <span className="text-sm font-semibold">관리자 관리</span>
+          <span className="text-white/30 shrink-0">|</span>
+          <span className="text-sm font-semibold truncate">관리자 관리</span>
         </div>
         <button
           onClick={handleLogout}
-          className="text-xs text-white/70 hover:text-white transition-colors"
+          className="text-xs text-white/70 hover:text-white transition-colors shrink-0 ml-3"
         >
           로그아웃
         </button>
@@ -221,8 +221,8 @@ function AdminsContent({ payload }) {
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
 
         {/* 목록 헤더 + 추가 버튼 */}
-        <div className="flex items-center justify-between px-1">
-          <h2 className="text-sm font-semibold text-warm-dark">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-warm-dark min-w-0">
             관리자 계정
             {!loading && (
               <span className="ml-2 font-normal text-warm-light">{admins.length}명</span>
@@ -231,7 +231,7 @@ function AdminsContent({ payload }) {
           <button
             onClick={() => { setShowCreate(v => !v); setCreateError(null) }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-warm-brown text-white
-              text-xs font-medium hover:bg-warm-dark active:scale-95 transition-all"
+              text-xs font-medium hover:bg-warm-dark active:scale-95 transition-all shrink-0 whitespace-nowrap"
           >
             <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5"
               strokeLinecap="round" viewBox="0 0 24 24">
@@ -345,57 +345,60 @@ function AdminsContent({ payload }) {
 
           return (
             <div key={admin.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              <div className="p-5">
+              <div className="p-4">
                 {/* 상단: 아바타 + 정보 + 액션 */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center
-                      text-white font-bold text-sm shrink-0 ${
-                      isAdminSuper ? 'bg-amber-500' : 'bg-warm-brown'
-                    }`}>
-                      {admin.username[0].toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-sm font-semibold text-warm-dark">{admin.username}</span>
-                        {isMe && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">
-                            나
-                          </span>
-                        )}
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                          isAdminSuper
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-stone-100 text-stone-600'
-                        }`}>
-                          {isAdminSuper ? '총괄' : '서브'}
+                <div className="flex items-center gap-2">
+                  {/* 아바타 */}
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center
+                    text-white font-bold text-sm shrink-0 ${
+                    isAdminSuper ? 'bg-amber-500' : 'bg-warm-brown'
+                  }`}>
+                    {admin.username[0].toUpperCase()}
+                  </div>
+
+                  {/* 이름 + 뱃지 */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-semibold text-warm-dark truncate max-w-[140px]">
+                        {admin.username}
+                      </span>
+                      {isMe && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium shrink-0">
+                          나
                         </span>
-                        {!admin.is_active && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 font-medium">
-                            비활성
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-warm-light mt-0.5">
-                        생성일: {formatDate(admin.created_at)}
-                      </p>
+                      )}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                        isAdminSuper
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-stone-100 text-stone-600'
+                      }`}>
+                        {isAdminSuper ? '총괄' : '서브'}
+                      </span>
+                      {!admin.is_active && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 font-medium shrink-0">
+                          비활성
+                        </span>
+                      )}
                     </div>
+                    <p className="text-[11px] text-warm-light mt-0.5">
+                      생성일: {formatDate(admin.created_at)}
+                    </p>
                   </div>
 
                   {/* 서브 계정 액션 */}
                   {!isAdminSuper && (
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {/* 활성/비활성 토글 */}
                       <button
                         onClick={() => handleToggle(admin)}
                         disabled={isToggling}
                         title={admin.is_active ? '비활성화' : '활성화'}
-                        className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+                        className={`relative w-10 h-6 rounded-full transition-colors ${
                           admin.is_active ? 'bg-warm-brown' : 'bg-stone-200'
                         } disabled:opacity-50`}
                       >
                         <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow
-                          transition-transform ${admin.is_active ? 'translate-x-5' : 'translate-x-0.5'}`}
+                          transition-transform ${admin.is_active ? 'translate-x-4' : 'translate-x-0.5'}`}
                         />
                       </button>
 
@@ -432,7 +435,7 @@ function AdminsContent({ payload }) {
                 </div>
 
                 {/* 권한 요약 */}
-                <div className="mt-3 pl-[46px]">
+                <div className="mt-2.5 pl-11">
                   <PermSummary permissions={admin.permissions} isSuper={isAdminSuper} />
                 </div>
               </div>
