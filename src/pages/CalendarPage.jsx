@@ -7,6 +7,7 @@ import CalendarGrid from '../components/Calendar/CalendarGrid'
 import DayDetail from '../components/MealRecord/DayDetail'
 import MealDetailModal from '../components/MealRecord/MealDetailModal'
 import { useNavigate } from 'react-router-dom'
+import BannerSlot from '../components/common/BannerSlot'
 
 const TAG_COLOR = { '집밥': '#2f9e5f', '외식': '#d6862c', '카페': '#d15c87', '배달': '#5276c4' }
 
@@ -123,8 +124,13 @@ export default function CalendarPage() {
   return (
     <>
       <div className="pb-28" style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
-        {/* 단골 멤버 카드 */}
-        {currentSpace && <StatBanner space={currentSpace} displayMonth={displayMonth} />}
+        {/* 달력 상단 배너 슬롯 — 활성 배너 없으면 StatBanner(단골 멤버 카드) 표시 */}
+        {currentSpace && (
+          <BannerSlot
+            slot="calendar_top"
+            fallback={<StatBanner space={currentSpace} displayMonth={displayMonth} />}
+          />
+        )}
 
         {/* 카테고리 범례 + 태그 필터 (한 줄) */}
         <div className="px-4 mb-1 flex items-end justify-between gap-3">

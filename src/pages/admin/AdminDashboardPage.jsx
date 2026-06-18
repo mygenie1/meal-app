@@ -159,8 +159,11 @@ function Dashboard({ payload }) {
               { label: '스페이스 관리', icon: '🏠', key: 'view_spaces', path: '/admin/spaces' },
               { label: '피드백', icon: '💬', key: 'view_feedback', path: '/admin/feedback' },
               { label: '관리자 관리', icon: '🔑', key: 'manage_admins', path: '/admin/admins' },
+              { label: '배너 관리',   icon: '🎨', key: 'manage_banners', path: '/admin/banners' },
             ].map(({ label, icon, key, path }) => {
-              const available  = isSuper || payload.permissions?.[key] === true
+              const available  = key === 'manage_banners'
+                ? isSuper
+                : (isSuper || payload.permissions?.[key] === true)
               const actionable = available && path
               const Tag        = actionable ? 'button' : 'div'
               return (

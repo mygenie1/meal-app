@@ -18,6 +18,7 @@ import AdminSpacesPage from './pages/admin/AdminSpacesPage'
 import AdminSpaceDetailPage from './pages/admin/AdminSpaceDetailPage'
 import AdminFeedbackPage from './pages/admin/AdminFeedbackPage'
 import AdminAdminsPage from './pages/admin/AdminAdminsPage'
+import AdminBannersPage from './pages/admin/AdminBannersPage'
 
 function OfflineBanner() {
   return (
@@ -328,7 +329,8 @@ function AdminRoutes() {
       <Route path="/admin/spaces"        element={<AdminSpacesPage />} />
       <Route path="/admin/spaces/:id"    element={<AdminSpaceDetailPage />} />
       <Route path="/admin/feedback"       element={<AdminFeedbackPage />} />
-      <Route path="/admin/admins"         element={<AdminAdminsPage />} />
+      <Route path="/admin/admins"           element={<AdminAdminsPage />} />
+      <Route path="/admin/banners"         element={<AdminBannersPage />} />
     </Routes>
   )
 }
