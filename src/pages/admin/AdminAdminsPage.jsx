@@ -412,35 +412,39 @@ function AdminsContent({ payload }) {
           return (
             <div key={admin.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
               <div className="p-4">
+                {/*
+                  단일 flex 행: [아바타 고정] [중간 가변 flex-1 min-w-0] [우측 고정 shrink-0]
+                  중간에 이름·날짜·권한을 세로 스택으로, 우측에 토글·수정·삭제 고정.
+                  pl-12 같은 인위적 들여쓰기 없이 flex만으로 잘림 방지.
+                */}
+                <div className="flex items-start gap-3">
 
-                {/* 행 1: 아바타 + 이름/뱃지 + super 보호 뱃지 */}
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center
-                    text-white font-bold text-sm shrink-0 ${
+                  {/* 아바타 (고정 크기) */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center
+                    text-white font-bold text-sm shrink-0 mt-0.5 ${
                     isAdminSuper ? 'bg-amber-500' : 'bg-warm-brown'
                   }`}>
                     {admin.username[0].toUpperCase()}
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm font-semibold text-warm-dark break-all">
+                  {/* 중간: 이름·뱃지·날짜·권한 (남은 공간 전부 사용, 절대 넘치지 않음) */}
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-sm font-semibold text-warm-dark truncate">
                         {admin.username}
                       </span>
                       {isMe && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium shrink-0">
+                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">
                           나
                         </span>
                       )}
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
-                        isAdminSuper
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-stone-100 text-stone-600'
+                      <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                        isAdminSuper ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-600'
                       }`}>
                         {isAdminSuper ? '총괄' : '서브'}
                       </span>
                       {!admin.is_active && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 font-medium shrink-0">
+                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-500 font-medium">
                           비활성
                         </span>
                       )}
@@ -448,10 +452,14 @@ function AdminsContent({ payload }) {
                     <p className="text-[11px] text-warm-light mt-0.5">
                       생성일: {formatDate(admin.created_at)}
                     </p>
+                    <div className="mt-1.5">
+                      <PermSummary permissions={admin.permissions} isSuper={isAdminSuper} />
+                    </div>
                   </div>
 
+                  {/* 우측: super 보호 표시 */}
                   {isAdminSuper && (
-                    <div className="flex items-center gap-1 text-[10px] text-amber-600 shrink-0">
+                    <div className="shrink-0 flex items-center gap-1 text-[10px] text-amber-600 mt-0.5">
                       <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2"
                         strokeLinecap="round" viewBox="0 0 24 24">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -460,26 +468,20 @@ function AdminsContent({ payload }) {
                       보호됨
                     </div>
                   )}
-                </div>
 
-                {/* 행 2: 권한 요약(좌) + 액션 버튼(우) */}
-                <div className="flex items-center justify-between gap-3 mt-3 pl-12">
-                  <div className="min-w-0 flex-1">
-                    <PermSummary permissions={admin.permissions} isSuper={isAdminSuper} />
-                  </div>
-
+                  {/* 우측: 서브 계정 액션 (토글 + 수정 + 삭제) */}
                   {!isAdminSuper && (
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="shrink-0 flex items-center gap-1">
                       {/* 활성/비활성 토글 */}
                       <button
                         onClick={() => handleToggle(admin)}
                         disabled={isToggling}
                         title={admin.is_active ? '비활성화' : '활성화'}
-                        className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+                        className={`relative w-9 h-5 rounded-full transition-colors ${
                           admin.is_active ? 'bg-warm-brown' : 'bg-stone-200'
                         } disabled:opacity-50`}
                       >
-                        <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow
+                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow
                           transition-transform ${admin.is_active ? 'translate-x-4' : 'translate-x-0.5'}`}
                         />
                       </button>
@@ -488,7 +490,7 @@ function AdminsContent({ payload }) {
                       <button
                         onClick={() => startEdit(admin)}
                         title="권한 수정"
-                        className={`p-1.5 rounded-lg transition-colors ${
+                        className={`p-1 rounded-lg transition-colors ${
                           isExpanded
                             ? 'bg-warm-brown/10 text-warm-brown'
                             : 'text-stone-400 hover:text-warm-brown hover:bg-cream-100'
@@ -507,7 +509,7 @@ function AdminsContent({ payload }) {
                           onClick={() => setConfirmDelete(admin)}
                           disabled={isDeleting}
                           title="삭제"
-                          className="p-1.5 rounded-lg transition-colors text-stone-400
+                          className="p-1 rounded-lg transition-colors text-stone-400
                             hover:text-red-500 hover:bg-red-50 disabled:opacity-50"
                         >
                           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"
