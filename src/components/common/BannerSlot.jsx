@@ -33,7 +33,7 @@ export default function BannerSlot({ slot, fallback = null, fixed: isFixed = fal
   // info 타입: 텍스트 카드
   if (banner.type === 'info') {
     content = (
-      <div className="mx-4 mb-3">
+      <div className="mx-4 mb-1">
         <div className="px-4 py-3.5 bg-cream-100 rounded-2xl">
           {banner.title && (
             <p className="text-sm font-semibold text-warm-dark">{banner.title}</p>
@@ -43,7 +43,7 @@ export default function BannerSlot({ slot, fallback = null, fixed: isFixed = fal
           )}
         </div>
         {banner.disclosure && (
-          <p className="text-[10px] text-cream-400 mt-1 px-1 whitespace-nowrap overflow-hidden text-ellipsis">{banner.disclosure}</p>
+          <p className="text-[10px] text-cream-400 mt-0.5 px-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{banner.disclosure}</p>
         )}
       </div>
     )
@@ -77,10 +77,10 @@ export default function BannerSlot({ slot, fallback = null, fixed: isFixed = fal
     ) : innerCard
 
     content = (
-      <div className="mx-4 mb-3">
+      <div className="mx-4 mb-1">
         {linkedCard}
         {banner.disclosure && (
-          <p className="text-[10px] text-cream-400 mt-1 px-1 whitespace-nowrap overflow-hidden text-ellipsis">{banner.disclosure}</p>
+          <p className="text-[10px] text-cream-400 mt-0.5 px-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{banner.disclosure}</p>
         )}
       </div>
     )
