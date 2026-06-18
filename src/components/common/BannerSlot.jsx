@@ -43,7 +43,7 @@ export default function BannerSlot({ slot, fallback = null, fixed: isFixed = fal
           )}
         </div>
         {banner.disclosure && (
-          <p className="text-[10px] text-cream-400 mt-1.5 px-1 leading-snug">{banner.disclosure}</p>
+          <p className="text-[10px] text-cream-400 mt-1 px-1 whitespace-nowrap overflow-hidden text-ellipsis">{banner.disclosure}</p>
         )}
       </div>
     )
@@ -80,7 +80,7 @@ export default function BannerSlot({ slot, fallback = null, fixed: isFixed = fal
       <div className="mx-4 mb-3">
         {linkedCard}
         {banner.disclosure && (
-          <p className="text-[10px] text-cream-400 mt-1.5 px-1 leading-snug">{banner.disclosure}</p>
+          <p className="text-[10px] text-cream-400 mt-1 px-1 whitespace-nowrap overflow-hidden text-ellipsis">{banner.disclosure}</p>
         )}
       </div>
     )

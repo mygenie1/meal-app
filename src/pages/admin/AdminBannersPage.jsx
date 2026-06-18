@@ -195,7 +195,7 @@ function FormPanel({ form, setForm, editingId, saving, onSave, onCancel }) {
           <textarea
             value={form.disclosure}
             onChange={e => setForm(prev => ({ ...prev, disclosure: e.target.value }))}
-            placeholder="이 배너는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다."
+            placeholder="쿠팡 파트너스 활동으로 일정 수수료를 받습니다"
             rows={2}
             className="w-full text-sm bg-white border border-cream-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-warm-brown text-warm-dark placeholder-cream-400 resize-none"
           />
@@ -204,7 +204,7 @@ function FormPanel({ form, setForm, editingId, saving, onSave, onCancel }) {
               type="button"
               onClick={() => setForm(prev => ({
                 ...prev,
-                disclosure: '이 배너는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.',
+                disclosure: '쿠팡 파트너스 활동으로 일정 수수료를 받습니다',
               }))}
               className="mt-1 text-[11px] text-warm-brown hover:text-warm-dark transition-colors"
             >

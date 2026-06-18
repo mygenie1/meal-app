@@ -63,13 +63,8 @@ function Section({ title, emoji, type, items, onAdd, onCheck, onChangeQty, onDel
 
       {/* 목록 */}
       {items.length === 0 ? (
-        <div className="text-center py-8">
-          <svg className="w-10 h-10 text-cream-300 mx-auto mb-2" fill="none" stroke="currentColor" strokeWidth="1.4" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          <p className="text-sm font-medium text-warm-dark">아직 재료가 없어요</p>
-          <p className="text-xs text-cream-400 mt-0.5">장을 보거나 남은 재료를 기록해보세요</p>
+        <div className="py-3">
+          <p className="text-xs text-cream-400">아직 재료가 없어요</p>
         </div>
       ) : (
         <div className="space-y-2">
