@@ -1,5 +1,6 @@
 // Edge Function: admin-feedback
-// GET /admin-feedback?limit=30&offset=0 → 피드백 목록 (view_feedback 권한)
+// GET  ?limit=30&offset=0&status=all|new|checked|done → 피드백 목록
+// PATCH { action: 'update_status', feedback_id, status } → 상태 변경
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
@@ -43,21 +44,61 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-  const url    = new URL(req.url)
-  const limit  = Math.min(parseInt(url.searchParams.get('limit')  ?? '30'), 100)
-  const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0'),  0)
+  // ── PATCH: 상태 변경 ──────────────────────────────────────────
+  if (req.method === 'PATCH') {
+    let body: { action?: string; feedback_id?: string; status?: string }
+    try { body = await req.json() } catch { return json({ error: '요청 파싱 실패' }, 400) }
+
+    if (body.action !== 'update_status') return json({ error: '알 수 없는 action' }, 400)
+    if (!body.feedback_id || !body.status) return json({ error: 'feedback_id, status 필수' }, 400)
+
+    const VALID_STATUSES = ['new', 'checked', 'done']
+    if (!VALID_STATUSES.includes(body.status)) return json({ error: '유효하지 않은 상태값' }, 400)
+
+    const { error } = await supabase
+      .from('feedback')
+      .update({
+        status:     body.status,
+        handled_by: adminPayload.username,
+        handled_at: new Date().toISOString(),
+      })
+      .eq('id', body.feedback_id)
+
+    if (error) {
+      console.error('[admin-feedback] 상태 변경 실패:', error.message)
+      return json({ error: '상태 변경 실패' }, 500)
+    }
+
+    console.log(`[admin-feedback] ${body.feedback_id} → ${body.status} by ${adminPayload.username}`)
+    return json({ ok: true })
+  }
+
+  // ── GET: 목록 조회 ────────────────────────────────────────────
+  if (req.method !== 'GET') return json({ error: 'Method Not Allowed' }, 405)
+
+  const url     = new URL(req.url)
+  const limit   = Math.min(parseInt(url.searchParams.get('limit')  ?? '30'), 100)
+  const offset  = Math.max(parseInt(url.searchParams.get('offset') ?? '0'),  0)
+  const statusQ = url.searchParams.get('status') ?? 'all'  // 'all'|'new'|'checked'|'done'
 
   try {
-    // 피드백 목록 + 총 개수 + auth 유저 이름 병렬 조회
+    let feedbackQ = supabase
+      .from('feedback')
+      .select('id, user_id, nickname, type, content, screenshot_url, created_at, status, handled_by, handled_at')
+      .order('created_at', { ascending: false })
+
+    let countQ = supabase.from('feedback').select('id', { count: 'exact', head: true })
+
+    if (statusQ !== 'all') {
+      feedbackQ = feedbackQ.eq('status', statusQ)
+      countQ    = countQ.eq('status', statusQ)
+    }
+
+    feedbackQ = feedbackQ.range(offset, offset + limit - 1)
+
     const [feedbackRes, countRes, authRes] = await Promise.all([
-      supabase
-        .from('feedback')
-        .select('id, user_id, nickname, type, content, screenshot_url, created_at')
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1),
-      supabase
-        .from('feedback')
-        .select('id', { count: 'exact', head: true }),
+      feedbackQ,
+      countQ,
       supabase.auth.admin.listUsers({ page: 1, perPage: 500 }),
     ])
 
@@ -74,27 +115,23 @@ Deno.serve(async (req) => {
         (u.email ? u.email.split('@')[0] : `user_${u.id.slice(0, 8)}`)
     }
 
-    const items = (feedbackRes.data ?? []).map(f => ({
+    const items = (feedbackRes.data ?? []).map((f: Record<string, unknown>) => ({
       id:       f.id,
-      // 우선순위: auth 이름 → DB에 저장된 nickname → 익명
-      author:   (f.user_id ? (userMap[f.user_id] ?? null) : null) || f.nickname || '익명',
+      author:   (f.user_id ? (userMap[f.user_id as string] ?? null) : null) || f.nickname || '익명',
       type:     f.type,
       content:  f.content,
-      // http URL 아닌 경우(업로드 실패 잔재) 제외
-      screenshot_url: (f.screenshot_url && f.screenshot_url.startsWith('http'))
+      screenshot_url: (f.screenshot_url && (f.screenshot_url as string).startsWith('http'))
         ? f.screenshot_url
         : null,
       created_at: f.created_at,
+      status:     (f.status as string) ?? 'new',
+      handled_by: (f.handled_by as string | null) ?? null,
+      handled_at: (f.handled_at as string | null) ?? null,
     }))
 
     console.log(`[admin-feedback] 조회 완료: ${items.length}건 (전체 ${countRes.count ?? 0}건)`)
 
-    return json({
-      items,
-      total:  countRes.count ?? 0,
-      offset,
-      limit,
-    })
+    return json({ items, total: countRes.count ?? 0, offset, limit })
 
   } catch (e) {
     console.error('[admin-feedback] 오류:', e instanceof Error ? e.message : e)

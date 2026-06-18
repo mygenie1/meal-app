@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AdminGuard, { clearAdminToken, getAdminToken } from './AdminGuard'
 
-const ADMIN_VERIFY_URL  = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-verify`
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const ADMIN_VERIFY_URL    = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-verify`
+const ADMIN_PUSH_STATS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-push-stats`
+const SUPABASE_ANON_KEY   = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const PERMISSION_LABELS = {
   view_users:         '사용자 목록 조회',
@@ -17,6 +19,30 @@ function Dashboard({ payload }) {
   const navigate  = useNavigate()
   const isSuper   = payload.role === 'super'
   const expDate   = new Date(payload.exp * 1000)
+  const canViewUsers = isSuper || payload.permissions?.view_users === true
+
+  const [pushStats, setPushStats]         = useState(null)
+  const [pushStatsLoading, setPushStatsLoading] = useState(false)
+  const [pushStatsError, setPushStatsError]     = useState(null)
+
+  useEffect(() => {
+    if (!canViewUsers) return
+    setPushStatsLoading(true)
+    fetch(ADMIN_PUSH_STATS_URL, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey':        SUPABASE_ANON_KEY,
+        'x-admin-token': getAdminToken(),
+      },
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) setPushStatsError(d.error)
+        else setPushStats(d)
+      })
+      .catch(() => setPushStatsError('불러오기 실패'))
+      .finally(() => setPushStatsLoading(false))
+  }, [])
 
   function handleLogout() {
     clearAdminToken()
@@ -159,6 +185,62 @@ function Dashboard({ payload }) {
             })}
           </div>
         </div>
+
+        {/* 푸시 알림 현황 */}
+        {canViewUsers && (
+          <div className="bg-white rounded-2xl shadow-sm p-5">
+            <h2 className="text-sm font-semibold text-warm-dark mb-3">푸시 알림 현황</h2>
+            {pushStatsLoading && (
+              <div className="flex justify-center py-4">
+                <div className="w-5 h-5 rounded-full border-2 border-stone-200 border-t-stone-400 animate-spin" />
+              </div>
+            )}
+            {pushStatsError && !pushStatsLoading && (
+              <p className="text-xs text-red-500">{pushStatsError}</p>
+            )}
+            {pushStats && !pushStatsLoading && (() => {
+              const { total_tokens, users_with_tokens, total_users } = pushStats
+              const pct = total_users > 0
+                ? Math.round((users_with_tokens / total_users) * 100)
+                : 0
+              return (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { label: '등록 토큰', value: total_tokens, unit: '개' },
+                      { label: '알림 활성 사용자', value: users_with_tokens, unit: '명' },
+                      { label: '커버리지', value: pct, unit: '%' },
+                    ].map(({ label, value, unit }) => (
+                      <div key={label} className="bg-cream-50 rounded-xl p-3 text-center">
+                        <p className="text-[10px] text-warm-light mb-1">{label}</p>
+                        <p className="text-lg font-bold text-warm-dark leading-none">
+                          {value.toLocaleString()}
+                          <span className="text-xs font-normal text-warm-light ml-0.5">{unit}</span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-1">
+                    {/* 커버리지 바 */}
+                    <div className="h-2 bg-cream-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-warm-brown rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-cream-400">
+                      전체 {total_users}명 중 {users_with_tokens}명이 알림을 켰어요
+                      {total_tokens > users_with_tokens && ` · 1인 다기기 포함 (토큰 ${total_tokens}개)`}
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-cream-400 border-t border-cream-100 pt-2">
+                    플랫폼 분류 · 발송 성공/실패 로그는 현재 미저장 (향후 과제)
+                  </p>
+                </div>
+              )
+            })()}
+          </div>
+        )}
 
         {/* 인증 검증 테스트 (개발용) */}
         <div className="bg-white rounded-2xl shadow-sm p-5">
