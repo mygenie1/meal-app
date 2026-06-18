@@ -148,7 +148,10 @@ meal-app/
 │   │                                    setNotifEnabledPref() — 상태 + localStorage 동시 업데이트
 │   │                                    markNotificationRead() / markAllNotificationsRead()
 │   │                                    registerFCMToken(userId) — 로그인 직후 FCM 토큰 요청 + fcm_tokens upsert
-│   │                                    deleteAccount() — space_members/fcm_tokens/notifications 정리 후
+│   │                                    leaveSpace() → supabase.rpc('leave_space') 호출 (오너 자동 승계)
+│   │                                      → DB 재조회로 stale state 방지
+│   │                                    deleteAccount() — transfer_owned_spaces RPC 먼저 호출 후
+│   │                                      space_members/fcm_tokens/notifications 정리 →
 │   │                                      supabase.rpc('delete_user_account') 직접 호출 (Edge Function 제거)
 │   │                                    getUserAvatarUrl(user) — kakaocdn URL 필터링 헬퍼 (모듈 레벨)
 │   │
@@ -180,7 +183,13 @@ meal-app/
 │   │   │   ├── PhotoGallery.jsx         터치 스와이프 사진 갤러리 (LazyImage + 도트 인디케이터 + n/total 뱃지)
 │   │   │   │                            호출 측에서 URL 해석 완료된 문자열 배열을 받음
 │   │   │   ├── FullscreenViewer.jsx     사진 전체화면 뷰어
-│   │   │   └── StarRating.jsx           별점 입력/표시 (1~5, 클릭 토글)
+│   │   │   ├── StarRating.jsx           별점 입력/표시 (1~5, 클릭 토글)
+│   │   │   └── BannerSlot.jsx           위치별 배너 표시 컴포넌트
+│   │   │                                slot prop으로 banners 테이블에서 is_active 배너 1개 조회
+│   │   │                                info 타입: 텍스트 카드 (title + body)
+│   │   │                                image 타입: 이미지 + 선택적 link_url (새 탭)
+│   │   │                                disclosure 있으면 배너 아래 작은 회색 텍스트로 고지 문구 표시
+│   │   │                                fixed prop: BottomNav 바로 위 고정 표시 (z-[49])
 │   │   │
 │   │   ├── Calendar/
 │   │   │   └── CalendarGrid.jsx         월간 달력 그리드
@@ -226,8 +235,16 @@ meal-app/
 │   │   ├── Ingredients/
 │   │   │   └── IngredientList.jsx       살 것 목록 / 남은 재료 (체크박스)
 │   │   │
+│   │   │   └── MealMap.jsx              (위 설명 참조)
+│   │   │                                SITE_URL 상수: VITE_PUBLIC_SITE_URL || 'https://siktakilgi.com'
+│   │   │                                위시리스트 공유 링크 생성 시 SITE_URL 사용 (Vercel 주소 방지)
 │   │   └── Space/
 │   │       ├── SpaceManager.jsx         스페이스 생성·전환·코드 참가 + 사진 일괄 등록 버튼
+│       │                            구성원 목록: get_space_members RPC, 오너 배지, "나" 레이블
+│       │                            오너 전용: 멤버 강퇴(remove_space_member), 초대코드 재발급(regenerate_invite_code)
+│       │                            isGhostOwner 감지: owner_id 있지만 목록에 오너 없음 → "내 것으로" 버튼
+│       │                            SITE_URL 상수: VITE_PUBLIC_SITE_URL || 'https://siktakilgi.com' (초대 링크 고정 도메인)
+│       │                            leaveSpace → leave_space RPC (오너면 자동 승계 후 탈퇴)
 │   │       ├── SettingsModal.jsx        설정 모달 (프로필/닉네임/알림 토글/로그아웃/회원탈퇴)
 │   │       │                            알림 토글: notifEnabled ↔ setNotifEnabledPref()
 │   │       │                            회원탈퇴: 2단계 확인 → supabase.rpc('delete_user_account') 직접 호출
@@ -238,6 +255,19 @@ meal-app/
 │   │                                    날짜별 자동 묶음 → 태그/끼니 선택 후 일괄 저장
 │   │
 │   └── pages/
+│       ├── admin/
+│       │   ├── AdminGuard.jsx           관리자 세션 토큰 검증 + 권한 주입 (getAdminToken/clearAdminToken)
+│       │   ├── AdminLoginPage.jsx       관리자 로그인 (/admin/login)
+│       │   ├── AdminDashboard.jsx       관리자 대시보드 (/admin)
+│       │   ├── AdminUsersPage.jsx       사용자 관리 — 조회/차단/복구/영구삭제 (/admin/users)
+│       │   ├── AdminSpacesPage.jsx      스페이스 목록/통계 열람 (/admin/spaces)
+│       │   ├── AdminFeedbackPage.jsx    피드백 목록 + 첨부 사진 열람 (/admin/feedback)
+│       │   └── AdminBannersPage.jsx     배너 관리 (/admin/banners)
+│       │                                슬롯별 배너 생성/수정/삭제/활성화 토글
+│       │                                이미지 배너: Storage 버킷 'banners' 서명 업로드
+│       │                                광고 고지 문구(disclosure) 입력란 + 쿠팡 파트너스 빠른 입력 버튼
+│       │                                FormPanel/BannerRow/SlotSection 모두 모듈 레벨 컴포넌트
+│       │                                  (BannersContent 내부 정의 시 매 렌더마다 unmount → 포커스 소실)
 │       ├── HomePage.jsx                 홈 피드 (히어로 CTA + 식탁 리포트 + 추억 카드 + 최근 피드)
 │       │                                마운트 시 requestedPhotosRef로 중복 없이 전체 loadMealPhotos
 │       │                                FeedCard: ratingsMap 기반 평균 별점 표시
@@ -255,6 +285,9 @@ meal-app/
 │
 ├── ratings-migration.sql                ratings 테이블 생성 + 기존 meals.rating 마이그레이션
 ├── notifications-migration.sql          notifications 테이블 생성
+├── space-member-management-rpc.sql      구성원 관리 RPC 3종 (get/remove/regenerate)
+├── owner-succession-migration.sql       오너 승계 RPC + spaces.owner_id FK
+├── banners-disclosure-migration.sql     banners.disclosure 컬럼 추가
 ├── .env                                 환경변수 (gitignore, Vercel에 별도 설정)
 ├── tailwind.config.js                   커스텀 색상(cream, warm) + 폰트 정의
 ├── postcss.config.js
@@ -272,8 +305,8 @@ meal-app/
 ### 테이블
 
 ```
-spaces        id, name, emoji, code(6자리 unique), created_at
-space_members id, space_id(FK), user_id, created_at
+spaces        id, name, emoji, code(6자리 unique), owner_id(FK → auth.users ON DELETE SET NULL), created_at
+space_members id, space_id(FK), user_id, joined_at   ← created_at 아님, joined_at
 meals         id, space_id(FK), date, title, restaurant_name, location, lat, lng,
               rating, review, memo, tag,
               photo(TEXT, 레거시 base64 단일),
@@ -287,12 +320,17 @@ notifications id, user_id(FK), space_id(FK), meal_id(FK),
               from_user_id(FK), from_nickname, from_avatar_url,
               type(new_meal|comment|rating), message, is_read, created_at
 meal_photos   id, meal_id(FK), storage_path, created_at  ← 미사용 (향후 확장용)
+banners       id, slot(calendar_top|ingredients_bottom), type(info|image), title, body,
+              image_url, link_url, disclosure(text, null=숨김), is_active, created_at
 ```
 
 ### SQL 마이그레이션 파일
 - `supabase-rls-migration.sql` — space_members 기반 RLS 정책 + join_space_by_code RPC
 - `ratings-migration.sql` — ratings 테이블 생성, 기존 meals.rating 값 마이그레이션
 - `notifications-migration.sql` — notifications 테이블 생성
+- `space-member-management-rpc.sql` — 구성원 관리 RPC 3종 (get_space_members / remove_space_member / regenerate_invite_code)
+- `owner-succession-migration.sql` — 오너 승계 RPC 2종 (leave_space / transfer_owned_spaces) + spaces.owner_id FK
+- `banners-disclosure-migration.sql` — banners.disclosure 컬럼 추가
 → **Supabase SQL Editor에서 직접 실행** (CLI/service_role 키 없음)
 
 ### Storage 버킷 `meal-photos`
@@ -328,15 +366,27 @@ const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, 
 - **space_members 기반 권한 관리** (`supabase-rls-migration.sql` 실행 완료)
 - spaces: 내가 space_members에 있는 스페이스만 조회/수정 가능
 - meals / ingredients / wishlist: 내가 멤버인 스페이스의 데이터만 접근 가능
-- space_members: 자기 자신의 레코드만 조회/삽입/삭제 가능
+- space_members: 자기 자신의 레코드만 조회/삽입/삭제 가능 (SELECT RLS = user_id = auth.uid())
 - ratings / notifications: `FOR ALL TO authenticated USING (true) WITH CHECK (true)` (완화된 정책)
-- 코드 참가: `join_space_by_code(p_code)` RPC (SECURITY DEFINER, RLS 우회하여 코드로 스페이스 탐색 후 멤버 등록)
+
+### RPC 목록 (SECURITY DEFINER — RLS 우회)
+- `join_space_by_code(p_code)` — 코드로 스페이스 탐색 후 멤버 등록
+- `get_space_members(p_space_id)` — 스페이스 멤버 목록 (호출자가 멤버여야 실행 가능)
+  - RETURNS TABLE: user_id, display_name, joined_at, is_owner
+  - 내부에서 sm0 별칭 필수 (RETURNS TABLE의 user_id 출력 컬럼과 충돌 방지)
+- `remove_space_member(p_space_id, p_target_user_id)` — 멤버 강퇴 (오너만, 자신 강퇴 불가)
+- `regenerate_invite_code(p_space_id)` — 초대코드 재발급 (오너만, 6자리 대문자 hex 반환)
+  - `SET search_path = public, extensions` 필수 (gen_random_bytes가 extensions 스키마)
+- `leave_space(p_space_id)` — 스페이스 나가기 + 오너면 joined_at ASC 기준 다음 멤버에게 자동 승계
+- `transfer_owned_spaces(p_user_id)` — 해당 유저 소유 스페이스 전체 일괄 승계 (계정 삭제 전 호출)
+- `delete_user_account(user_id)` — auth.users 계정 삭제 (회원탈퇴, SECURITY DEFINER)
 
 ### 환경변수 (.env)
 ```
 VITE_SUPABASE_URL=https://jsesigubkqnddcjqusjv.supabase.co
 VITE_SUPABASE_ANON_KEY=...
-VITE_KAKAO_MAP_KEY=...   ← 카카오 지도 + 식당 자동완성 (없으면 텍스트 입력 폴백)
+VITE_KAKAO_MAP_KEY=...            ← 카카오 지도 + 식당 자동완성 (없으면 텍스트 입력 폴백)
+VITE_PUBLIC_SITE_URL=https://siktakilgi.com  ← 초대/공유 링크 고정 도메인 (없으면 하드코딩 fallback 사용)
 ```
 Vercel 배포 시 대시보드 → Settings → Environment Variables에 동일하게 설정 필요.
 
@@ -650,6 +700,10 @@ npm run dev
 | 가고싶은곳 배너 버그 수정 | hasRealLocation: GPS 실제 취득 시에만 배너 표시, 클릭 시 가고싶은곳 탭으로 이동 |
 | 식탁 리포트 월 전환 | reportMonth state + ‹ › 화살표, 첫 기록 월~현재 월 범위, 과거 월 집계 |
 | 도메인 변경 | siktakilgi.com 적용 — LoginPage redirectTo, send-push 아이콘, manifest start_url/scope |
+| 스페이스 구성원 관리 | SpaceManager에 멤버 목록(get_space_members RPC), 오너 배지, 강퇴(remove_space_member), 초대코드 재발급(regenerate_invite_code) 추가 |
+| 스페이스 오너 승계 | leave_space/transfer_owned_spaces RPC + spaces.owner_id FK ON DELETE SET NULL + isGhostOwner UI + claimSpace 확장 |
+| 배너 광고 고지 문구 | banners.disclosure 컬럼 + AdminBannersPage 입력란·쿠팡 파트너스 빠른 입력 + BannerSlot 표시 + admin-banners Edge Function 처리 |
+| 초대 링크 도메인 고정 | SITE_URL 상수 (VITE_PUBLIC_SITE_URL fallback) — SpaceManager 초대 링크·MealMap 공유 링크 모두 siktakilgi.com 고정 |
 
 ---
 
