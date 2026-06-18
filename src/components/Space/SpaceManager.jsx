@@ -178,6 +178,14 @@ export default function SpaceManager() {
   const [memberCount, setMemberCount] = useState(null)
   const [copied, setCopied] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  // 구성원 관리
+  const [members, setMembers] = useState([])
+  const [membersLoading, setMembersLoading] = useState(false)
+  const [kickTarget, setKickTarget] = useState(null)
+  const [kicking, setKicking] = useState(false)
+  const [showRegenCodeModal, setShowRegenCodeModal] = useState(false)
+  const [regenningCode, setRegenningCode] = useState(false)
+  const [displayCode, setDisplayCode] = useState(null) // null이면 currentSpace.code 사용
 
   async function handleCreate(e) {
     e.preventDefault()
@@ -260,10 +268,87 @@ export default function SpaceManager() {
     setLeaveTargetSpace(null)
   }
 
+  // 스페이스 전환 시 displayCode 초기화
+  useEffect(() => {
+    setDisplayCode(null)
+  }, [currentSpace?.id])
+
+  // 멤버 목록 로드
+  useEffect(() => {
+    if (!currentSpace?.id) { setMembers([]); return }
+    loadMembers(currentSpace.id)
+  }, [currentSpace?.id])
+
+  async function loadMembers(spaceId) {
+    setMembersLoading(true)
+    try {
+      const { data, error } = await supabase.rpc('get_space_members', { p_space_id: spaceId })
+      if (error) {
+        console.error('[SpaceManager] get_space_members 오류:', error.message)
+        setMembers([])
+      } else {
+        setMembers(data ?? [])
+      }
+    } catch (e) {
+      console.error('[SpaceManager] get_space_members 예외:', e)
+      setMembers([])
+    } finally {
+      setMembersLoading(false)
+    }
+  }
+
+  async function handleKick() {
+    if (!kickTarget || !currentSpace) return
+    setKicking(true)
+    try {
+      const { error } = await supabase.rpc('remove_space_member', {
+        p_space_id: currentSpace.id,
+        p_target_user_id: kickTarget.user_id,
+      })
+      if (error) {
+        console.error('[SpaceManager] remove_space_member 오류:', error.message)
+        alert('내보내기에 실패했어요')
+      } else {
+        setMembers(prev => prev.filter(m => m.user_id !== kickTarget.user_id))
+        setKickTarget(null)
+      }
+    } catch (e) {
+      console.error('[SpaceManager] remove_space_member 예외:', e)
+      alert('내보내기에 실패했어요')
+    } finally {
+      setKicking(false)
+    }
+  }
+
+  async function handleRegenCode() {
+    if (!currentSpace) return
+    setRegenningCode(true)
+    try {
+      const { data: newCode, error } = await supabase.rpc('regenerate_invite_code', {
+        p_space_id: currentSpace.id,
+      })
+      if (error) {
+        console.error('[SpaceManager] regenerate_invite_code 오류:', error.message)
+        alert('코드 변경에 실패했어요')
+      } else {
+        setDisplayCode(newCode)
+        setShowRegenCodeModal(false)
+      }
+    } catch (e) {
+      console.error('[SpaceManager] regenerate_invite_code 예외:', e)
+      alert('코드 변경에 실패했어요')
+    } finally {
+      setRegenningCode(false)
+    }
+  }
+
   const displayName = user?.user_metadata?.name
     || user?.user_metadata?.full_name
     || user?.email
     || '카카오 사용자'
+
+  const isOwner = !!(currentSpace?.ownerId && currentSpace.ownerId === user?.id)
+  const activeCode = displayCode ?? currentSpace?.code
 
   return (
     <div className="space-y-4">
@@ -301,10 +386,10 @@ export default function SpaceManager() {
           <div className="flex items-center justify-between bg-cream-50 rounded-xl px-4 py-3">
             <div className="min-w-0">
               <p className="text-xs text-cream-400 mb-0.5">초대 코드</p>
-              <p className="font-mono tracking-widest text-lg font-bold text-warm-dark">{currentSpace.code}</p>
+              <p className="font-mono tracking-widest text-lg font-bold text-warm-dark">{activeCode}</p>
             </div>
             <button
-              onClick={() => copyInviteLink(currentSpace.code)}
+              onClick={() => copyInviteLink(activeCode)}
               className="flex items-center gap-1.5 border border-cream-300 rounded-xl px-3 py-1.5 text-sm text-warm-brown hover:bg-cream-100 transition-colors shrink-0"
             >
               {linkCopied ? (
@@ -323,6 +408,58 @@ export default function SpaceManager() {
                 </>
               )}
             </button>
+          </div>
+
+          {/* 구성원 목록 */}
+          <div className="mt-4 border-t border-cream-100 pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-warm-light">
+                구성원{!membersLoading && members.length > 0 && ` · ${members.length}명`}
+              </p>
+              {isOwner && (
+                <button
+                  onClick={() => setShowRegenCodeModal(true)}
+                  className="text-xs text-cream-400 hover:text-warm-light transition-colors flex items-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  초대코드 변경
+                </button>
+              )}
+            </div>
+            {membersLoading ? (
+              <div className="flex justify-center py-3">
+                <div className="w-4 h-4 border-2 border-cream-300 border-t-warm-brown rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {members.map(member => (
+                  <div key={member.user_id} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar nickname={member.display_name} size="xs" className="shrink-0" />
+                      <span className="text-sm text-warm-dark truncate">{member.display_name}</span>
+                      {member.is_owner && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-warm-brown/10 text-warm-brown shrink-0">
+                          오너
+                        </span>
+                      )}
+                      {member.user_id === user?.id && (
+                        <span className="text-[10px] text-cream-400 shrink-0">나</span>
+                      )}
+                    </div>
+                    {isOwner && member.user_id !== user?.id && (
+                      <button
+                        onClick={() => setKickTarget(member)}
+                        className="text-xs text-cream-400 hover:text-red-400 shrink-0 transition-colors"
+                      >
+                        내보내기
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 스페이스 나가기 */}
@@ -635,6 +772,55 @@ export default function SpaceManager() {
             </button>
           </div>
         )}
+      </Modal>
+
+      {/* 멤버 내보내기 확인 모달 */}
+      <Modal isOpen={!!kickTarget} onClose={() => setKickTarget(null)}>
+        <div className="p-6">
+          <h3 className="font-bold text-warm-dark text-lg mb-2">멤버 내보내기</h3>
+          <p className="text-sm text-warm-light leading-relaxed mb-6">
+            <span className="font-medium text-warm-dark">{kickTarget?.display_name}</span>님을
+            스페이스에서 내보낼까요?<br />
+            기록은 그대로 남아요.
+          </p>
+          <button
+            onClick={handleKick}
+            disabled={kicking}
+            className="w-full bg-red-50 text-red-500 rounded-xl py-3 font-medium mb-2 active:scale-[0.99] transition-transform disabled:opacity-50"
+          >
+            {kicking ? '내보내는 중...' : '내보내기'}
+          </button>
+          <button
+            onClick={() => setKickTarget(null)}
+            className="w-full text-warm-light text-sm py-2"
+          >
+            취소
+          </button>
+        </div>
+      </Modal>
+
+      {/* 초대코드 변경 확인 모달 */}
+      <Modal isOpen={showRegenCodeModal} onClose={() => setShowRegenCodeModal(false)}>
+        <div className="p-6">
+          <h3 className="font-bold text-warm-dark text-lg mb-2">초대코드 변경</h3>
+          <p className="text-sm text-warm-light leading-relaxed mb-6">
+            새 코드가 발급되고 기존 코드는 더 이상 쓸 수 없게 됩니다.<br />
+            이미 참가한 멤버에게는 영향이 없어요.
+          </p>
+          <button
+            onClick={handleRegenCode}
+            disabled={regenningCode}
+            className="w-full bg-warm-brown text-white rounded-xl py-3 font-medium mb-2 active:scale-[0.99] transition-transform disabled:opacity-50"
+          >
+            {regenningCode ? '변경 중...' : '코드 변경'}
+          </button>
+          <button
+            onClick={() => setShowRegenCodeModal(false)}
+            className="w-full text-warm-light text-sm py-2"
+          >
+            취소
+          </button>
+        </div>
       </Modal>
 
       {/* 초대 링크 복사 토스트 */}
