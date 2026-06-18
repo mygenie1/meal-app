@@ -132,6 +132,11 @@ function InstallMiniCard() {
 
 const EMOJIS = ['🍽️', '🍜', '🍕', '🍱', '🍰', '☕', '🥗', '🍣', '🌮', '🥘']
 
+// 초대/공유 링크에 사용할 고정 도메인
+// Vercel 미리보기 주소가 아닌 공식 도메인으로 항상 나가도록 고정
+// VITE_PUBLIC_SITE_URL 환경변수가 있으면 그 값, 없으면 하드코딩 fallback
+const SITE_URL = import.meta.env.VITE_PUBLIC_SITE_URL || 'https://siktakilgi.com'
+
 // 초대 메시지 브라우저 안내 문구 — 여기서 한 곳에서만 수정
 const BROWSER_GUIDE = '👉 안드로이드는 Chrome, 아이폰은 Safari로 열어주세요.'
 
@@ -218,7 +223,7 @@ export default function SpaceManager() {
   }
 
   async function copyInviteLink(spaceCode) {
-    const message = buildInviteMessage(window.location.origin, spaceCode)
+    const message = buildInviteMessage(SITE_URL, spaceCode)
     try {
       await navigator.clipboard.writeText(message)
     } catch {

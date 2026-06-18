@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+
+// 공유 링크 생성 시 항상 공식 도메인을 사용 (Vercel 미리보기 주소 방지)
+const SITE_URL = import.meta.env.VITE_PUBLIC_SITE_URL || 'https://siktakilgi.com'
 import { useApp } from '../../context/AppContext'
 import { supabase } from '../../lib/supabase'
 import { getThumbUrl, getOriginalUrl, uploadPhotoToStorage } from '../../lib/uploadPhoto'
@@ -297,7 +300,7 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
   }
 
   function handleShare() {
-    const url = `${window.location.origin}/map?wish=${item.id}`
+    const url = `${SITE_URL}/map?wish=${item.id}`
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url).then(() => showToast('링크가 복사됐어요'))
     } else {
