@@ -13,6 +13,7 @@ const PERMISSION_LABELS = {
   read_space_content: '스페이스 콘텐츠 조회',
   view_feedback:      '피드백 조회',
   manage_admins:      '관리자 관리',
+  manage_banners:     '배너 관리',
 }
 
 function Dashboard({ payload }) {
@@ -161,9 +162,7 @@ function Dashboard({ payload }) {
               { label: '관리자 관리', icon: '🔑', key: 'manage_admins', path: '/admin/admins' },
               { label: '배너 관리',   icon: '🎨', key: 'manage_banners', path: '/admin/banners' },
             ].map(({ label, icon, key, path }) => {
-              const available  = key === 'manage_banners'
-                ? isSuper
-                : (isSuper || payload.permissions?.[key] === true)
+              const available  = isSuper || payload.permissions?.[key] === true
               const actionable = available && path
               const Tag        = actionable ? 'button' : 'div'
               return (

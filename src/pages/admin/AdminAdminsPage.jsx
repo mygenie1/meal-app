@@ -12,6 +12,7 @@ const PERMISSION_LABELS = {
   read_space_content: '스페이스 콘텐츠 조회',
   view_feedback:      '피드백 조회',
   manage_admins:      '관리자 관리',
+  manage_banners:     '배너 관리',
 }
 
 const ALL_PERMISSIONS = Object.keys(PERMISSION_LABELS)

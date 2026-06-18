@@ -12,6 +12,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   verifyToken,
+  hasPermission,
   CORS_HEADERS,
   json,
 } from '../_shared/adminAuth.ts'
@@ -41,7 +42,9 @@ Deno.serve(async (req) => {
 
   try {
     const p = await verifyToken(sessionToken, ADMIN_SESSION_SECRET)
-    if (p.role !== 'super') return json({ error: '배너 관리는 총괄 관리자만 가능합니다' }, 403)
+    if (!hasPermission(p, 'manage_banners')) {
+      return json({ error: 'manage_banners 권한이 없습니다' }, 403)
+    }
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : '토큰 오류' }, 401)
   }

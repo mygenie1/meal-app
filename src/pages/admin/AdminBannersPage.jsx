@@ -393,7 +393,8 @@ function BannersContent({ payload }) {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm]           = useState(EMPTY_FORM)
   const [saving, setSaving]       = useState(false)
-  const isSuper = payload.role === 'super'
+  const isSuper         = payload.role === 'super'
+  const canManageBanners = isSuper || payload.permissions?.manage_banners === true
 
   useEffect(() => { load() }, [])
 
@@ -543,9 +544,9 @@ function BannersContent({ payload }) {
         </button>
       </header>
 
-      {!isSuper ? (
+      {!canManageBanners ? (
         <div className="max-w-3xl mx-auto px-4 py-16 text-center">
-          <p className="text-sm text-warm-light">총괄 관리자만 배너를 관리할 수 있어요</p>
+          <p className="text-sm text-warm-light">배너 관리 권한이 없어요</p>
         </div>
       ) : (
         <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
