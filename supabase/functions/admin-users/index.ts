@@ -102,12 +102,17 @@ Deno.serve(async (req) => {
         ? `${u.email[0]}**@${u.email.split('@')[1]}`
         : null
 
+      const isBanned = u.banned_until
+        ? new Date(u.banned_until) > new Date()
+        : false
+
       return {
         id:           u.id,
         display_name: displayName,
         masked_email: maskedEmail,
         provider,
         created_at:   u.created_at,
+        is_banned:    isBanned,
         space_count:  spaceCountMap[u.id] ?? 0,
         meal_count:   mealCountMap[u.id]  ?? 0,
       }
