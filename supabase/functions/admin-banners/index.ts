@@ -21,7 +21,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const ADMIN_SESSION_SECRET      = Deno.env.get('ADMIN_SESSION_SECRET')
 
 const VALID_SLOTS = ['calendar_top', 'ingredients_bottom']
-const VALID_TYPES = ['info', 'image_link', 'ad']
+const VALID_TYPES = ['info', 'image']
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })

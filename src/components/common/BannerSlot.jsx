@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 
-export default function BannerSlot({ slot, fallback = null }) {
+export default function BannerSlot({ slot, fallback = null, fixed: isFixed = false, onActive }) {
   const [banner, setBanner] = useState(undefined) // undefined=로딩, null=없음
 
   useEffect(() => {
@@ -17,19 +17,22 @@ export default function BannerSlot({ slot, fallback = null }) {
         if (error) {
           console.error('[BannerSlot] 조회 실패:', error.message)
           setBanner(null)
+          onActive?.(false)
           return
         }
         setBanner(data)
+        onActive?.(!!data)
       })
     return () => { cancelled = true }
   }, [slot])
 
-  // 로딩 중이거나 배너 없음 → fallback
   if (banner === undefined || banner === null) return fallback
+
+  let content = null
 
   // info 타입: 텍스트 카드
   if (banner.type === 'info') {
-    return (
+    content = (
       <div className="mx-4 mb-3 px-4 py-3.5 bg-cream-100 rounded-2xl">
         {banner.title && (
           <p className="text-sm font-semibold text-warm-dark">{banner.title}</p>
@@ -41,8 +44,8 @@ export default function BannerSlot({ slot, fallback = null }) {
     )
   }
 
-  // image_link / ad 타입: 이미지 + 클릭 링크
-  if (banner.type === 'image_link' || banner.type === 'ad') {
+  // image / image_link / ad 타입: 이미지 + 선택적 클릭 링크
+  else if (banner.type === 'image' || banner.type === 'image_link' || banner.type === 'ad') {
     if (!banner.image_url) return fallback
 
     const card = (
@@ -62,15 +65,26 @@ export default function BannerSlot({ slot, fallback = null }) {
       </div>
     )
 
-    if (banner.link_url) {
-      return (
-        <a href={banner.link_url} target="_blank" rel="noopener noreferrer" className="block">
-          {card}
-        </a>
-      )
-    }
-    return card
+    content = banner.link_url ? (
+      <a href={banner.link_url} target="_blank" rel="noopener noreferrer" className="block">
+        {card}
+      </a>
+    ) : card
   }
 
-  return fallback
+  if (!content) return fallback
+
+  // fixed 모드: BottomNav 바로 위에 고정 (z-[49] = BottomNav z-50 보다 낮음)
+  if (isFixed) {
+    return (
+      <div
+        className="fixed left-0 right-0 max-w-lg mx-auto z-[49]"
+        style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}
+      >
+        {content}
+      </div>
+    )
+  }
+
+  return content
 }
