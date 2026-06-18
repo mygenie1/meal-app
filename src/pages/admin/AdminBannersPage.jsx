@@ -29,7 +29,7 @@ const TYPE_INFO = {
   image: { label: '이미지', cls: 'bg-purple-50 text-purple-600' },
 }
 
-const EMPTY_FORM = { type: 'info', title: '', body: '', image_url: '', link_url: '' }
+const EMPTY_FORM = { type: 'info', title: '', body: '', image_url: '', link_url: '', disclosure: '' }
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 모듈 레벨 컴포넌트
@@ -183,6 +183,37 @@ function FormPanel({ form, setForm, editingId, saving, onSave, onCancel }) {
         </div>
       )}
 
+      {/* 광고 고지 문구 (image 타입, 선택) */}
+      {form.type === 'image' && (
+        <div className="mb-3">
+          <p className="text-xs text-warm-light mb-1">
+            광고 고지 문구 <span className="text-cream-400">(선택)</span>
+          </p>
+          <p className="text-[10px] text-cream-400 mb-1.5">
+            쿠팡 파트너스 등 제휴 광고는 고지 문구를 반드시 표시해야 해요.
+          </p>
+          <textarea
+            value={form.disclosure}
+            onChange={e => setForm(prev => ({ ...prev, disclosure: e.target.value }))}
+            placeholder="이 배너는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다."
+            rows={2}
+            className="w-full text-sm bg-white border border-cream-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-warm-brown text-warm-dark placeholder-cream-400 resize-none"
+          />
+          {!form.disclosure && (
+            <button
+              type="button"
+              onClick={() => setForm(prev => ({
+                ...prev,
+                disclosure: '이 배너는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.',
+              }))}
+              className="mt-1 text-[11px] text-warm-brown hover:text-warm-dark transition-colors"
+            >
+              + 쿠팡 파트너스 문구 채우기
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 미리보기 */}
       {(form.title || form.body || form.image_url) && (
         <div className="mb-3">
@@ -199,6 +230,9 @@ function FormPanel({ form, setForm, editingId, saving, onSave, onCancel }) {
               </div>
             ) : null}
           </div>
+          {form.disclosure && (
+            <p className="text-[10px] text-warm-light mt-1.5 px-1 leading-snug">{form.disclosure}</p>
+          )}
         </div>
       )}
 
@@ -422,11 +456,12 @@ function BannersContent({ payload }) {
     setEditingId(banner.id)
     setFormSlot(banner.slot)
     setForm({
-      type:      banner.type,
-      title:     banner.title     ?? '',
-      body:      banner.body      ?? '',
-      image_url: banner.image_url ?? '',
-      link_url:  banner.link_url  ?? '',
+      type:       banner.type,
+      title:      banner.title      ?? '',
+      body:       banner.body       ?? '',
+      image_url:  banner.image_url  ?? '',
+      link_url:   banner.link_url   ?? '',
+      disclosure: banner.disclosure ?? '',
     })
   }
 
@@ -450,23 +485,25 @@ function BannersContent({ payload }) {
       let data
       if (editingId) {
         data = await adminPost({
-          action:    'update',
-          id:        editingId,
-          type:      form.type,
-          title:     form.title     || null,
-          body:      form.body      || null,
-          image_url: form.image_url || null,
-          link_url:  form.link_url  || null,
+          action:     'update',
+          id:         editingId,
+          type:       form.type,
+          title:      form.title      || null,
+          body:       form.body       || null,
+          image_url:  form.image_url  || null,
+          link_url:   form.link_url   || null,
+          disclosure: form.disclosure || null,
         })
       } else {
         data = await adminPost({
-          action:    'create',
-          slot:      formSlot,
-          type:      form.type,
-          title:     form.title     || null,
-          body:      form.body      || null,
-          image_url: form.image_url || null,
-          link_url:  form.link_url  || null,
+          action:     'create',
+          slot:       formSlot,
+          type:       form.type,
+          title:      form.title      || null,
+          body:       form.body       || null,
+          image_url:  form.image_url  || null,
+          link_url:   form.link_url   || null,
+          disclosure: form.disclosure || null,
         })
       }
       if (data.error) { alert(data.error); return }

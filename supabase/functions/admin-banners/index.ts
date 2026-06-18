@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
 
   // ── create ───────────────────────────────────────────────────
   if (action === 'create') {
-    const { slot, type, title, body: bannerBody, image_url, link_url } = reqBody as Record<string, string>
+    const { slot, type, title, body: bannerBody, image_url, link_url, disclosure } = reqBody as Record<string, string>
     if (!slot || !VALID_SLOTS.includes(slot)) return json({ error: '유효하지 않은 slot' }, 400)
     if (!type || !VALID_TYPES.includes(type)) return json({ error: '유효하지 않은 type' }, 400)
 
@@ -80,10 +80,11 @@ Deno.serve(async (req) => {
       .from('banners')
       .insert({
         slot, type,
-        title:     title      || null,
-        body:      bannerBody || null,
-        image_url: image_url  || null,
-        link_url:  link_url   || null,
+        title:      title      || null,
+        body:       bannerBody || null,
+        image_url:  image_url  || null,
+        link_url:   link_url   || null,
+        disclosure: disclosure || null,
         is_active: false,
       })
       .select()
@@ -99,15 +100,16 @@ Deno.serve(async (req) => {
 
   // ── update ───────────────────────────────────────────────────
   if (action === 'update') {
-    const { id, type, title, body: bannerBody, image_url, link_url } = reqBody as Record<string, string>
+    const { id, type, title, body: bannerBody, image_url, link_url, disclosure } = reqBody as Record<string, string>
     if (!id) return json({ error: 'id 필수' }, 400)
 
     const updates: Record<string, unknown> = {}
-    if ('type' in reqBody)      { if (VALID_TYPES.includes(type)) updates.type = type }
-    if ('title' in reqBody)     updates.title     = title      || null
-    if ('body' in reqBody)      updates.body      = bannerBody || null
-    if ('image_url' in reqBody) updates.image_url = image_url  || null
-    if ('link_url' in reqBody)  updates.link_url  = link_url   || null
+    if ('type' in reqBody)        { if (VALID_TYPES.includes(type)) updates.type = type }
+    if ('title' in reqBody)       updates.title      = title      || null
+    if ('body' in reqBody)        updates.body       = bannerBody || null
+    if ('image_url' in reqBody)   updates.image_url  = image_url  || null
+    if ('link_url' in reqBody)    updates.link_url   = link_url   || null
+    if ('disclosure' in reqBody)  updates.disclosure = disclosure || null
     if (Object.keys(updates).length === 0) return json({ error: '수정할 항목 없음' }, 400)
 
     const { data, error } = await supabase

@@ -8,7 +8,7 @@ export default function BannerSlot({ slot, fallback = null, fixed: isFixed = fal
     let cancelled = false
     supabase
       .from('banners')
-      .select('id, type, title, body, image_url, link_url')
+      .select('id, type, title, body, image_url, link_url, disclosure')
       .eq('slot', slot)
       .eq('is_active', true)
       .maybeSingle()
@@ -33,12 +33,17 @@ export default function BannerSlot({ slot, fallback = null, fixed: isFixed = fal
   // info 타입: 텍스트 카드
   if (banner.type === 'info') {
     content = (
-      <div className="mx-4 mb-3 px-4 py-3.5 bg-cream-100 rounded-2xl">
-        {banner.title && (
-          <p className="text-sm font-semibold text-warm-dark">{banner.title}</p>
-        )}
-        {banner.body && (
-          <p className="text-sm text-warm-light leading-snug mt-0.5">{banner.body}</p>
+      <div className="mx-4 mb-3">
+        <div className="px-4 py-3.5 bg-cream-100 rounded-2xl">
+          {banner.title && (
+            <p className="text-sm font-semibold text-warm-dark">{banner.title}</p>
+          )}
+          {banner.body && (
+            <p className="text-sm text-warm-light leading-snug mt-0.5">{banner.body}</p>
+          )}
+        </div>
+        {banner.disclosure && (
+          <p className="text-[10px] text-cream-400 mt-1.5 px-1 leading-snug">{banner.disclosure}</p>
         )}
       </div>
     )
@@ -48,8 +53,8 @@ export default function BannerSlot({ slot, fallback = null, fixed: isFixed = fal
   else if (banner.type === 'image' || banner.type === 'image_link' || banner.type === 'ad') {
     if (!banner.image_url) return fallback
 
-    const card = (
-      <div className="mx-4 mb-3 relative rounded-2xl overflow-hidden bg-cream-100">
+    const innerCard = (
+      <div className="relative rounded-2xl overflow-hidden bg-cream-100">
         <img
           src={banner.image_url}
           alt={banner.title || '배너'}
@@ -65,11 +70,20 @@ export default function BannerSlot({ slot, fallback = null, fixed: isFixed = fal
       </div>
     )
 
-    content = banner.link_url ? (
+    const linkedCard = banner.link_url ? (
       <a href={banner.link_url} target="_blank" rel="noopener noreferrer" className="block">
-        {card}
+        {innerCard}
       </a>
-    ) : card
+    ) : innerCard
+
+    content = (
+      <div className="mx-4 mb-3">
+        {linkedCard}
+        {banner.disclosure && (
+          <p className="text-[10px] text-cream-400 mt-1.5 px-1 leading-snug">{banner.disclosure}</p>
+        )}
+      </div>
+    )
   }
 
   if (!content) return fallback
