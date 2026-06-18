@@ -3,10 +3,11 @@
 // 필요 권한: manage_admins
 //
 // actions:
-//   list              → 관리자 목록 (password_hash 제외)
-//   create            → 서브 관리자 생성 (role='sub' 고정)
-//   toggle_active     → 활성/비활성 토글 (super 보호)
+//   list               → 관리자 목록 (password_hash 제외)
+//   create             → 서브 관리자 생성 (role='sub' 고정)
+//   toggle_active      → 활성/비활성 토글 (super 보호)
 //   update_permissions → 권한 수정 (super 보호)
+//   delete             → 서브 관리자 삭제 (super 보호, 자기자신 삭제 금지)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
@@ -172,6 +173,39 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[admin-manage] update_permissions: ${target_id} by ${adminPayload.username}`)
+    return json({ success: true })
+  }
+
+  // ── delete ────────────────────────────────────────────────
+  if (action === 'delete') {
+    const target_id = typeof body.target_id === 'string' ? body.target_id : ''
+    if (!target_id) return json({ error: 'target_id 필수' }, 400)
+
+    // 자기 자신 삭제 금지
+    if (target_id === adminPayload.id) {
+      return json({ error: '자기 자신은 삭제할 수 없습니다' }, 403)
+    }
+
+    const { data: target, error: fetchErr } = await supabase
+      .from('admin_accounts')
+      .select('id, role, username')
+      .eq('id', target_id)
+      .maybeSingle()
+
+    if (fetchErr || !target) return json({ error: '대상 계정을 찾을 수 없습니다' }, 404)
+    if (target.role === 'super') return json({ error: 'super 계정은 삭제할 수 없습니다' }, 403)
+
+    const { error: deleteErr } = await supabase
+      .from('admin_accounts')
+      .delete()
+      .eq('id', target_id)
+
+    if (deleteErr) {
+      console.error('[admin-manage] delete 오류:', deleteErr.message)
+      return json({ error: '삭제 실패' }, 500)
+    }
+
+    console.log(`[admin-manage] delete: ${target.username} by ${adminPayload.username}`)
     return json({ success: true })
   }
 

@@ -46,12 +46,45 @@ function PermSummary({ permissions, isSuper }) {
     return <span className="text-xs text-stone-400">권한 없음</span>
   }
   return (
-    <div className="flex flex-wrap gap-1 mt-1">
+    <div className="flex flex-wrap gap-1">
       {granted.map(k => (
         <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">
           {PERMISSION_LABELS[k]}
         </span>
       ))}
+    </div>
+  )
+}
+
+// 삭제 확인 모달
+function DeleteConfirmModal({ admin, onConfirm, onCancel, loading }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-xs">
+        <h3 className="text-sm font-semibold text-warm-dark mb-1">관리자 삭제</h3>
+        <p className="text-xs text-warm-light mb-1">
+          <span className="font-semibold text-warm-dark">{admin.username}</span> 계정을 삭제할까요?
+        </p>
+        <p className="text-xs text-red-500 mb-5">이 작업은 되돌릴 수 없습니다.</p>
+        <div className="flex gap-2">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="flex-1 py-2 text-xs text-warm-light rounded-xl border border-cream-300
+              hover:bg-cream-50 transition-colors disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 py-2 text-xs font-medium text-white bg-red-500 rounded-xl
+              hover:bg-red-600 active:scale-95 transition-all disabled:opacity-50"
+          >
+            {loading ? '삭제 중…' : '삭제'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -78,8 +111,12 @@ function AdminsContent({ payload }) {
   const [editPerms,   setEditPerms]   = useState({})
   const [savingPerms, setSavingPerms] = useState(false)
 
-  // 활성/비활성 토글 (per id)
+  // 활성/비활성 토글
   const [togglingId,  setTogglingId]  = useState(null)
+
+  // 삭제 확인
+  const [confirmDelete, setConfirmDelete] = useState(null) // admin 객체
+  const [deletingId,    setDeletingId]    = useState(null)
 
   useEffect(() => {
     if (!canManage) {
@@ -186,17 +223,45 @@ function AdminsContent({ payload }) {
     }
   }
 
+  async function handleDelete(adminId) {
+    setDeletingId(adminId)
+    try {
+      const res  = await adminCall('delete', { target_id: adminId })
+      const body = await res.json()
+      if (!res.ok) {
+        alert(body.error || '삭제 실패')
+        return
+      }
+      setAdmins(prev => prev.filter(a => a.id !== adminId))
+      setConfirmDelete(null)
+    } catch {
+      alert('네트워크 오류')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   function handleLogout() {
     clearAdminToken()
     navigate('/admin/login', { replace: true })
   }
 
   return (
-    <div className="min-h-svh w-full bg-stone-100 overflow-x-hidden">
+    <div className="min-h-svh bg-stone-100">
+
+      {/* 삭제 확인 모달 */}
+      {confirmDelete && (
+        <DeleteConfirmModal
+          admin={confirmDelete}
+          onConfirm={() => handleDelete(confirmDelete.id)}
+          onCancel={() => setConfirmDelete(null)}
+          loading={deletingId === confirmDelete.id}
+        />
+      )}
 
       {/* 헤더 */}
       <header className="bg-warm-brown text-white px-4 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={() => navigate('/admin')}
             className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors shrink-0"
@@ -208,11 +273,11 @@ function AdminsContent({ payload }) {
             <span className="text-sm">대시보드</span>
           </button>
           <span className="text-white/30 shrink-0">|</span>
-          <span className="text-sm font-semibold truncate">관리자 관리</span>
+          <span className="text-sm font-semibold">관리자 관리</span>
         </div>
         <button
           onClick={handleLogout}
-          className="text-xs text-white/70 hover:text-white transition-colors shrink-0 ml-3"
+          className="text-xs text-white/70 hover:text-white transition-colors shrink-0 ml-2"
         >
           로그아웃
         </button>
@@ -222,7 +287,7 @@ function AdminsContent({ payload }) {
 
         {/* 목록 헤더 + 추가 버튼 */}
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-warm-dark min-w-0">
+          <h2 className="text-sm font-semibold text-warm-dark">
             관리자 계정
             {!loading && (
               <span className="ml-2 font-normal text-warm-light">{admins.length}명</span>
@@ -231,7 +296,7 @@ function AdminsContent({ payload }) {
           <button
             onClick={() => { setShowCreate(v => !v); setCreateError(null) }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-warm-brown text-white
-              text-xs font-medium hover:bg-warm-dark active:scale-95 transition-all shrink-0 whitespace-nowrap"
+              text-xs font-medium hover:bg-warm-dark active:scale-95 transition-all shrink-0"
           >
             <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5"
               strokeLinecap="round" viewBox="0 0 24 24">
@@ -342,13 +407,14 @@ function AdminsContent({ payload }) {
           const isAdminSuper = admin.role === 'super'
           const isExpanded   = editingId === admin.id
           const isToggling   = togglingId === admin.id
+          const isDeleting   = deletingId === admin.id
 
           return (
             <div key={admin.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
               <div className="p-4">
-                {/* 상단: 아바타 + 정보 + 액션 */}
-                <div className="flex items-center gap-2">
-                  {/* 아바타 */}
+
+                {/* 행 1: 아바타 + 이름/뱃지 + super 보호 뱃지 */}
+                <div className="flex items-center gap-3">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center
                     text-white font-bold text-sm shrink-0 ${
                     isAdminSuper ? 'bg-amber-500' : 'bg-warm-brown'
@@ -356,10 +422,9 @@ function AdminsContent({ payload }) {
                     {admin.username[0].toUpperCase()}
                   </div>
 
-                  {/* 이름 + 뱃지 */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm font-semibold text-warm-dark truncate max-w-[140px]">
+                      <span className="text-sm font-semibold text-warm-dark break-all">
                         {admin.username}
                       </span>
                       {isMe && (
@@ -385,7 +450,24 @@ function AdminsContent({ payload }) {
                     </p>
                   </div>
 
-                  {/* 서브 계정 액션 */}
+                  {isAdminSuper && (
+                    <div className="flex items-center gap-1 text-[10px] text-amber-600 shrink-0">
+                      <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2"
+                        strokeLinecap="round" viewBox="0 0 24 24">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4"/>
+                      </svg>
+                      보호됨
+                    </div>
+                  )}
+                </div>
+
+                {/* 행 2: 권한 요약(좌) + 액션 버튼(우) */}
+                <div className="flex items-center justify-between gap-3 mt-3 pl-12">
+                  <div className="min-w-0 flex-1">
+                    <PermSummary permissions={admin.permissions} isSuper={isAdminSuper} />
+                  </div>
+
                   {!isAdminSuper && (
                     <div className="flex items-center gap-1.5 shrink-0">
                       {/* 활성/비활성 토글 */}
@@ -393,7 +475,7 @@ function AdminsContent({ payload }) {
                         onClick={() => handleToggle(admin)}
                         disabled={isToggling}
                         title={admin.is_active ? '비활성화' : '활성화'}
-                        className={`relative w-10 h-6 rounded-full transition-colors ${
+                        className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
                           admin.is_active ? 'bg-warm-brown' : 'bg-stone-200'
                         } disabled:opacity-50`}
                       >
@@ -409,7 +491,7 @@ function AdminsContent({ payload }) {
                         className={`p-1.5 rounded-lg transition-colors ${
                           isExpanded
                             ? 'bg-warm-brown/10 text-warm-brown'
-                            : 'text-warm-light hover:text-warm-brown hover:bg-cream-100'
+                            : 'text-stone-400 hover:text-warm-brown hover:bg-cream-100'
                         }`}
                       >
                         <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"
@@ -418,25 +500,27 @@ function AdminsContent({ payload }) {
                           <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
                         </svg>
                       </button>
+
+                      {/* 삭제 버튼 (자기 자신 제외) */}
+                      {!isMe && (
+                        <button
+                          onClick={() => setConfirmDelete(admin)}
+                          disabled={isDeleting}
+                          title="삭제"
+                          className="p-1.5 rounded-lg transition-colors text-stone-400
+                            hover:text-red-500 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"
+                            strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                            <path d="M10 11v6M14 11v6"/>
+                            <path d="M9 6V4h6v2"/>
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   )}
-
-                  {/* super 보호 표시 */}
-                  {isAdminSuper && (
-                    <div className="flex items-center gap-1 text-[10px] text-amber-600 shrink-0">
-                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"
-                        strokeLinecap="round" viewBox="0 0 24 24">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                        <path d="M7 11V7a5 5 0 0110 0v4"/>
-                      </svg>
-                      보호됨
-                    </div>
-                  )}
-                </div>
-
-                {/* 권한 요약 */}
-                <div className="mt-2.5 pl-11">
-                  <PermSummary permissions={admin.permissions} isSuper={isAdminSuper} />
                 </div>
               </div>
 
