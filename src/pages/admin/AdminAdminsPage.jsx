@@ -471,18 +471,18 @@ function AdminsContent({ payload }) {
 
                   {/* 우측: 서브 계정 액션 (토글 + 수정 + 삭제) */}
                   {!isAdminSuper && (
-                    <div className="shrink-0 flex items-center gap-1">
+                    <div className="shrink-0 flex items-center gap-2">
                       {/* 활성/비활성 토글 */}
                       <button
                         onClick={() => handleToggle(admin)}
                         disabled={isToggling}
                         title={admin.is_active ? '비활성화' : '활성화'}
-                        className={`relative w-9 h-5 rounded-full transition-colors ${
+                        className={`relative w-10 h-5 rounded-full transition-colors ${
                           admin.is_active ? 'bg-warm-brown' : 'bg-stone-200'
                         } disabled:opacity-50`}
                       >
                         <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow
-                          transition-transform ${admin.is_active ? 'translate-x-4' : 'translate-x-0.5'}`}
+                          transition-transform ${admin.is_active ? 'translate-x-5' : 'translate-x-0.5'}`}
                         />
                       </button>
 

@@ -292,7 +292,7 @@ function UsersPage({ payload }) {
               ) : (
                 <ul className="divide-y divide-cream-100">
                   {filteredUsers.map((user, idx) => (
-                    <li key={user.id} className="px-5 py-3.5 flex items-center gap-4">
+                    <li key={user.id} className="px-4 pr-5 py-3.5 flex items-center gap-3">
                       {/* 순번 */}
                       <span className="text-xs text-cream-400 tabular-nums w-5 shrink-0 text-right">
                         {idx + 1}
@@ -337,17 +337,17 @@ function UsersPage({ payload }) {
 
                       {/* 액션 버튼 (권한 있을 때만) */}
                       {canDelete && (
-                        <div className="shrink-0 flex items-center gap-1">
+                        <div className="shrink-0 flex items-center gap-2 ml-2">
                           {/* 비활성화 / 복구 토글 */}
                           <button
                             title={user.is_banned ? '계정 복구' : '계정 비활성화'}
                             onClick={() => openAction(user.is_banned ? 'reactivate' : 'deactivate', user)}
-                            className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${
+                            className={`w-10 h-5 rounded-full relative transition-colors shrink-0 ${
                               user.is_banned ? 'bg-stone-300' : 'bg-green-400'
                             }`}
                           >
                             <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow
-                              transition-transform ${user.is_banned ? 'translate-x-0.5' : 'translate-x-4'}`}/>
+                              transition-transform ${user.is_banned ? 'translate-x-0.5' : 'translate-x-5'}`}/>
                           </button>
                           {/* 영구삭제 (super 전용) */}
                           {payload.role === 'super' && (
