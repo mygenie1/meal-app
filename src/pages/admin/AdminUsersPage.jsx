@@ -4,6 +4,7 @@ import AdminGuard, { clearAdminToken, getAdminToken } from './AdminGuard'
 
 const ADMIN_USERS_URL       = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`
 const ADMIN_USER_DELETE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-user-delete`
+const ADMIN_STATS_URL       = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-stats`
 const SUPABASE_ANON_KEY     = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 function formatDate(dateStr) {
@@ -23,6 +24,60 @@ function ProviderBadge({ provider }) {
     <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium ${cls}`}>
       {label}
     </span>
+  )
+}
+
+// 날짜 레이블용 M/D 포맷 (leading zero 제거)
+function fmtMD(dateStr) {
+  const [, m, d] = dateStr.split('-')
+  return `${parseInt(m)}/${parseInt(d)}`
+}
+
+// 순수 CSS div 바 차트 — 라이브러리 없음
+function MiniBarChart({ data, color }) {
+  if (!data || data.length === 0) return null
+  const maxVal = Math.max(...data.map(d => d.value), 1)
+  // 레이블: 0, 7, 14, 21, 29 인덱스 (약 7일 간격)
+  const labelSet = new Set([0, 7, 14, 21, data.length - 1])
+
+  return (
+    <div>
+      <div className="flex items-end gap-px" style={{ height: '60px' }}>
+        {data.map((d, i) => {
+          const pct = d.value === 0
+            ? 3
+            : Math.max(8, Math.round((d.value / maxVal) * 100))
+          return (
+            <div
+              key={d.date}
+              className="flex-1 rounded-t-sm transition-all"
+              style={{
+                height: `${pct}%`,
+                backgroundColor: d.value === 0 ? '#ede0cc' : color,
+              }}
+              title={`${d.date}: ${d.value}`}
+            />
+          )
+        })}
+      </div>
+      {/* X 축 날짜 레이블 */}
+      <div className="relative mt-1" style={{ height: '14px' }}>
+        {data.map((d, i) => {
+          if (!labelSet.has(i)) return null
+          const left = data.length === 1 ? 0 : (i / (data.length - 1)) * 100
+          const anchor = i === 0 ? 'translateX(0%)' : i === data.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)'
+          return (
+            <span
+              key={d.date}
+              className="absolute text-[9px] text-cream-400 leading-none"
+              style={{ left: `${left}%`, transform: anchor }}
+            >
+              {fmtMD(d.date)}
+            </span>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -50,10 +105,14 @@ function UsersPage({ payload }) {
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError]   = useState(null)
 
+  // 성장 추이 상태
+  const [statsData, setStatsData]         = useState(null)
+  const [statsLoading, setStatsLoading]   = useState(true)
+
   // delete_users 권한 또는 super이면 비활성화/복구 가능
   const canDelete = payload.role === 'super' || payload.permissions?.delete_users === true
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadStats() }, [])
 
   async function load() {
     setLoading(true)
@@ -81,6 +140,30 @@ function UsersPage({ payload }) {
       setError('네트워크 오류 — 다시 시도해주세요')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadStats() {
+    setStatsLoading(true)
+    try {
+      const res  = await fetch(ADMIN_STATS_URL, {
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey':        SUPABASE_ANON_KEY,
+          'x-admin-token': getAdminToken(),
+        },
+      })
+      const body = await res.json()
+      if (!res.ok) {
+        if (res.status === 401) { navigate('/admin/login', { replace: true }); return }
+        console.error('[admin-stats]', body.error)
+        return
+      }
+      setStatsData(body)
+    } catch (e) {
+      console.error('[admin-stats] 네트워크 오류:', e)
+    } finally {
+      setStatsLoading(false)
     }
   }
 
@@ -237,6 +320,64 @@ function UsersPage({ payload }) {
             <StatCard value={data.summary.new_users_7d} label="신규(7일)" />
           </div>
         )}
+
+        {/* 성장 추이 */}
+        <div className="bg-white rounded-2xl shadow-sm p-5">
+          <div className="flex items-baseline justify-between mb-4">
+            <h2 className="text-sm font-semibold text-warm-dark">성장 추이</h2>
+            <span className="text-[11px] text-warm-light">최근 30일</span>
+          </div>
+
+          {statsLoading && !statsData ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-5 h-5 rounded-full border-2 border-cream-200 border-t-stone-400 animate-spin"/>
+            </div>
+          ) : statsData ? (
+            <div className="space-y-5">
+              {/* 신규 가입 */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-warm-brown"/>
+                    <span className="text-xs font-medium text-warm-dark">신규 가입</span>
+                  </div>
+                  <span className="text-[11px] text-warm-light tabular-nums">
+                    30일 합계{' '}
+                    <span className="font-semibold text-warm-dark">
+                      {statsData.trend.reduce((s, d) => s + d.signups, 0)}명
+                    </span>
+                  </span>
+                </div>
+                <MiniBarChart
+                  data={statsData.trend.map(d => ({ date: d.date, value: d.signups }))}
+                  color="#6b4f3a"
+                />
+              </div>
+
+              {/* 신규 기록 */}
+              <div className="pt-4 border-t border-cream-100">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: '#3b7fd4' }}/>
+                    <span className="text-xs font-medium text-warm-dark">신규 기록</span>
+                  </div>
+                  <span className="text-[11px] text-warm-light tabular-nums">
+                    30일 합계{' '}
+                    <span className="font-semibold text-warm-dark">
+                      {statsData.trend.reduce((s, d) => s + d.meals, 0)}건
+                    </span>
+                  </span>
+                </div>
+                <MiniBarChart
+                  data={statsData.trend.map(d => ({ date: d.date, value: d.meals }))}
+                  color="#3b7fd4"
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-warm-light text-center py-4">데이터를 불러올 수 없어요</p>
+          )}
+        </div>
 
         {/* 유저 목록 */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
