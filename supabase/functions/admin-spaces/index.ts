@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
       // space_members를 전체 조회 후 JS에서 필터링
       // — 목록과 동일한 방식: DB `.eq()` 필터 대신 JS 비교로 일관성 보장
       const [spaceRes, allMembersRes, totalMealsRes, mealsRes] = await Promise.all([
-        supabase.from('spaces').select('id, name, emoji, code, created_at').eq('id', spaceId).single(),
+        supabase.from('spaces').select('id, name, emoji, code, created_at, is_active').eq('id', spaceId).single(),
         supabase.from('space_members').select('space_id, user_id, joined_at'),
         supabase.from('meals').select('id', { count: 'exact', head: true }).eq('space_id', spaceId),
         supabase.from('meals')
@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
 
   try {
     const [spacesRes, membersRes, mealsRes] = await Promise.all([
-      supabase.from('spaces').select('id, name, emoji, code, created_at').order('created_at', { ascending: false }),
+      supabase.from('spaces').select('id, name, emoji, code, created_at, is_active').order('created_at', { ascending: false }),
       supabase.from('space_members').select('space_id'),
       supabase.from('meals').select('space_id, date').order('date', { ascending: false }),
     ])
@@ -171,6 +171,7 @@ Deno.serve(async (req) => {
         emoji:          s.emoji,
         code:           s.code,
         created_at:     s.created_at,
+        is_active:      s.is_active ?? true,
         member_count:   memberCountMap[s.id] ?? 0,
         meal_count:     mealCountMap[s.id]   ?? 0,
         last_meal_date: lastMealMap[s.id]    ?? null,

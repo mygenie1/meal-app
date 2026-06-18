@@ -114,8 +114,10 @@ function SpacesContent({ payload }) {
           <button
             key={space.id}
             onClick={() => navigate(`/admin/spaces/${space.id}`)}
-            className="w-full bg-white rounded-2xl shadow-sm p-5 text-left
-              hover:bg-cream-50 active:scale-[0.99] transition-all"
+            className={`w-full bg-white rounded-2xl shadow-sm p-5 text-left
+              hover:bg-cream-50 active:scale-[0.99] transition-all ${
+              !space.is_active ? 'opacity-60' : ''
+            }`}
           >
             <div className="flex items-start gap-3">
               {/* 이모지 */}
@@ -126,9 +128,15 @@ function SpacesContent({ payload }) {
 
               {/* 정보 */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-warm-dark text-sm truncate">{space.name}</span>
                   <span className="text-[10px] text-cream-400 font-mono shrink-0">#{space.code}</span>
+                  {!space.is_active && (
+                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full
+                      bg-red-50 text-red-500 font-medium">
+                      비활성
+                    </span>
+                  )}
                 </div>
 
                 {/* 통계 배지 */}

@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AdminGuard, { clearAdminToken, getAdminToken } from './AdminGuard'
 
-const ADMIN_SPACES_URL  = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-spaces`
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const ADMIN_SPACES_URL       = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-spaces`
+const ADMIN_SPACE_DELETE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-space-delete`
+const SUPABASE_ANON_KEY      = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 function adminFetch(url, token) {
   return fetch(url, {
@@ -14,6 +15,37 @@ function adminFetch(url, token) {
       'Content-Type':  'application/json',
     },
   })
+}
+
+function adminPost(body, token) {
+  return fetch(ADMIN_SPACE_DELETE_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey':        SUPABASE_ANON_KEY,
+      'x-admin-token': token,
+      'Content-Type':  'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+}
+
+function DangerRow({ title, desc, btnLabel, btnClass, onAction }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-warm-dark">{title}</p>
+        <p className="text-xs text-warm-light mt-0.5 leading-relaxed">{desc}</p>
+      </div>
+      <button
+        onClick={onAction}
+        className={`shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg
+          transition-colors active:scale-95 ${btnClass}`}
+      >
+        {btnLabel}
+      </button>
+    </div>
+  )
 }
 
 function formatDate(dateStr) {
@@ -54,6 +86,14 @@ function SpaceDetailContent({ payload }) {
   const [error, setError]     = useState(null)
   const [lightbox, setLightbox] = useState(null)
 
+  // Danger Zone 상태
+  const [showDeactivate, setShowDeactivate] = useState(false)
+  const [showReactivate, setShowReactivate] = useState(false)
+  const [showDelete, setShowDelete]         = useState(false)
+  const [confirmName, setConfirmName]       = useState('')
+  const [actionLoading, setActionLoading]   = useState(false)
+  const [actionError, setActionError]       = useState(null)
+
   useEffect(() => { load() }, [id])
 
   async function load() {
@@ -78,6 +118,69 @@ function SpaceDetailContent({ payload }) {
   function handleLogout() {
     clearAdminToken()
     navigate('/admin/login', { replace: true })
+  }
+
+  async function handleDeactivate() {
+    setActionLoading(true)
+    setActionError(null)
+    try {
+      const res  = await adminPost({ action: 'deactivate', space_id: id }, getAdminToken())
+      const body = await res.json()
+      if (!res.ok) {
+        if (res.status === 401) { navigate('/admin/login', { replace: true }); return }
+        setActionError(body.error || '비활성화 실패')
+        return
+      }
+      setShowDeactivate(false)
+      await load()
+    } catch {
+      setActionError('네트워크 오류 — 다시 시도해주세요')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleReactivate() {
+    setActionLoading(true)
+    setActionError(null)
+    try {
+      const res  = await adminPost({ action: 'reactivate', space_id: id }, getAdminToken())
+      const body = await res.json()
+      if (!res.ok) {
+        if (res.status === 401) { navigate('/admin/login', { replace: true }); return }
+        setActionError(body.error || '활성화 실패')
+        return
+      }
+      setShowReactivate(false)
+      await load()
+    } catch {
+      setActionError('네트워크 오류 — 다시 시도해주세요')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleHardDelete() {
+    if (confirmName !== space?.name) return
+    setActionLoading(true)
+    setActionError(null)
+    try {
+      const res  = await adminPost(
+        { action: 'hard_delete', space_id: id, space_name: confirmName },
+        getAdminToken(),
+      )
+      const body = await res.json()
+      if (!res.ok) {
+        if (res.status === 401) { navigate('/admin/login', { replace: true }); return }
+        setActionError(body.error || '영구 삭제 실패')
+        return
+      }
+      navigate('/admin/spaces', { replace: true })
+    } catch {
+      setActionError('네트워크 오류 — 다시 시도해주세요')
+    } finally {
+      setActionLoading(false)
+    }
   }
 
   const space = data?.space
@@ -163,7 +266,15 @@ function SpaceDetailContent({ payload }) {
                   {space.emoji || '🍽️'}
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-warm-dark">{space.name}</h1>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-lg font-bold text-warm-dark">{space.name}</h1>
+                    {!space.is_active && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full
+                        bg-red-50 text-red-500 font-medium">
+                        비활성
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-warm-light">
                     <span>초대 코드 <span className="font-mono font-semibold text-warm-dark">{space.code}</span></span>
                     <span>·</span>
@@ -287,9 +398,205 @@ function SpaceDetailContent({ payload }) {
                 </ul>
               )}
             </div>
+            {/* ── Danger Zone — super 전용 ──────────────────── */}
+            {payload.role === 'super' && (
+              <div className="border border-red-200 rounded-2xl overflow-hidden">
+                <div className="px-5 py-3.5 bg-red-50 border-b border-red-100 flex items-center gap-2">
+                  <svg width="13" height="13" fill="none" stroke="#dc2626" strokeWidth="2"
+                    strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                  <span className="text-sm font-semibold text-red-700">위험 영역</span>
+                  <span className="text-[11px] text-red-400">— 총괄 관리자 전용</span>
+                </div>
+
+                <div className="bg-white p-5 space-y-4">
+                  {actionError && (
+                    <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{actionError}</p>
+                  )}
+
+                  {/* 비활성화 or 활성화 */}
+                  {space.is_active ? (
+                    <DangerRow
+                      title="스페이스 비활성화"
+                      desc="데이터를 보존한 채 일반 앱에서 숨깁니다. 멤버들이 접근할 수 없게 됩니다. 언제든 복구 가능합니다."
+                      btnLabel="비활성화"
+                      btnClass="text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100"
+                      onAction={() => { setActionError(null); setShowDeactivate(true) }}
+                    />
+                  ) : (
+                    <DangerRow
+                      title="스페이스 활성화"
+                      desc="비활성화된 스페이스를 복구합니다. 멤버들이 다시 접근할 수 있게 됩니다."
+                      btnLabel="활성화"
+                      btnClass="text-green-700 bg-green-50 border border-green-200 hover:bg-green-100"
+                      onAction={() => { setActionError(null); setShowReactivate(true) }}
+                    />
+                  )}
+
+                  <div className="border-t border-red-100" />
+
+                  <DangerRow
+                    title="영구 삭제"
+                    desc="모든 기록, 사진, 멤버 데이터가 영구 삭제됩니다. 되돌릴 수 없습니다."
+                    btnLabel="영구 삭제"
+                    btnClass="text-white bg-red-500 hover:bg-red-600"
+                    onAction={() => { setConfirmName(''); setActionError(null); setShowDelete(true) }}
+                  />
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>
+
+      {/* ── 비활성화 확인 모달 ─────────────────────────────── */}
+      {showDeactivate && space && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !actionLoading && setShowDeactivate(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-warm-dark mb-1">스페이스 비활성화</h3>
+            <p className="text-sm text-warm-light mb-1">
+              <span className="font-medium text-warm-dark">{space.name}</span> 스페이스를 비활성화합니다.
+            </p>
+            <p className="text-xs text-warm-light leading-relaxed mb-5">
+              일반 앱에서 보이지 않게 됩니다. 데이터는 보존되므로 언제든 복구할 수 있습니다.
+            </p>
+            {actionError && <p className="text-xs text-red-500 mb-3">{actionError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeactivate(false)}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 text-sm text-warm-light rounded-xl border border-cream-300
+                  hover:bg-cream-50 disabled:opacity-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDeactivate}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 text-sm font-medium text-amber-700 bg-amber-50
+                  rounded-xl border border-amber-200 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading ? '처리 중…' : '비활성화'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 활성화 확인 모달 ───────────────────────────────── */}
+      {showReactivate && space && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !actionLoading && setShowReactivate(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-warm-dark mb-1">스페이스 활성화</h3>
+            <p className="text-sm text-warm-light mb-5">
+              <span className="font-medium text-warm-dark">{space.name}</span> 스페이스를
+              다시 활성화합니다. 멤버들이 정상적으로 접근할 수 있게 됩니다.
+            </p>
+            {actionError && <p className="text-xs text-red-500 mb-3">{actionError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowReactivate(false)}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 text-sm text-warm-light rounded-xl border border-cream-300
+                  hover:bg-cream-50 disabled:opacity-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleReactivate}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 text-sm font-medium text-green-700 bg-green-50
+                  rounded-xl border border-green-200 hover:bg-green-100 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading ? '처리 중…' : '활성화'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 영구 삭제 확인 모달 (이름 직접 입력) ──────────── */}
+      {showDelete && space && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => !actionLoading && (setShowDelete(false), setConfirmName(''))}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <svg width="18" height="18" fill="none" stroke="#dc2626" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <h3 className="font-semibold text-red-600">영구 삭제 확인</h3>
+            </div>
+
+            <p className="text-sm text-warm-light mb-1">
+              이 작업은{' '}
+              <span className="font-semibold text-red-600">되돌릴 수 없습니다.</span>
+            </p>
+            <p className="text-sm text-warm-light mb-4 leading-relaxed">
+              <span className="font-medium text-warm-dark">{space.name}</span> 스페이스의
+              모든 기록, 사진, 멤버 정보가 영구 삭제됩니다.
+            </p>
+
+            <p className="text-xs font-medium text-warm-dark mb-1.5">
+              확인을 위해 스페이스 이름{' '}
+              <span className="text-red-500 font-mono">"{space.name}"</span>
+              을 입력하세요:
+            </p>
+            <input
+              type="text"
+              value={confirmName}
+              onChange={e => setConfirmName(e.target.value)}
+              placeholder={space.name}
+              autoFocus
+              className="w-full px-3 py-2.5 text-sm rounded-xl border border-cream-300
+                bg-cream-50 focus:outline-none focus:border-red-300 mb-4"
+            />
+
+            {actionError && <p className="text-xs text-red-500 mb-3">{actionError}</p>}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowDelete(false); setConfirmName('') }}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 text-sm text-warm-light rounded-xl border border-cream-300
+                  hover:bg-cream-50 disabled:opacity-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleHardDelete}
+                disabled={actionLoading || confirmName !== space.name}
+                className="flex-1 py-2.5 text-sm font-medium text-white bg-red-500
+                  rounded-xl hover:bg-red-600 disabled:opacity-40 active:scale-95 transition-all"
+              >
+                {actionLoading ? '삭제 중…' : '영구 삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
