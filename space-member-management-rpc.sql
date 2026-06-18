@@ -32,9 +32,10 @@ BEGIN
   END IF;
 
   -- 호출자가 이 스페이스의 멤버인지 확인
+  -- sm0 별칭 필수: RETURNS TABLE의 user_id 출력 컬럼과 space_members.user_id 가 충돌
   IF NOT EXISTS (
-    SELECT 1 FROM space_members
-    WHERE space_id = p_space_id AND user_id = auth.uid()
+    SELECT 1 FROM space_members AS sm0
+    WHERE sm0.space_id = p_space_id AND sm0.user_id = auth.uid()
   ) THEN
     RAISE EXCEPTION 'Access denied: you are not a member of this space';
   END IF;
@@ -106,7 +107,7 @@ CREATE OR REPLACE FUNCTION regenerate_invite_code(p_space_id uuid)
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions  -- gen_random_bytes가 extensions 스키마에 있음
 AS $$
 DECLARE
   v_owner_id uuid;
