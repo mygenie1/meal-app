@@ -28,6 +28,7 @@ function SpacesContent({ payload }) {
   const [spaces, setSpaces]   = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
+  const [filter, setFilter]   = useState('all') // 'all' | 'empty'
 
   useEffect(() => { load() }, [])
 
@@ -98,19 +99,59 @@ function SpacesContent({ payload }) {
           </div>
         )}
 
-        {/* 목록 헤더 */}
-        {spaces && (
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-sm font-semibold text-warm-dark">
-              전체 스페이스
-              <span className="ml-2 font-normal text-warm-light">{spaces.length}개</span>
-            </h2>
-            <span className="text-[11px] text-warm-light">기록 수 많은 순</span>
-          </div>
-        )}
+        {/* 필터 탭 + 목록 헤더 */}
+        {spaces && (() => {
+          const emptyCount   = spaces.filter(s => s.member_count === 0).length
+          const visibleSpaces = filter === 'empty'
+            ? spaces.filter(s => s.member_count === 0)
+            : spaces
 
-        {/* 스페이스 카드 목록 */}
-        {spaces?.map(space => (
+          return (
+            <>
+              {/* 필터 탭 */}
+              <div className="flex items-center gap-2 px-1">
+                <button
+                  onClick={() => setFilter('all')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                    filter === 'all'
+                      ? 'bg-warm-brown text-white'
+                      : 'bg-white text-warm-light hover:text-warm-dark border border-cream-200'
+                  }`}
+                >
+                  전체 {spaces.length}
+                </button>
+                <button
+                  onClick={() => setFilter('empty')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                    filter === 'empty'
+                      ? 'bg-stone-600 text-white'
+                      : 'bg-white text-warm-light hover:text-warm-dark border border-cream-200'
+                  }`}
+                >
+                  멤버 0명
+                  {emptyCount > 0 && (
+                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                      filter === 'empty'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}>
+                      {emptyCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* 목록 헤더 */}
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-sm font-semibold text-warm-dark">
+                  {filter === 'empty' ? '멤버 없는 스페이스' : '전체 스페이스'}
+                  <span className="ml-2 font-normal text-warm-light">{visibleSpaces.length}개</span>
+                </h2>
+                <span className="text-[11px] text-warm-light">기록 수 많은 순</span>
+              </div>
+
+              {/* 스페이스 카드 목록 */}
+              {visibleSpaces.map(space => (
           <button
             key={space.id}
             onClick={() => navigate(`/admin/spaces/${space.id}`)}
@@ -135,6 +176,12 @@ function SpacesContent({ payload }) {
                     <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full
                       bg-red-50 text-red-500 font-medium">
                       비활성
+                    </span>
+                  )}
+                  {space.member_count === 0 && (
+                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full
+                      bg-stone-100 text-stone-500 font-medium">
+                      멤버 없음
                     </span>
                   )}
                 </div>
@@ -178,11 +225,16 @@ function SpacesContent({ payload }) {
           </button>
         ))}
 
-        {spaces?.length === 0 && (
-          <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
-            <p className="text-sm text-warm-light">스페이스가 없어요</p>
-          </div>
-        )}
+              {visibleSpaces.length === 0 && (
+                <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
+                  <p className="text-sm text-warm-light">
+                    {filter === 'empty' ? '멤버 없는 스페이스가 없어요' : '스페이스가 없어요'}
+                  </p>
+                </div>
+              )}
+            </>
+          )
+        })()}
 
       </main>
     </div>
