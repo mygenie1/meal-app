@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import { QtyStepper } from './QtyStepper'
 
-function Section({ title, emoji, type, items, onAdd, onCheck, onChangeQty, onDelete, checkHint }) {
+// showCheck: 살 것=true(체크→남은재료 이동), 남은 재료=false(체크 없음)
+function Section({ title, emoji, type, items, onAdd, onCheck, onChangeQty, onDelete, checkHint, showCheck = true }) {
   const [input, setInput] = useState('')
   const [qty, setQty] = useState(1)
 
@@ -32,7 +33,7 @@ function Section({ title, emoji, type, items, onAdd, onCheck, onChangeQty, onDel
           {items.length}
         </span>
       </div>
-      {checkHint && (
+      {showCheck && checkHint && (
         <p className="text-[11px] text-warm-light -mt-1 mb-2 flex items-center gap-1">
           <span className="w-1 h-1 rounded-full bg-warm-brown" />
           체크하면 <b className="font-semibold text-warm-brown">남은 재료</b>로 이동해요
@@ -52,6 +53,7 @@ function Section({ title, emoji, type, items, onAdd, onCheck, onChangeQty, onDel
           quantity={qty}
           onDecrement={() => setQty(q => Math.max(1, q - 1))}
           onIncrement={() => setQty(q => q + 1)}
+          onDirectChange={n => setQty(n)}
         />
         <button
           type="submit"
@@ -72,36 +74,39 @@ function Section({ title, emoji, type, items, onAdd, onCheck, onChangeQty, onDel
             <div
               key={item.id}
               className={`flex items-center gap-3 rounded-2xl border border-cream-200 px-4 py-3 transition-colors ${
-                item.done ? 'bg-cream-50' : 'bg-white'
+                showCheck && item.done ? 'bg-cream-50' : 'bg-white'
               }`}
             >
-              {/* 커스텀 원형 체크박스 */}
-              <button
-                onClick={() => onCheck(item)}
-                aria-label={checkHint || (item.done ? '완료 해제' : '완료 체크')}
-                title={checkHint}
-                className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors ${
-                  item.done ? 'bg-warm-brown border-warm-brown' : 'border-cream-300 hover:border-warm-brown'
-                }`}
-              >
-                {item.done && (
-                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="2.6" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </button>
+              {/* 체크 버튼 — 살 것만 표시 (체크→남은재료 이동) */}
+              {showCheck && (
+                <button
+                  onClick={() => onCheck(item)}
+                  aria-label={checkHint || (item.done ? '완료 해제' : '완료 체크')}
+                  title={checkHint}
+                  className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors ${
+                    item.done ? 'bg-warm-brown border-warm-brown' : 'border-cream-300 hover:border-warm-brown'
+                  }`}
+                >
+                  {item.done && (
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="2.6" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+              )}
 
               {/* 재료명 */}
-              <span className={`flex-1 min-w-0 text-sm truncate ${item.done ? 'line-through text-cream-400' : 'text-warm-dark'}`}>
+              <span className={`flex-1 min-w-0 text-sm truncate ${showCheck && item.done ? 'line-through text-cream-400' : 'text-warm-dark'}`}>
                 {item.text}
               </span>
 
-              {/* 개수 스테퍼 (1이면 - 버튼이 휴지통) */}
+              {/* 개수 스테퍼 (1이면 - 버튼이 휴지통, 숫자 탭으로 직접 입력 가능) */}
               <QtyStepper
                 quantity={item.quantity}
                 minusAsDelete={item.quantity <= 1}
                 onDecrement={() => handleDecrement(item)}
                 onIncrement={() => onChangeQty(type, item.id, item.quantity + 1)}
+                onDirectChange={n => onChangeQty(type, item.id, n)}
               />
             </div>
           ))}
@@ -139,6 +144,7 @@ export default function IngredientList() {
         checkHint="체크하면 남은 재료로 이동해요"
         onChangeQty={updateIngredientQuantity}
         onDelete={deleteIngredient}
+        showCheck={true}
       />
       <Section
         title="남은 재료"
@@ -149,6 +155,7 @@ export default function IngredientList() {
         onCheck={item => toggleIngredient('remaining', item.id)}
         onChangeQty={updateIngredientQuantity}
         onDelete={deleteIngredient}
+        showCheck={false}
       />
     </div>
   )

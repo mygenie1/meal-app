@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 // 재료 개수 스테퍼 — IngredientList / MealForm 공용
 export function MinusIcon() {
   return (
@@ -23,8 +25,31 @@ export function TrashIcon() {
   )
 }
 
-// 원형 -/+ 버튼 + 가운데 숫자. minusAsDelete: quantity가 1일 때 - 가 삭제(휴지통)로 동작
-export function QtyStepper({ quantity, onDecrement, onIncrement, minusAsDelete }) {
+// 원형 -/+ 버튼 + 가운데 숫자.
+// minusAsDelete: quantity가 1일 때 - 가 삭제(휴지통)로 동작
+// onDirectChange: 전달 시 숫자를 탭하면 직접 입력 가능 (없으면 기존 동작)
+export function QtyStepper({ quantity, onDecrement, onIncrement, minusAsDelete, onDirectChange }) {
+  const [editing, setEditing] = useState(false)
+  const [inputVal, setInputVal] = useState('')
+
+  function startEdit() {
+    setInputVal(String(quantity))
+    setEditing(true)
+  }
+
+  function commitEdit() {
+    const n = parseInt(inputVal, 10)
+    if (!isNaN(n) && n >= 1) {
+      onDirectChange(n)
+    }
+    setEditing(false)
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
+    if (e.key === 'Escape') { setEditing(false) }
+  }
+
   return (
     <div className="flex items-center shrink-0">
       <button
@@ -39,7 +64,31 @@ export function QtyStepper({ quantity, onDecrement, onIncrement, minusAsDelete }
       >
         {minusAsDelete ? <TrashIcon /> : <MinusIcon />}
       </button>
-      <span className="w-8 text-center text-sm font-medium text-warm-dark tabular-nums">{quantity}</span>
+
+      {onDirectChange && editing ? (
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={inputVal}
+          onChange={e => setInputVal(e.target.value.replace(/[^0-9]/g, ''))}
+          onBlur={commitEdit}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          className="w-10 text-center font-medium text-warm-dark bg-cream-100 border border-warm-brown rounded focus:outline-none tabular-nums"
+          style={{ fontSize: '16px' }}
+        />
+      ) : (
+        <span
+          className={`w-8 text-center text-sm font-medium text-warm-dark tabular-nums${
+            onDirectChange ? ' cursor-pointer rounded active:bg-cream-100' : ''
+          }`}
+          onClick={onDirectChange ? startEdit : undefined}
+        >
+          {quantity}
+        </span>
+      )}
+
       <button
         type="button"
         onClick={onIncrement}
