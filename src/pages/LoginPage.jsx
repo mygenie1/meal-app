@@ -78,9 +78,17 @@ export default function LoginPage() {
         },
       })
       if (e) {
-        setError(e.message)
+        const msg = e.message
+        setError(
+          msg.includes('already registered') || msg.includes('already in use')
+            ? '이미 가입된 이메일이에요. 아래 로그인 탭에서 로그인해 주세요.'
+            : msg
+        )
+      } else if (data.user?.identities?.length === 0) {
+        // Email Enumeration Protection: 중복 이메일을 error 없이 identities:[]로 반환
+        setError('이미 가입된 이메일이에요. 아래 로그인 탭에서 로그인해 주세요.')
       } else if (!data.session) {
-        // 이메일 인증 필요 (세션 없음)
+        // 정상 신규 가입 — 이메일 인증 대기
         setShowEmailSent(true)
       }
       // data.session이 있으면 AppContext onAuthStateChange가 자동 로그인 처리
