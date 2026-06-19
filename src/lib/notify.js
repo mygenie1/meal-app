@@ -18,9 +18,12 @@ export function buildFromUser(user) {
 
 export async function sendNotification({ toUserIds, spaceId, mealId, fromUser, type, message }) {
   const targets = toUserIds.filter(id => id !== fromUser.id)
-  if (targets.length === 0) return
+  if (targets.length === 0) {
+    console.log('[notify] targets 없음(본인 제외 후 0명) — 알림 스킵', { type, mealId })
+    return
+  }
   try {
-    await supabase.from('notifications').insert(
+    const { error } = await supabase.from('notifications').insert(
       targets.map(userId => ({
         user_id: userId,
         space_id: spaceId || null,
@@ -33,12 +36,19 @@ export async function sendNotification({ toUserIds, spaceId, mealId, fromUser, t
         is_read: false,
       }))
     )
+    if (error) {
+      console.error('[notify] notifications INSERT 실패:', error.code, error.message, { type, mealId, targets: targets.length })
+    } else {
+      console.log('[notify] notifications INSERT 성공:', targets.length, '건', { type, mealId })
+    }
   } catch (e) {
-    console.error('[notify] 알림 전송 실패:', e)
+    console.error('[notify] 알림 전송 예외:', e)
   }
 }
 
 export async function getSpaceMemberIds(spaceId) {
-  const { data } = await supabase.rpc('get_space_member_ids', { p_space_id: spaceId })
+  const { data, error } = await supabase.rpc('get_space_member_ids', { p_space_id: spaceId })
+  if (error) console.error('[notify] getSpaceMemberIds RPC 실패:', error.message, '| spaceId:', spaceId)
+  else console.log('[notify] getSpaceMemberIds 결과:', data?.length ?? 0, '명', '| spaceId:', spaceId)
   return data?.map(row => row.user_id) || []
 }

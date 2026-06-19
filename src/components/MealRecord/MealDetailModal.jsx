@@ -84,17 +84,23 @@ function RatingsSection({ mealId }) {
     if (myRating?.rating === value) {
       await deleteRating(mealId)
     } else {
-      await addOrUpdateRating(mealId, value)
-      const fromUser = buildFromUser(user)
-      const memberIds = await getSpaceMemberIds(currentSpace?.id)
-      await sendNotification({
-        toUserIds: memberIds,
-        spaceId: currentSpace?.id,
-        mealId,
-        fromUser,
-        type: 'new_rating',
-        message: `${fromUser?.nickname || '멤버'}님이 별점 ${value}점을 남겼어요`,
-      })
+      // addOrUpdateRating 성공 여부 확인 후 알림 발송
+      const ok = await addOrUpdateRating(mealId, value)
+      if (ok) {
+        const fromUser = buildFromUser(user)
+        const memberIds = await getSpaceMemberIds(currentSpace?.id)
+        // mealId prop = liveMeal.id (로컬 state 기반)
+        // ratings.meal_id FK(→ meals.id)가 통과했으므로 upsert 성공 시 mealId 유효
+        console.log('[별점] 알림 발송, mealId:', mealId)
+        await sendNotification({
+          toUserIds: memberIds,
+          spaceId: currentSpace?.id,
+          mealId,
+          fromUser,
+          type: 'new_rating',
+          message: `${fromUser?.nickname || '멤버'}님이 별점 ${value}점을 남겼어요`,
+        })
+      }
     }
     setSaving(false)
   }
@@ -305,11 +311,17 @@ export default function MealDetailModal({ meal, onClose }) {
       setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
       const fromUser = buildFromUser(user)
       const preview = trimmed.length > 20 ? trimmed.slice(0, 20) + '…' : trimmed
+      // data.meal_id: 댓글 INSERT DB 응답 — comments.meal_id FK(→ meals.id)가 통과한 값
+      // liveMeal.id는 로컬 state 기반으로 race condition 시 실제 DB id와 달라질 수 있음
+      const notifMealId = data.meal_id
+      if (notifMealId !== liveMeal.id) {
+        console.warn('[댓글] mealId 불일치 감지 — data.meal_id:', notifMealId, '| liveMeal.id:', liveMeal.id)
+      }
       const memberIds = await getSpaceMemberIds(currentSpace?.id)
       await sendNotification({
         toUserIds: memberIds,
         spaceId: currentSpace?.id,
-        mealId: liveMeal.id,
+        mealId: notifMealId,
         fromUser,
         type: 'new_comment',
         message: `${fromUser?.nickname || '멤버'}님이 댓글을 남겼어요: ${preview}`,
