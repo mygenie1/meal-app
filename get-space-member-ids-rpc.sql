@@ -5,7 +5,7 @@
 -- space_members SELECT RLS (user_id = auth.uid()) 우회용.
 -- 프론트에서 직접 조회하면 본인 레코드만 반환되어 알림 대상이 0명이 됨.
 -- SECURITY DEFINER로 RLS를 우회해 스페이스의 전체 멤버 user_id 목록을 반환.
--- get_space_member_count와 동일 패턴.
+-- auth.users JOIN으로 탈퇴/삭제된 유령 멤버 자동 제외 (user_id FK 위반 방지).
 --
 -- 호출: supabase.rpc('get_space_member_ids', { p_space_id: spaceId })
 -- 반환: [{ user_id: uuid }, ...]
@@ -16,7 +16,10 @@ LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT user_id FROM space_members WHERE space_id = p_space_id;
+  SELECT sm.user_id
+  FROM space_members sm
+  JOIN auth.users u ON u.id = sm.user_id
+  WHERE sm.space_id = p_space_id;
 $$;
 
 -- authenticated 롤에 실행 권한 부여
