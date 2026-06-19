@@ -406,6 +406,21 @@ export default function MealDetailModal({ meal, onClose }) {
         <p className="text-sm text-warm-dark mb-2 leading-relaxed">{linkify(liveMeal.review)}</p>
       )}
 
+      {/* ③ 사용 재료 — 집밥 게시글에서 차감한 재료 히스토리 */}
+      {liveMeal.usedIngredients?.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-2">
+          <span className="text-xs text-warm-light shrink-0">사용 재료</span>
+          {liveMeal.usedIngredients.map((u, i) => (
+            <span
+              key={i}
+              className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full"
+            >
+              {u.name} {u.qty}개
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* ③ 메모 */}
       {liveMeal.memo && (
         <p className="text-xs text-warm-light leading-relaxed mb-3">{linkify(liveMeal.memo)}</p>

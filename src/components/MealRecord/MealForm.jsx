@@ -283,7 +283,9 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     () => (initial?.lat && initial?.lng) ? 'found' : 'idle'
   )
   const [ingredientsOpen, setIngredientsOpen] = useState(false)
-  // 재료 입력(추가 폼) — UI 전용 로컬 상태. 실제 목록은 AppContext ingredients(toBuy) 공유
+  // 사용 재료 선택 — { [ingredientId]: useQty } (저장 시 remaining에서 차감)
+  const [usedItems, setUsedItems] = useState({})
+  // 즉석 재료 추가 폼 — UI 전용 로컬 상태
   const [ingInput, setIngInput] = useState('')
   const [ingQty, setIngQty] = useState(1)
   const [pasteToast, setPasteToast] = useState(null) // null | { kind: 'loading'|'error', msg }
@@ -412,7 +414,13 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       }
     }
 
-    // 집밥 재료는 ingredients 테이블(toBuy)에서 즉시 관리되므로 저장 시 별도 처리 없음
+    // 신규 집밥: 사용 재료 스냅샷 (저장 성공 후 remaining에서 차감)
+    const pendingDeductions = (!initial && form.tag === '집밥')
+      ? homeIngredients
+          .filter(i => (usedItems[i.id] ?? 0) > 0)
+          .map(i => ({ ...i, useQty: usedItems[i.id] }))
+      : []
+    const usedArr = pendingDeductions.map(i => ({ name: i.text, qty: i.useQty }))
 
     // 사진 Storage 업로드 — base64는 URL로 교체, 이미 URL이면 그대로
     setUploading(true)
@@ -423,7 +431,33 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       )
       // 별점은 meals.rating에 쓰지 않고 ratings 테이블로 통일 → payload에서 제외
       const { rating: _selectedRating, ...formNoRating } = form
-      const newMeal = await onSubmit({ ...formNoRating, date: formDate, lat, lng, photos: uploadedPhotos, photo: uploadedPhotos[0] || '' })
+      const newMeal = await onSubmit({
+        ...formNoRating,
+        date: formDate,
+        lat,
+        lng,
+        photos: uploadedPhotos,
+        photo: uploadedPhotos[0] || '',
+        // 신규: 선택한 사용 재료 저장 / 수정: 기존 값 보존
+        usedIngredients: !initial
+          ? (usedArr.length > 0 ? usedArr : null)
+          : (initial.usedIngredients ?? null),
+      })
+
+      // 재료 차감 — 신규 집밥 + 저장 성공 시 1회만 (복구 없음)
+      if (pendingDeductions.length > 0 && newMeal?.id) {
+        for (const item of pendingDeductions) {
+          try {
+            if (item.useQty >= item.quantity) {
+              await deleteIngredient('remaining', item.id)
+            } else {
+              await updateIngredientQuantity('remaining', item.id, item.quantity - item.useQty)
+            }
+          } catch (err) {
+            console.error('[MealForm] 재료 차감 실패:', item.text, err)
+          }
+        }
+      }
 
       // 작성자 별점 → ratings 테이블 upsert (신규: meal insert 후 / 수정: 기존 row 갱신)
       const mealId = newMeal?.id || initial?.id
@@ -493,7 +527,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   const homeIngredients = currentSpace?.ingredients?.remaining || []
   const style = TAG_STYLE[form.tag] || {}
 
-  // 재료 추가 — ingredients 테이블에 즉시 insert (remaining)
+  // 즉석 재료 추가 — remaining에 즉시 insert 후 목록에 바로 표시
   async function handleAddIngredient(e) {
     e.preventDefault()
     const text = ingInput.trim()
@@ -503,10 +537,22 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     setIngQty(1)
   }
 
-  // - 버튼: quantity>1이면 감소, 1이면 삭제
-  function handleIngredientDecrement(item) {
-    if (item.quantity > 1) updateIngredientQuantity('remaining', item.id, item.quantity - 1)
-    else deleteIngredient('remaining', item.id)
+  // 사용 재료 체크 토글
+  function toggleUsedItem(item) {
+    setUsedItems(prev => {
+      if (prev[item.id]) {
+        const next = { ...prev }
+        delete next[item.id]
+        return next
+      }
+      return { ...prev, [item.id]: 1 }
+    })
+  }
+
+  // 사용 개수 변경 (1 이상, 남은 개수 초과 불가)
+  function setUseQty(item, qty) {
+    const clamped = Math.min(item.quantity, Math.max(1, qty))
+    setUsedItems(prev => ({ ...prev, [item.id]: clamped }))
   }
 
   // ── Step 1: 날짜 + 태그 + 끼니 ───────────────────────────────────────
@@ -848,7 +894,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
           </div>
         )}
 
-        {/* 집밥: 재료 — ingredients 테이블 remaining과 공유 (재료 탭과 실시간 연동) */}
+        {/* 집밥: 재료 사용 — 남은 재료에서 선택 + 저장 시 차감 */}
         {form.tag === '집밥' && (
           <div className="rounded-2xl border border-cream-200 overflow-hidden">
             <button
@@ -856,11 +902,11 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
               onClick={() => setIngredientsOpen(o => !o)}
               className="w-full flex items-center justify-between px-4 py-3 bg-cream-100 hover:bg-cream-200 transition-colors"
             >
-              <span className="text-sm font-medium text-warm-dark">재료</span>
+              <span className="text-sm font-medium text-warm-dark">재료 사용하기</span>
               <div className="flex items-center gap-2">
-                {homeIngredients.length > 0 && (
+                {Object.values(usedItems).some(q => q > 0) && (
                   <span className="text-xs bg-warm-brown text-white px-2 py-0.5 rounded-full font-medium">
-                    {homeIngredients.length}개
+                    {Object.values(usedItems).filter(q => q > 0).length}종
                   </span>
                 )}
                 <svg
@@ -873,22 +919,23 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
             </button>
             {ingredientsOpen && (
               <div className="px-4 py-3 space-y-3">
-                <p className="text-xs text-warm-light">재료 탭 "남은 재료"와 함께 관리돼요</p>
+                <p className="text-xs text-warm-light">남은 재료에서 사용할 것을 선택하고 개수를 지정하세요</p>
 
-                {/* 입력: 재료명 + 개수 스테퍼 + 추가 */}
+                {/* 즉석 재료 추가 */}
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={ingInput}
                     onChange={e => setIngInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddIngredient(e) } }}
-                    placeholder="재료 추가하기"
+                    placeholder="재료 즉석 추가"
                     className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-cream-100 border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light"
                   />
                   <QtyStepper
                     quantity={ingQty}
                     onDecrement={() => setIngQty(q => Math.max(1, q - 1))}
                     onIncrement={() => setIngQty(q => q + 1)}
+                    onDirectChange={n => setIngQty(n)}
                   />
                   <button
                     type="button"
@@ -899,25 +946,55 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
                   </button>
                 </div>
 
-                {/* 목록: 재료명 + 개수 스테퍼 */}
+                {/* 남은 재료 목록 — 체크 선택 + 사용 개수 */}
                 {homeIngredients.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {homeIngredients.map(item => (
-                      <div key={item.id} className="flex items-center gap-2">
-                        <span className={`flex-1 min-w-0 text-sm truncate ${item.done ? 'text-cream-400 line-through' : 'text-warm-dark'}`}>
-                          {item.text}
-                        </span>
-                        <QtyStepper
-                          quantity={item.quantity}
-                          minusAsDelete={item.quantity <= 1}
-                          onDecrement={() => handleIngredientDecrement(item)}
-                          onIncrement={() => updateIngredientQuantity('remaining', item.id, item.quantity + 1)}
-                        />
-                      </div>
-                    ))}
+                  <div className="space-y-2">
+                    {homeIngredients.map(item => {
+                      const isChecked = !!(usedItems[item.id])
+                      const useQty = usedItems[item.id] || 1
+                      return (
+                        <div
+                          key={item.id}
+                          className={`flex items-center gap-2 rounded-xl px-3 py-2 border transition-colors ${
+                            isChecked ? 'bg-green-50 border-green-200' : 'bg-cream-50 border-cream-200'
+                          }`}
+                        >
+                          {/* 체크 버튼 */}
+                          <button
+                            type="button"
+                            onClick={() => toggleUsedItem(item)}
+                            className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors ${
+                              isChecked ? 'bg-warm-brown border-warm-brown' : 'border-cream-300 hover:border-warm-brown'
+                            }`}
+                          >
+                            {isChecked && (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="2.6" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+
+                          {/* 재료명 + 남은 개수 */}
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm text-warm-dark block truncate">{item.text}</span>
+                            <span className="text-[10px] text-cream-400">남은 {item.quantity}개</span>
+                          </div>
+
+                          {/* 사용 개수 스테퍼 — 체크 시만 표시 */}
+                          {isChecked && (
+                            <QtyStepper
+                              quantity={useQty}
+                              onDecrement={() => setUseQty(item, useQty - 1)}
+                              onIncrement={() => setUseQty(item, useQty + 1)}
+                              onDirectChange={n => setUseQty(item, n)}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
-                  <p className="text-center text-xs text-cream-400 py-2">아직 추가된 재료가 없어요</p>
+                  <p className="text-center text-xs text-cream-400 py-2">남은 재료가 없어요. 위에서 즉석 추가하세요</p>
                 )}
               </div>
             )}
