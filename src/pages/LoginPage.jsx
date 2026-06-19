@@ -181,7 +181,11 @@ export default function LoginPage() {
                 {loading ? '카카오 연결 중...' : '카카오로 시작하기'}
               </button>
               <p className="text-xs text-cream-400 text-center mt-4 leading-relaxed">
-                로그인 시 서비스 이용약관에 동의하게 됩니다.<br />
+                로그인 시{' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline text-warm-light">이용약관</a>
+                {' '}및{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline text-warm-light">개인정보처리방침</a>
+                에 동의하게 됩니다.<br />
                 기존 데이터는 로그인 후에도 그대로 유지돼요.
               </p>
             </>
@@ -273,6 +277,16 @@ export default function LoginPage() {
                   className="w-full text-xs text-cream-400 mt-3 py-2">
                   비밀번호를 잊으셨나요?
                 </button>
+              )}
+
+              {emailMode === 'signup' && (
+                <p className="text-xs text-cream-400 text-center mt-3 leading-relaxed">
+                  가입을 진행하면{' '}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline text-warm-light">이용약관</a>
+                  {' '}및{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline text-warm-light">개인정보처리방침</a>
+                  에 동의하는 것으로 간주됩니다.
+                </p>
               )}
             </>
           )}

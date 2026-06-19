@@ -19,6 +19,8 @@ import AdminSpaceDetailPage from './pages/admin/AdminSpaceDetailPage'
 import AdminFeedbackPage from './pages/admin/AdminFeedbackPage'
 import AdminAdminsPage from './pages/admin/AdminAdminsPage'
 import AdminBannersPage from './pages/admin/AdminBannersPage'
+import TermsPage from './pages/TermsPage'
+import PrivacyPage from './pages/PrivacyPage'
 
 function OfflineBanner() {
   return (
@@ -335,10 +337,23 @@ function AdminRoutes() {
   )
 }
 
+// /terms, /privacy 경로는 AppProvider·인증 불필요 (비로그인 접근 보장)
+function PublicRoutes() {
+  return (
+    <Routes>
+      <Route path="/terms"   element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+    </Routes>
+  )
+}
+
 function RootRouter() {
   const location = useLocation()
   if (location.pathname.startsWith('/admin')) {
     return <AdminRoutes />
+  }
+  if (location.pathname === '/terms' || location.pathname === '/privacy') {
+    return <PublicRoutes />
   }
   return (
     <AppProvider>
