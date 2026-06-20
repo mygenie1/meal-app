@@ -30,6 +30,7 @@ export default function MapPage() {
           onTabChange={tab => setIsWishTab(tab === 'wishlist')}
           initialTab={wantWishTab ? 'wishlist' : undefined}
           wishRandom={!!(wantWishTab && state?.random)}
+          focusWishId={wantWishTab ? state?.wishId : undefined}
         />
       </div>
       {viewingMeal && (

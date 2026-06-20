@@ -187,6 +187,35 @@ function SubStat({ value, label, active, onClick }) {
   )
 }
 
+// 통합검색 결과용 — 가보고 싶은 곳 카드 (FeedCard는 meal 전용이라 별도)
+function WishResultCard({ wish, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left bg-cream-50 rounded-2xl shadow-sm border border-cream-200 p-4 flex items-start gap-3 hover:bg-cream-100 active:scale-[0.99] transition-colors"
+    >
+      <div className="w-10 h-10 rounded-xl bg-cream-200 flex items-center justify-center shrink-0">
+        <svg className="w-5 h-5 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-[10px] font-semibold text-white bg-warm-brown px-1.5 py-0.5 rounded-full leading-none">가보고 싶은 곳</span>
+          {wish.category && <span className="text-[10px] text-warm-light">{wish.category}</span>}
+        </div>
+        <p className="text-sm font-semibold text-warm-dark truncate">{wish.name || '이름 없는 장소'}</p>
+        {wish.location && <p className="text-xs text-warm-light truncate mt-0.5">{wish.location}</p>}
+        {wish.memo && <p className="text-xs text-cream-400 truncate mt-0.5">{wish.memo}</p>}
+      </div>
+      <svg className="w-4 h-4 text-cream-300 shrink-0 mt-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+  )
+}
+
 export default function HomePage() {
   const { currentSpace, spaces, loadMealPhotos, ratingsMap, user } = useApp()
   const navigate = useNavigate()
@@ -401,17 +430,28 @@ export default function HomePage() {
   const visibleMeals = filteredMeals.slice(0, visibleCount)
   const hasMore = visibleCount < filteredMeals.length
 
-  // 검색 결과
+  // 검색 결과 — 게시글(meals) + 가보고 싶은 곳(wishlist) 혼합 { type, item }
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return []
-    return sortedMeals.filter(m =>
-      (m.title && m.title.toLowerCase().includes(q)) ||
-      (m.restaurantName && m.restaurantName.toLowerCase().includes(q)) ||
-      (m.review && m.review.toLowerCase().includes(q)) ||
-      (m.memo && m.memo.toLowerCase().includes(q))
-    )
-  }, [searchQuery, sortedMeals])
+    const mealHits = sortedMeals
+      .filter(m =>
+        (m.title && m.title.toLowerCase().includes(q)) ||
+        (m.restaurantName && m.restaurantName.toLowerCase().includes(q)) ||
+        (m.review && m.review.toLowerCase().includes(q)) ||
+        (m.memo && m.memo.toLowerCase().includes(q))
+      )
+      .map(m => ({ type: 'meal', item: m }))
+    const wishHits = wishlist
+      .filter(w =>
+        (w.name && w.name.toLowerCase().includes(q)) ||
+        (w.location && w.location.toLowerCase().includes(q)) ||
+        (w.memo && w.memo.toLowerCase().includes(q)) ||
+        (w.category && w.category.toLowerCase().includes(q))
+      )
+      .map(w => ({ type: 'wishlist', item: w }))
+    return [...mealHits, ...wishHits]
+  }, [searchQuery, sortedMeals, wishlist])
 
   // 필터 변경 시 페이지 리셋
   useEffect(() => { setVisibleCount(PAGE_SIZE) }, [ratingFilter, tagFilter])
@@ -429,10 +469,12 @@ export default function HomePage() {
     })
   }, [visibleMeals])
 
-  // 검색 결과 사진 로드
+  // 검색 결과 사진 로드 (meal 타입만)
   useEffect(() => {
     if (!searchQuery.trim()) return
-    searchResults.forEach(m => {
+    searchResults.forEach(r => {
+      if (r.type !== 'meal') return
+      const m = r.item
       if (!m.photosLoaded && !requestedPhotosRef.current.has(m.id)) {
         requestedPhotosRef.current.add(m.id)
         loadMealPhotos(m.id)
@@ -584,7 +626,7 @@ export default function HomePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
               </svg>
               <p className="text-sm text-cream-400">검색어를 입력해주세요</p>
-              <p className="text-xs text-cream-300 mt-1">제목, 식당명, 한줄평, 메모</p>
+              <p className="text-xs text-cream-300 mt-1">제목, 식당명, 한줄평, 메모, 가보고 싶은 곳</p>
             </div>
           ) : searchResults.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center py-20">
@@ -597,8 +639,14 @@ export default function HomePage() {
                 <span className="font-medium text-warm-brown">"{searchQuery}"</span> 검색 결과 {searchResults.length}건
               </p>
               <div className="space-y-4">
-                {searchResults.map(meal => (
-                  <FeedCard key={meal.id} meal={meal} onClick={() => setSelectedMeal(meal)} />
+                {searchResults.map(r => r.type === 'meal' ? (
+                  <FeedCard key={`m-${r.item.id}`} meal={r.item} onClick={() => setSelectedMeal(r.item)} />
+                ) : (
+                  <WishResultCard
+                    key={`w-${r.item.id}`}
+                    wish={r.item}
+                    onClick={() => navigate('/map', { state: { tab: 'wish', wishId: r.item.id } })}
+                  />
                 ))}
               </div>
             </>
