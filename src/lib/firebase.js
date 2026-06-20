@@ -68,7 +68,15 @@ export async function requestFCMToken() {
     console.log(`[FCM] 권한 결과: ${permission}`)
     if (permission !== 'granted') return null
 
-    const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js')
+    // 전용 스코프로 등록 — Workbox(vite-plugin-pwa) sw.js가 scope '/'를 점유하므로
+    // 같은 scope '/'에 FCM SW를 등록하면 단일 registration 슬롯을 두고 충돌함.
+    // (Workbox skipWaiting:false + clientsClaim:true → Workbox가 계속 active,
+    //  FCM SW는 waiting에 머물러 push 이벤트가 핸들러 없는 sw.js로 전달되어 폐기)
+    // FCM 관례 스코프('/firebase-cloud-messaging-push-scope', '/'보다 좁아 허용)에
+    // 별도 registration을 만들어 충돌을 원천 제거. getToken에도 이 registration을 전달.
+    const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+      scope: '/firebase-cloud-messaging-push-scope',
+    })
     await swReg.update()
     console.log('[FCM] SW 등록 완료, scope:', swReg.scope)
 
