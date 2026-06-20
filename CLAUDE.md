@@ -711,57 +711,71 @@ _shared/
 
 ---
 
-## ★ 알림 시스템 현황 (일부 해결 — 다음 세션 이어갈 것)
+## ★ 알림 시스템 — 해결 완료(안드로이드 인앱+푸시), iOS 미확인
 
 ### 증상 (2026-06-17~)
-인앱 알림 + FCM 푸시 알림 전체 미작동.
+인앱 알림 + FCM 푸시 알림 전체 미작동. → **2026-06-20 단계별 진단으로 안드로이드 완전 동작**.
 
-### 진단 및 해결 경과
+### 1) 인앱 알림 (해결)
 
 **원인1 — 댓글 알림 mealId FK 위반 (409)** → **해결됨**
 - 증상: `notifications_meal_id_fkey` FK 위반으로 INSERT 실패
 - 원인: `handleAddComment`에서 `mealId: liveMeal.id`(로컬 state) 사용
-  → optimistic update 패턴으로 로컬 id가 실제 DB id와 달라질 수 있음
-- 수정: 댓글 INSERT DB 응답 `data.meal_id` 사용 (FK 검증됨)
-- 추가: `sendNotification` INSERT error 로깅, `addOrUpdateRating` 성공 시에만 알림 발송
+  → optimistic update 패턴으로 로컬 id가 실제 `meals.id`와 달라질 수 있음
+- 수정: MealDetailModal에서 댓글 INSERT DB 응답 `data.meal_id` 사용 (FK 검증됨)
+- 추가: 별점 알림도 `addOrUpdateRating` 성공(ok===true) 후에만 발송
 
 **원인2 — 수신자에 유령 멤버 포함, user_id FK 위반 (23503)** → **해결됨**
-- 증상: `notifications_user_id_fkey` 위반, 배열 INSERT 전체 실패
-- 원인: `get_space_member_ids`가 `auth.users`에 없는 탈퇴 계정(유령 멤버) user_id 반환
-  → batch INSERT에서 한 건만 위반해도 전체 롤백
+- 증상: `notifications_user_id_fkey` 위반, 배열 INSERT 전체 롤백
+- 원인: `get_space_member_ids`가 `auth.users`에 없는 탈퇴/삭제 잔존(유령 멤버) user_id 반환
 - 수정: RPC에 `JOIN auth.users u ON u.id = sm.user_id` 추가 → 실존 멤버만 반환
-- 결과: **인앱 알림 복구 확인**
 
-**원인3 — notify.js 침묵 실패 (역사적)** → **해결됨**
-- try/catch가 JS 예외만 잡고 Supabase error 응답은 무시
-- 수정: `const { error }` 구조 분해 후 error 로깅 추가
+**진단 가속의 핵심 — notify.js 침묵 실패 제거**
+- try/catch가 JS 예외만 잡고 Supabase error 응답은 무시하던 것을
+  `const { error }` 구조 분해 후 `console.error` 로깅으로 변경.
+- INSERT/RPC 에러가 콘솔에 드러나면서 원인1·2를 빠르게 특정.
 
-### 남은 TODO (다음 세션)
+### 2) 유령 멤버 근본 원인 (해결)
+- 근본 원인: `space_members.user_id`에 **FK가 아예 없었음**(`space_id`엔 있었음)
+  → 유저 삭제 시 멤버 행이 잔존 → 유령 멤버 발생.
+- 해결: 잔존 유령 `DELETE` + `space_members.user_id`에 **FK `ON DELETE CASCADE`** 추가.
+  이제 유저 삭제 시 멤버가 자동 정리됨 (유령 재발 차단).
 
-1. **유령 멤버 데이터 정리** (Supabase SQL Editor 실행):
-   ```sql
-   -- 확인
-   SELECT sm.id, sm.space_id, sm.user_id FROM space_members sm
-   WHERE NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id = sm.user_id);
-   -- 삭제 (확인 후)
-   DELETE FROM space_members WHERE user_id NOT IN (SELECT id FROM auth.users);
-   ```
-   단, 삭제 전 해당 유령이 spaces.owner_id인지 확인 후 승계 먼저 처리.
+### 3) 푸시(FCM) — 안드로이드 해결, iOS 미확인
 
-2. **space_members FK CASCADE 점검**:
-   ```sql
-   SELECT rc.delete_rule FROM information_schema.table_constraints tc
-   JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
-   JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-   WHERE tc.table_schema = 'public' AND tc.table_name = 'space_members' AND kcu.column_name = 'user_id';
-   ```
-   `NO ACTION`이면 → CASCADE로 변경 (유저 삭제 시 멤버 자동 정리 안 됨이 유령 발생 근본 원인).
+**서버 발송은 처음부터 정상이었음** (실측 확인)
+- `on-notification-insert` 트리거(AFTER INSERT, anon JWT 헤더) → `send-push` → FCM v1.
+- send-push 호출 시 FCM v1이 `{"name":"projects/siktak-ilgi/messages/..."}` 발급 →
+  OAuth/서비스계정 키/토큰 유효성/send 전부 통과 확인.
 
-3. **★ FCM 푸시 알림 — 미해결**:
-   - 인앱 알림은 복구됐으나 웹푸시(FCM)는 별개
-   - 현재 콘솔상 FCM 권한 denied 상태로 파악됨
-   - send-push Edge Function, firebase-messaging-sw.js 동작 확인 필요
-   - 포그라운드/백그라운드 분기, FCM 토큰 등록 흐름 재진단 필요
+**원인A — 수신자 기기에 fcm_token 미등록**
+- 실제 수신자 기기가 권한 denied였거나, 권한 허용 후 앱 새로고침을 안 함.
+- `registerFCMToken`이 로그인 직후 세션 1회(`hasBootedRef`)만 실행돼 재등록 안 됨.
+- 조치: 각 수신 기기에서 권한 허용 상태로 앱 새로고침 → `fcm_tokens`에 토큰 저장 확인.
+
+**원인B (핵심) — Service Worker 스코프 충돌** → **해결됨**
+- Workbox(`/sw.js`, **push 핸들러 없음**)와 FCM SW(`/firebase-messaging-sw.js`)가
+  같은 scope `/`를 공유 → 단일 registration 슬롯을 다툼.
+- Workbox가 `skipWaiting:false` + `clientsClaim:true`로 계속 active →
+  FCM SW는 PWA 창이 열려 있는 동안 **waiting에 머묾**.
+- PushSubscription이 active 워커(=Workbox, 핸들러 없음)에 묶여
+  **data-only push가 조용히 폐기** → "서버 발송 성공 + 기기 무표시".
+- 포그라운드 `onMessage`도 구독 소유 SW가 페이지로 forward해야 발동하는데,
+  구독이 Workbox에 묶여 forward 불가 → 포그라운드도 미표시였음.
+- **해결**: FCM SW를 전용 스코프 `'/firebase-cloud-messaging-push-scope'`로 등록 분리
+  (`src/lib/firebase.js`, `getToken`에도 동일 registration 전달).
+  FCM SW가 자기 registration/구독을 소유 → **백그라운드+포그라운드 양쪽 표시 정상화**.
+- 결과: **안드로이드 PWA에서 인앱+푸시 완전 동작 확인** (2026-06-20).
+
+**★ iOS 미확인 (남은 TODO)**
+- iOS 웹푸시는 16.4+ & **홈 화면 추가된 PWA(standalone)**에서만 동작.
+- 추후 iOS 실기기에서 권한 허용 → 토큰 등록 → 백그라운드 표시 확인 필요.
+
+**★ 테스트 시 SW 캐시 주의**
+- 설치형 PWA는 옛 SW가 끈질기게 남음 → 새 SW 적용하려면
+  **PWA 완전 삭제 + 사이트 데이터 삭제 후 재설치**. (일반 PWA 캐시보다 더 끈질김)
+- 검증: `chrome://inspect` → Application → Service Workers에서
+  `/firebase-cloud-messaging-push-scope`에 `firebase-messaging-sw.js`가 activated인지 확인.
 
 ---
 
@@ -782,7 +796,8 @@ _shared/
 - [ ] www → non-www 리다이렉트 설정 (siktakilgi.com으로 통일)
 - [ ] 약관/개인정보처리방침 내용 최종 검토 + 시행일 확인
 - [ ] admin@siktakilgi.com 수신 테스트 (다음 스마트워크 메일)
-- [ ] iOS Safari 푸시 알림 동작 확인 (iOS 16.4+ 필요)
+- [x] 알림 — 인앱 + 안드로이드 FCM 푸시 동작 확인 (2026-06-20, SW 전용 스코프 분리로 해결)
+- [ ] iOS Safari 푸시 알림 동작 확인 (iOS 16.4+ & 홈화면 추가 PWA 필요) — 실기기 미확인
 - [ ] Android TWA 포그라운드 알림 아이콘 확인
 - [ ] assetlinks.json 게시 및 TWA 검증
 
@@ -795,6 +810,9 @@ _shared/
 | `space_members.created_at` 사용 | 컬럼명은 `joined_at` (created_at 없음) |
 | `gen_random_bytes` / `gen_salt` 직접 호출 | `extensions` 스키마 소속 → RPC에 `SET search_path = public, extensions` 필수 |
 | PWA 캐시로 오래된 코드가 보임 | 테스트는 항상 **시크릿 창** 사용 (캐시 없음) |
+| 설치형 PWA의 SW 캐시 | 일반 PWA 캐시보다 더 끈질김 → **PWA 삭제 + 사이트 데이터 삭제 후 재설치**해야 새 SW 적용 |
+| Workbox sw.js와 FCM SW 같은 scope `/` 등록 | 충돌(단일 슬롯 다툼) → FCM SW는 **전용 scope `/firebase-cloud-messaging-push-scope`**로 분리 등록 |
+| data-only FCM 페이로드 | 브라우저 자동 표시 없음 → SW가 직접 `showNotification` 호출해야 표시됨 |
 | Supabase RPC/INSERT error 무시 | 반드시 `const { error }` 받아서 `console.error` 로깅 — 침묵 실패 금지 |
 | 댓글 알림에 `liveMeal.id` 사용 | 반드시 댓글 INSERT 응답의 `data.meal_id` 사용 (FK 검증됨) |
 | `get_space_members` 내부 변수명 | sm 대신 `sm0` 별칭 필수 (RETURNS TABLE의 user_id 컬럼과 충돌) |
@@ -939,14 +957,16 @@ npm run dev
 | 알림 user_id FK 수정 | get_space_member_ids RPC JOIN auth.users — 유령 멤버 제외, 배치 INSERT 실패(23503) 해결 |
 | notify.js 에러 로깅 | INSERT/RPC error console.error 추가 — 침묵 실패 방지, 원인 진단 가능 |
 | FK 삭제 규칙 정리 | meals/comments/ratings.user_id ON DELETE SET NULL, notifications.user_id ON DELETE CASCADE |
+| 유령 멤버 근본 해결 | space_members.user_id에 FK 없던 것 → 잔존 유령 DELETE + FK ON DELETE CASCADE 추가 |
+| FCM 푸시 SW 스코프 분리 | Workbox/FCM SW가 scope `/` 충돌 → FCM SW를 전용 스코프로 등록(firebase.js), 안드로이드 인앱+푸시 완전 동작 |
 
 ---
 
 ## 다음 단계
 
-**진행 중 (이어서 작업)**
-- **FCM 푸시 알림 진단** — 인앱은 복구됐으나 웹푸시 미작동. firebase-messaging-sw.js, send-push Edge Function, 포그라운드/백그라운드 분기 재진단 필요
-- **유령 멤버 정리** — space_members에 auth.users 없는 행 삭제 + FK CASCADE 확인
+**알림 — 남은 1건**
+- **iOS 푸시 실기기 확인** — iOS 16.4+ & 홈화면 추가 PWA에서 권한 허용 → 토큰 등록 → 표시 확인.
+  (인앱 + 안드로이드 FCM 푸시는 완료 — "알림 시스템" 섹션 참조)
 
 **출시 준비**
 - **TWA(PWABuilder) 패키지 생성** — 구글 플레이스토어 등록
