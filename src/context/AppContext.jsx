@@ -6,6 +6,10 @@ const AppContext = createContext(null)
 
 const SPACE_KEY = 'mealapp_current_space'
 
+// 알림 무한 스크롤: 최초 4개, 이후 묶음 10개씩
+const NOTIF_PAGE_INITIAL = 4
+const NOTIF_PAGE_SIZE = 10
+
 // 이메일 계정의 카카오 CDN URL은 빈 문자열로 반환
 function getUserAvatarUrl(user) {
   const provider = user?.app_metadata?.provider
@@ -116,6 +120,10 @@ export function AppProvider({ children }) {
   const [wishlistInterestsMap, setWishlistInterestsMap] = useState({})
   // 현재 유저의 알림 목록 (최신 50건)
   const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)          // 안읽은 전체 수 (목록 길이와 무관, 별도 count 쿼리)
+  const [hasMoreNotifs, setHasMoreNotifs] = useState(true)   // 더 불러올 알림이 있는지
+  const [loadingMoreNotifs, setLoadingMoreNotifs] = useState(false)
+  const notifIdsRef = useRef(new Set())                       // 로드된 알림 id (중복 방지: 초기/추가/실시간 공유)
   const [notifEnabled, setNotifEnabled] = useState(() => localStorage.getItem('notif_enabled') !== 'false')
 
   function setNotifEnabledPref(val) {
@@ -281,28 +289,47 @@ export function AppProvider({ children }) {
 
   // 알림 로드 + Realtime 구독 (로그인 시)
   useEffect(() => {
-    if (!user?.id) { setNotifications([]); return }
+    if (!user?.id) {
+      setNotifications([]); setUnreadCount(0); setHasMoreNotifs(true)
+      notifIdsRef.current = new Set()
+      return
+    }
     let destroyed = false
+    notifIdsRef.current = new Set()
 
+    // 최초 묶음 (4개만 — 화면 적게 차지). 이후 스크롤 시 loadMoreNotifications로 추가.
     supabase
       .from('notifications')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(50)
-      .then(({ data }) => { if (!destroyed && data) setNotifications(data) })
+      .range(0, NOTIF_PAGE_INITIAL - 1)
+      .then(({ data }) => {
+        if (destroyed || !data) return
+        data.forEach(n => notifIdsRef.current.add(n.id))
+        setNotifications(data)
+        setHasMoreNotifs(data.length === NOTIF_PAGE_INITIAL)
+      })
+
+    // 안읽은 전체 수는 페이지네이션과 별개로 정확히 — head count 쿼리
+    supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false)
+      .then(({ count }) => { if (!destroyed && typeof count === 'number') setUnreadCount(count) })
 
     const channel = supabase
       .channel(`notifications:${user.id}`)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
         ({ new: newRow }) => {
-          if (!destroyed && newRow?.user_id === user.id) {
-            // 같은 알림이 두 번 전달되는 경우 중복 추가 방지 (id 기준)
-            setNotifications(prev =>
-              prev.find(n => n.id === newRow.id) ? prev : [newRow, ...prev].slice(0, 50)
-            )
-          }
+          if (destroyed || newRow?.user_id !== user.id) return
+          // 같은 알림이 두 번 전달되는 경우 중복 추가 방지 (id 기준, ref 공유)
+          if (notifIdsRef.current.has(newRow.id)) return
+          notifIdsRef.current.add(newRow.id)
+          setNotifications(prev => [newRow, ...prev])
+          if (!newRow.is_read) setUnreadCount(c => c + 1)
         }
       )
       .subscribe()
@@ -1043,16 +1070,42 @@ export function AppProvider({ children }) {
     return true
   }
 
-  // 알림 읽음 처리
+  // 알림 추가 로드 (무한 스크롤) — 가장 오래된 항목보다 더 과거 묶음을 cursor로 조회.
+  // created_at cursor라 실시간 prepend로 인한 offset 드리프트 없음.
+  async function loadMoreNotifications() {
+    if (!user?.id || loadingMoreNotifs || !hasMoreNotifs) return
+    const oldest = notifications[notifications.length - 1]
+    if (!oldest) return
+    setLoadingMoreNotifs(true)
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .lt('created_at', oldest.created_at)
+      .limit(NOTIF_PAGE_SIZE)
+    if (data) {
+      const fresh = data.filter(n => !notifIdsRef.current.has(n.id))
+      fresh.forEach(n => notifIdsRef.current.add(n.id))
+      if (fresh.length) setNotifications(prev => [...prev, ...fresh])
+      setHasMoreNotifs(data.length === NOTIF_PAGE_SIZE)
+    }
+    setLoadingMoreNotifs(false)
+  }
+
+  // 알림 읽음 처리 — 안읽은 카운트도 함께 보정
   async function markNotificationRead(id) {
+    const target = notifications.find(n => n.id === id)
     await supabase.from('notifications').update({ is_read: true }).eq('id', id)
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+    if (target && !target.is_read) setUnreadCount(c => Math.max(0, c - 1))
   }
 
   async function markAllNotificationsRead() {
     if (!user) return
     await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+    setUnreadCount(0)
   }
 
   // 별점 추가 또는 수정 (UPSERT)
@@ -1195,7 +1248,10 @@ export function AppProvider({ children }) {
         addOrUpdateRating,
         deleteRating,
         notifications: notifEnabled ? notifications : [],
-        unreadCount: notifEnabled ? notifications.filter(n => !n.is_read).length : 0,
+        unreadCount: notifEnabled ? unreadCount : 0,
+        hasMoreNotifications: notifEnabled ? hasMoreNotifs : false,
+        loadingMoreNotifications: loadingMoreNotifs,
+        loadMoreNotifications,
         notifEnabled,
         setNotifEnabledPref,
         markNotificationRead,

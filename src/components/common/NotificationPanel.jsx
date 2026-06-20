@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react'
 import { useApp } from '../../context/AppContext'
 
 function formatTimeAgo(dateStr) {
@@ -45,7 +46,27 @@ export function NotificationBell({ onClick }) {
 
 // ── 알림 패널 ────────────────────────────────────────────────────────────
 export default function NotificationPanel({ open, onClose, onSelectMeal }) {
-  const { notifications, unreadCount, markNotificationRead, markAllNotificationsRead } = useApp()
+  const {
+    notifications, unreadCount, markNotificationRead, markAllNotificationsRead,
+    hasMoreNotifications, loadingMoreNotifications, loadMoreNotifications,
+  } = useApp()
+
+  const scrollRef = useRef(null)
+  const sentinelRef = useRef(null)
+
+  // 무한 스크롤: 목록 끝의 sentinel이 보이면 다음 묶음 자동 로드
+  useEffect(() => {
+    if (!open || !hasMoreNotifications) return
+    const root = scrollRef.current
+    const sentinel = sentinelRef.current
+    if (!root || !sentinel) return
+    const io = new IntersectionObserver(
+      entries => { if (entries[0].isIntersecting) loadMoreNotifications() },
+      { root, rootMargin: '120px' }
+    )
+    io.observe(sentinel)
+    return () => io.disconnect()
+  }, [open, hasMoreNotifications, loadMoreNotifications, notifications.length])
 
   async function handleClick(notif) {
     if (!notif.is_read) await markNotificationRead(notif.id)
@@ -92,7 +113,7 @@ export default function NotificationPanel({ open, onClose, onSelectMeal }) {
         </div>
 
         {/* 목록 */}
-        <ul className="overflow-y-auto flex-1 overscroll-contain">
+        <ul ref={scrollRef} className="overflow-y-auto flex-1 overscroll-contain">
           {notifications.length === 0 ? (
             <li className="py-16 text-center">
               <div className="w-12 h-12 rounded-full bg-cream-200 flex items-center justify-center mx-auto mb-3">
@@ -140,6 +161,15 @@ export default function NotificationPanel({ open, onClose, onSelectMeal }) {
                 </button>
               </li>
             ))
+          )}
+
+          {/* 무한 스크롤 sentinel + 추가 로딩 표시 */}
+          {notifications.length > 0 && hasMoreNotifications && (
+            <li ref={sentinelRef} className="py-3 flex justify-center">
+              {loadingMoreNotifications && (
+                <span className="w-4 h-4 rounded-full border-2 border-cream-300 border-t-warm-brown animate-spin" />
+              )}
+            </li>
           )}
         </ul>
       </div>
