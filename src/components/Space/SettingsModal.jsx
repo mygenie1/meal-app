@@ -9,7 +9,43 @@ import Avatar from '../common/Avatar'
 
 export default function SettingsModal({ isOpen, onClose }) {
   const navigate = useNavigate()
-  const { user, signOut, deleteAccount, updateProfile, notifEnabled, setNotifEnabledPref } = useApp()
+  const { user, signOut, deleteAccount, updateProfile, notifEnabled, setNotifEnabledPref, registerFCMToken } = useApp()
+
+  // ── 푸시 알림(기기 알림 권한) — iOS는 반드시 사용자 탭(제스처) 안에서 권한 요청 ──
+  const pushSupported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator
+  const isIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent)
+  const isStandalone = typeof window !== 'undefined' &&
+    (window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches)
+  const [pushPerm, setPushPerm] = useState(pushSupported ? Notification.permission : 'unsupported')
+  const [pushStatus, setPushStatus] = useState('')   // 화면 검증 로그(임시)
+  const [pushBusy, setPushBusy] = useState(false)
+
+  async function handleEnablePush() {
+    if (!user) return
+    setPushBusy(true)
+    setPushStatus('요청 중...')
+    try {
+      const res = await registerFCMToken(user.id, { prompt: true })   // ★ 제스처 컨텍스트
+      setPushPerm(pushSupported ? Notification.permission : 'unsupported')
+      if (res?.ok) {
+        setPushStatus(res.reason === 'already' ? '이미 등록됨 ✓' : '알림 켜짐 · 토큰 등록됨 ✓')
+      } else {
+        const map = {
+          denied: '권한 거부됨 — 기기 설정에서 알림을 허용해주세요',
+          'needs-gesture': '다시 시도해주세요(권한 미결정)',
+          'messaging-null': '이 환경은 푸시 미지원',
+          'no-notification-api': '이 브라우저는 푸시 미지원',
+          'db-error': '토큰 저장 실패(네트워크)',
+        }
+        setPushStatus(`실패: ${map[res?.reason] || res?.reason || '알 수 없음'}`)
+      }
+    } catch (e) {
+      console.error('[Settings] 푸시 켜기 오류:', e)
+      setPushStatus('오류가 발생했어요')
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   const [nickname, setNickname] = useState('')
   const [saving, setSaving] = useState(false)
@@ -337,6 +373,42 @@ export default function SettingsModal({ isOpen, onClose }) {
                 >
                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${notifEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
                 </button>
+              </div>
+
+              {/* 푸시 알림 (기기 알림 권한) — 버튼 탭으로만 권한 요청(iOS 호환) */}
+              <div className="px-4 py-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <svg className={`w-4 h-4 shrink-0 ${pushPerm === 'granted' ? 'text-warm-brown' : 'text-cream-400'}`} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 21h4m-9-4h14l-1.405-1.405A2.032 2.032 0 0116 14.158V11a4 4 0 10-8 0v3.159c0 .538-.214 1.055-.595 1.436L6 17z" />
+                    </svg>
+                    <div className="min-w-0">
+                      <p className="text-sm text-warm-dark">푸시 알림</p>
+                      <p className="text-[11px] text-cream-400">
+                        {!pushSupported
+                          ? (isIOS && !isStandalone ? '홈 화면에 추가 후 켤 수 있어요' : '이 환경은 푸시 미지원')
+                          : pushPerm === 'granted' ? '기기 알림 켜짐'
+                          : pushPerm === 'denied' ? '기기 설정에서 알림 허용 필요'
+                          : '기기로 알림 받기'}
+                      </p>
+                    </div>
+                  </div>
+                  {pushSupported && pushPerm !== 'granted' && pushPerm !== 'denied' && (
+                    <button
+                      onClick={handleEnablePush}
+                      disabled={pushBusy}
+                      className="shrink-0 px-3 py-1.5 rounded-xl bg-warm-brown text-white text-xs font-medium hover:bg-warm-dark transition-colors disabled:opacity-60"
+                    >
+                      {pushBusy ? '요청 중...' : '알림 켜기'}
+                    </button>
+                  )}
+                  {pushSupported && pushPerm === 'granted' && (
+                    <span className="shrink-0 text-xs text-warm-brown font-medium">켜짐</span>
+                  )}
+                </div>
+                {pushStatus && (
+                  <p className="text-[11px] text-warm-light mt-2 pl-7">{pushStatus} · 권한: {pushPerm}</p>
+                )}
               </div>
 
               {/* 앱 업데이트 확인 */}

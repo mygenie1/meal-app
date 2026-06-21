@@ -344,14 +344,16 @@ export function AppProvider({ children }) {
   const RETRY_DELAYS = [1500, 3000, 5000]
 
   // FCM 토큰 등록 — 로그인 직후 한 번만 시도
-  async function registerFCMToken(userId) {
-    if (!userId) return
-    console.log('[FCM] registerFCMToken 시작, userId:', userId)
+  // prompt:false(부팅) → granted일 때만 조용히 토큰 등록 / prompt:true(버튼 탭) → 권한 프롬프트
+  // 반환: { ok, reason, permission } — SettingsModal 화면 표시/판별용
+  async function registerFCMToken(userId, { prompt = false } = {}) {
+    if (!userId) return { ok: false, reason: 'no-user' }
+    console.log('[FCM] registerFCMToken 시작, userId:', userId, 'prompt:', prompt)
     try {
-      const token = await requestFCMToken()
+      const { token, permission, reason } = await requestFCMToken({ prompt })
       if (!token) {
-        console.log('[FCM] 토큰 없음 — 저장 스킵')
-        return
+        console.log('[FCM] 토큰 없음 — 저장 스킵, reason:', reason)
+        return { ok: false, reason, permission }
       }
       // 포그라운드 알림 핸들러 — 토큰 취득 성공 시 항상 등록 (중복 저장 여부 무관)
       onFCMMessage((payload) => {
@@ -382,18 +384,20 @@ export function AppProvider({ children }) {
         .maybeSingle()
       if (existing) {
         console.log('[FCM] 토큰 이미 저장됨, 스킵')
-        return
+        return { ok: true, reason: 'already', permission }
       }
       const { error } = await supabase
         .from('fcm_tokens')
         .insert({ user_id: userId, token })
       if (error) {
         console.error('[FCM] 토큰 저장 실패:', error)
-      } else {
-        console.log('[FCM] 토큰 저장 완료')
+        return { ok: false, reason: 'db-error', permission }
       }
+      console.log('[FCM] 토큰 저장 완료')
+      return { ok: true, reason: 'saved', permission }
     } catch (e) {
       console.error('[FCM] 토큰 등록 오류:', e)
+      return { ok: false, reason: 'error' }
     }
   }
 
@@ -1259,6 +1263,7 @@ export function AppProvider({ children }) {
         loadMoreNotifications,
         notifEnabled,
         setNotifEnabledPref,
+        registerFCMToken,
         markNotificationRead,
         markAllNotificationsRead,
       }}

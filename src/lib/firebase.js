@@ -24,7 +24,13 @@ async function getMessagingInstance() {
 
   try {
     const { initializeApp } = await import('firebase/app')
-    const { getMessaging } = await import('firebase/messaging')
+    const { getMessaging, isSupported } = await import('firebase/messaging')
+    // 비지원 환경(예: iOS 일반 Safari 탭, 일부 브라우저)에서 getMessaging throw 방지
+    const supported = await isSupported().catch(() => false)
+    if (!supported) {
+      console.warn('[FCM] 이 환경은 FCM 웹푸시 미지원 (isSupported=false)')
+      return null
+    }
     const app = initializeApp(firebaseConfig)
     _messaging = getMessaging(app)
     console.log('[FCM] messaging 초기화 완료')
@@ -44,29 +50,42 @@ export async function onFCMMessage(callback) {
 }
 
 // 푸시 알림 권한 요청 + FCM 토큰 반환
-export async function requestFCMToken() {
-  console.log('[FCM] requestFCMToken 호출')
+// ★ prompt: true 일 때만 Notification.requestPermission() 호출 (iOS는 사용자 제스처 안에서만 허용)
+//   prompt: false (부팅) → 이미 granted면 토큰만 조용히 발급, default면 프롬프트 없이 대기
+// 반환: { token, permission, reason } — 화면 로그/판별용
+export async function requestFCMToken({ prompt = false } = {}) {
+  console.log('[FCM] requestFCMToken 호출, prompt:', prompt)
 
   if (!('Notification' in window)) {
     console.warn('[FCM] Notification API 미지원 브라우저')
-    return null
+    return { token: null, permission: 'unsupported', reason: 'no-notification-api' }
   }
   if (!('serviceWorker' in navigator)) {
     console.warn('[FCM] Service Worker 미지원 브라우저')
-    return null
+    return { token: null, permission: 'unsupported', reason: 'no-sw' }
   }
 
   const messaging = await getMessagingInstance()
   if (!messaging) {
-    console.warn('[FCM] messaging이 null — 초기화 실패')
-    return null
+    console.warn('[FCM] messaging이 null — 미지원/초기화 실패')
+    return { token: null, permission: Notification.permission, reason: 'messaging-null' }
   }
 
   try {
-    console.log('[FCM] 알림 권한 요청')
-    const permission = await Notification.requestPermission()
-    console.log(`[FCM] 권한 결과: ${permission}`)
-    if (permission !== 'granted') return null
+    let permission = Notification.permission
+    if (permission === 'default') {
+      if (!prompt) {
+        // iOS는 제스처 밖 자동 요청을 차단 → 버튼 탭을 기다림 (자동 프롬프트 안 함)
+        console.log('[FCM] 권한 미결정 + 자동요청 안 함(버튼 탭 대기)')
+        return { token: null, permission, reason: 'needs-gesture' }
+      }
+      console.log('[FCM] 알림 권한 요청 (사용자 제스처)')
+      permission = await Notification.requestPermission()
+      console.log(`[FCM] 권한 결과: ${permission}`)
+    }
+    if (permission !== 'granted') {
+      return { token: null, permission, reason: permission === 'denied' ? 'denied' : 'not-granted' }
+    }
 
     // 전용 스코프로 등록 — Workbox(vite-plugin-pwa) sw.js가 scope '/'를 점유하므로
     // 같은 scope '/'에 FCM SW를 등록하면 단일 registration 슬롯을 두고 충돌함.
@@ -92,9 +111,9 @@ export async function requestFCMToken() {
       console.warn('[FCM] 토큰이 빈 값 — VAPID 키 또는 SW 설정 확인 필요')
     }
 
-    return token || null
+    return { token: token || null, permission, reason: token ? 'ok' : 'empty-token' }
   } catch (err) {
     console.error('[FCM] 토큰 등록 실패:', err)
-    return null
+    return { token: null, permission: Notification.permission, reason: 'error' }
   }
 }
