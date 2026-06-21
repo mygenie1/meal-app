@@ -67,7 +67,7 @@ export default function UnifiedSearch({ open, onClose, onSelectMeal, onSelectWis
             onChange={e => setQuery(e.target.value)}
             placeholder="제목, 식당명, 한줄평, 메모, 가보고 싶은 곳 검색"
             autoFocus
-            className="flex-1 bg-transparent text-base text-warm-dark outline-none placeholder-cream-400"
+            className="flex-1 min-w-0 bg-transparent text-base text-warm-dark outline-none placeholder-cream-400"
           />
           {query && (
             <button

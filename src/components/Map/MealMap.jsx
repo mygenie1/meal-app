@@ -595,14 +595,14 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
               </svg>
             </div>
           )}
-          <div className="flex-1 flex items-center bg-white border border-cream-200 rounded-full px-4 py-2 gap-2 focus-within:border-warm-light transition-colors">
+          <div className="flex-1 min-w-0 flex items-center bg-white border border-cream-200 rounded-full px-4 py-2 gap-2 focus-within:border-warm-light transition-colors">
             <input
               type="text"
               value={commentText}
               onChange={e => setCommentText(e.target.value)}
               placeholder="댓글 달기..."
               maxLength={200}
-              className="flex-1 bg-transparent text-base text-warm-dark placeholder-cream-400 focus:outline-none"
+              className="flex-1 min-w-0 bg-transparent text-base text-warm-dark placeholder-cream-400 focus:outline-none"
             />
             <button
               type="submit"

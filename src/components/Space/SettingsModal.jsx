@@ -330,7 +330,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                     onKeyDown={e => e.key === 'Enter' && handleSaveNickname()}
                     placeholder="닉네임 입력"
                     maxLength={20}
-                    className="flex-1 px-3 py-2 rounded-xl bg-cream-50 border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors"
+                    className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-cream-50 border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors"
                   />
                   <button
                     onClick={handleSaveNickname}
