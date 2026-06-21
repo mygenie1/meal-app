@@ -133,6 +133,11 @@ Deno.serve(async (req) => {
   const notifTitle = '식탁일기'
   const notifBody = (record.message as string) || typeLabel[record.type as string] || '알림이 도착했어요'
 
+  // 클릭 시 열 딥링크 — 게시글이 있으면 해당 게시글, 없으면 홈 (콜드스타트 폴백용)
+  const SITE = 'https://www.siktakilgi.com'
+  const mealId = String(record.meal_id ?? '')
+  const clickLink = mealId ? `${SITE}/?meal=${mealId}` : `${SITE}/`
+
   const results = await Promise.allSettled(
     tokenRows.map(({ token }: { token: string }) =>
       fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
@@ -145,10 +150,10 @@ Deno.serve(async (req) => {
           message: {
             token,
             webpush: {
-              fcm_options: { link: '/' },
+              fcm_options: { link: clickLink },
             },
             data: {
-              meal_id: String(record.meal_id ?? ''),
+              meal_id: mealId,
               type: String(record.type ?? ''),
               space_id: String(record.space_id ?? ''),
               title: notifTitle,

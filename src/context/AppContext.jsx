@@ -362,17 +362,21 @@ export function AppProvider({ children }) {
         const body = d.body || ''
         if ('serviceWorker' in navigator && Notification.permission === 'granted') {
           const origin = window.location.origin
-          navigator.serviceWorker.ready.then(reg => {
-            reg.showNotification(title, {
-              body,
-              icon: `${origin}/icon-192x192.png`,
-              badge: `${origin}/notification-icon-192.png`,
-              tag: `meal-${d.type || 'notification'}-fg`,
-              data: d,
-              requireInteraction: false,
-              vibrate: [200, 100, 200],
+          // 포그라운드 알림도 FCM SW(전용 스코프)로 표시 → 그 SW의 notificationclick이
+          // meal_id 딥링크를 처리(클릭 시 게시글 열기). 없으면 controller SW로 폴백.
+          navigator.serviceWorker.getRegistration('/firebase-cloud-messaging-push-scope')
+            .then(r => r || navigator.serviceWorker.ready)
+            .then(reg => {
+              reg.showNotification(title, {
+                body,
+                icon: `${origin}/icon-192x192.png`,
+                badge: `${origin}/notification-icon-192.png`,
+                tag: `meal-${d.type || 'notification'}-fg`,
+                data: d,
+                requireInteraction: false,
+                vibrate: [200, 100, 200],
+              })
             })
-          })
         }
       })
       // SELECT 후 조건부 INSERT — DB UNIQUE 제약 없어도 중복 행 방지

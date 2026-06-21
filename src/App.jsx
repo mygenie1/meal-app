@@ -192,6 +192,25 @@ function AppContent() {
     }
   }, [])
 
+  // 푸시 알림 클릭 → 게시글 열기 (warm): SW가 보낸 OPEN_MEAL 메시지를 받아 HomePage로 위임
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onMsg = (e) => {
+      if (e.data?.type === 'OPEN_MEAL' && e.data.mealId) {
+        navigate('/', { state: { openMealId: e.data.mealId } })
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', onMsg)
+    return () => navigator.serviceWorker.removeEventListener('message', onMsg)
+  }, [navigate])
+
+  // 푸시 알림 클릭 → 게시글 열기 (cold): /?meal=<id> 콜드스타트 → 라우터 state로 변환 + URL 정리
+  useEffect(() => {
+    const mealId = new URLSearchParams(location.search).get('meal')
+    if (mealId) navigate('/', { replace: true, state: { openMealId: mealId } })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // /join?code=... 처리: 비로그인 시 코드 저장 → 로그인 후 자동 참가
   useEffect(() => {
     if (authLoading) return

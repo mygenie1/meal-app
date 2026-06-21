@@ -140,6 +140,24 @@ export default function HomePage() {
       window.history.replaceState({}, '')
     }
   }, [])
+
+  // 알림 클릭 → 게시글 열기 (인앱/푸시 공유). 못 찾으면 false.
+  function openMealById(mealId) {
+    const meal = spaces.flatMap(s => s.meals).find(m => m.id === mealId)
+    if (meal) { setSelectedMeal(meal); return true }
+    return false
+  }
+
+  // 푸시 딥링크: location.state.openMealId 처리 (warm/cold 공통 진입점)
+  // 데이터 로딩 전이면 spaces 변경 시 재시도, 열거나 못 찾으면 state 정리(재오픈 방지)
+  useEffect(() => {
+    const mealId = location.state?.openMealId
+    if (!mealId) return
+    if (openMealById(mealId) || spaces.some(s => s.meals?.length)) {
+      navigate('/', { replace: true, state: {} })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state?.openMealId, spaces, navigate])
   const nickname = user?.user_metadata?.name || user?.user_metadata?.full_name || '식탁'
   const avatarUrl = user?.user_metadata?.avatar_url
 
@@ -817,10 +835,7 @@ export default function HomePage() {
       <NotificationPanel
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
-        onSelectMeal={mealId => {
-          const meal = spaces.flatMap(s => s.meals).find(m => m.id === mealId)
-          if (meal) setSelectedMeal(meal)
-        }}
+        onSelectMeal={mealId => openMealById(mealId)}
       />
 
       <UnifiedSearch

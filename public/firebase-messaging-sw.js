@@ -58,18 +58,23 @@ self.addEventListener('push', (event) => {
   )
 })
 
-// 알림 클릭 → 앱 포커스 또는 새 탭 열기
+// 알림 클릭 → 해당 게시글로 이동 (meal_id 딥링크)
+//  - 기존 창 있으면: focus() + postMessage(OPEN_MEAL) → 앱이 리로드 없이 모달 오픈 (★ 안드로이드)
+//  - 기존 창 없으면(콜드스타트): openWindow('/?meal=<id>') → 앱 마운트 시 파라미터로 오픈 (★ iOS)
 self.addEventListener('notificationclick', event => {
   event.notification.close()
-  const url = '/'
+  const mealId = (event.notification.data && event.notification.data.meal_id) || ''
+  const target = mealId ? `/?meal=${mealId}` : '/'
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
-          return client.focus()
+          client.focus()
+          if (mealId) client.postMessage({ type: 'OPEN_MEAL', mealId })
+          return
         }
       }
-      return clients.openWindow(url)
+      return clients.openWindow(target)
     })
   )
 })
