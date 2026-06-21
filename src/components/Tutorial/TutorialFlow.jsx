@@ -104,7 +104,7 @@ export default function TutorialFlow({ onComplete }) {
 
   function renderStep1() {
     return (
-      <div className="flex flex-col px-8 pt-12">
+      <div className="flex flex-col px-8 pt-4">
         <h2 className="text-xl font-bold text-warm-dark mb-2">누구와 함께 기록할까요?</h2>
         <p className="text-sm text-warm-light mb-8">
           식탁일기는 함께 먹은 기록을<br />
@@ -128,7 +128,7 @@ export default function TutorialFlow({ onComplete }) {
 
   function renderStep2() {
     return (
-      <div className="flex flex-col px-8 pt-12 overflow-y-auto">
+      <div className="flex flex-col px-8 pt-4 overflow-y-auto">
         <h2 className="text-xl font-bold text-warm-dark mb-2">
           식탁을 만들거나<br />초대받은 곳에 들어가세요
         </h2>
@@ -195,7 +195,7 @@ export default function TutorialFlow({ onComplete }) {
 
   function renderStep3() {
     return (
-      <div className="flex flex-col items-center px-8 pt-12 text-center">
+      <div className="flex flex-col items-center px-8 pt-4 text-center">
         <div className="w-full bg-cream-100 rounded-2xl p-5 mb-8">
           <div className="grid grid-cols-7 gap-1 text-xs">
             {['일', '월', '화', '수', '목', '금', '토'].map(d => (
@@ -225,7 +225,7 @@ export default function TutorialFlow({ onComplete }) {
 
   function renderStep4() {
     return (
-      <div className="flex flex-col items-center px-8 pt-12 text-center">
+      <div className="flex flex-col items-center px-8 pt-4 text-center">
         <div className="w-24 h-24 bg-cream-100 rounded-full flex items-center justify-center mb-8">
           <svg viewBox="0 0 24 24" fill="none" stroke="#6b4f3a" strokeWidth="1.6" className="w-12 h-12" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
@@ -270,7 +270,7 @@ export default function TutorialFlow({ onComplete }) {
 
   function renderStep5() {
     return (
-      <div className="flex flex-col items-center px-8 pt-12 text-center">
+      <div className="flex flex-col items-center px-8 pt-4 text-center">
         <div className="w-24 h-24 bg-cream-100 rounded-full flex items-center justify-center mb-8">
           <svg viewBox="0 0 24 24" fill="none" stroke="#6b4f3a" strokeWidth="1.6" className="w-12 h-12" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
@@ -312,7 +312,7 @@ export default function TutorialFlow({ onComplete }) {
 
   function renderStep6() {
     return (
-      <div className="flex flex-col items-center px-8 pt-12 text-center">
+      <div className="flex flex-col items-center px-8 pt-4 text-center">
         <div className="w-20 h-20 bg-cream-100 rounded-full flex items-center justify-center mb-8">
           <svg className="w-9 h-9 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -390,27 +390,28 @@ export default function TutorialFlow({ onComplete }) {
     <div className="fixed inset-0 bg-cream-50 flex flex-col z-50"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}>
 
-      {/* 뒤로가기 버튼 (step 0 제외) */}
-      {currentStep > 0 && (
-        <button
-          onClick={() => goStep(currentStep - 1)}
-          className="absolute left-6 w-9 h-9 rounded-full bg-cream-100 flex items-center justify-center z-10"
-          style={{ top: 'calc(env(safe-area-inset-top) + 1.5rem)' }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-5 h-5 text-warm-dark">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-      )}
-
-      {/* 건너뛰기 버튼 (steps 1, 2에서만) */}
-      {(currentStep === 1 || currentStep === 2) && (
-        <button
-          onClick={goNext}
-          className="absolute right-6 text-sm text-cream-400 z-10"
-          style={{ top: 'calc(env(safe-area-inset-top) + 1.5rem)' }}>
-          건너뛰기
-        </button>
-      )}
+      {/* 헤더 행 — 뒤로가기 / 건너뛰기 (제목과 별도 행으로 분리해 겹침 방지) */}
+      <div className="flex items-center justify-between px-6 pt-3 pb-1 shrink-0 h-14">
+        {currentStep > 0 ? (
+          <button
+            onClick={() => goStep(currentStep - 1)}
+            className="w-9 h-9 rounded-full bg-cream-100 flex items-center justify-center active:scale-95 transition-transform"
+            aria-label="뒤로">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-5 h-5 text-warm-dark">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        ) : (
+          <span className="w-9 h-9" />
+        )}
+        {(currentStep === 1 || currentStep === 2) ? (
+          <button onClick={goNext} className="text-sm text-cream-400 px-1 active:opacity-70 transition-opacity">
+            건너뛰기
+          </button>
+        ) : (
+          <span />
+        )}
+      </div>
 
       {/* 콘텐츠 — 함수 직접 호출로 DOM 유지 (포커스 버그 방지) */}
       <div
