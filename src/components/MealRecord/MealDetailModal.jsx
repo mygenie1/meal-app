@@ -451,6 +451,25 @@ export default function MealDetailModal({ meal, onClose }) {
 
       {hasMap && <SmallMap lat={liveMeal.lat} lng={liveMeal.lng} />}
 
+      {/* ④-2 카카오맵 장소 링크 */}
+      {liveMeal.placeUrl && (
+        <a
+          href={liveMeal.placeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-warm-brown bg-cream-100 hover:bg-cream-200 border border-cream-300 rounded-full px-3 py-1.5 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
+            <circle cx="12" cy="8" r="2" />
+          </svg>
+          카카오맵에서 보기
+          <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+      )}
+
       {/* ⑤ 수정 / 삭제 */}
       <div className="flex gap-3 pt-4 mt-4 border-t border-cream-100">
         <button

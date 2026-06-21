@@ -19,7 +19,7 @@ const ROUND = 1e4
 const INPUT_CLS = 'w-full px-4 py-3 rounded-2xl bg-cream-100 border border-cream-200 text-base text-warm-dark placeholder-cream-400 focus:outline-none focus:border-warm-light transition-colors'
 const WISH_CATEGORY_COLORS = { 한식: '#fca5a5', 일식: '#93c5fd', 양식: '#86efac', 중식: '#fcd34d', 카페: '#f9a8d4', 기타: '#d1b89a' }
 const MOOD_TAGS = ['🔥 핫플', '💕 로맨틱', '🌿 힐링', '📸 인생샷', '✨ 특별한 날', '🍽️ 맛집 예감']
-const EMPTY_WISH_FORM = { name: '', location: '', memo: '', moodTags: [], lat: null, lng: null }
+const EMPTY_WISH_FORM = { name: '', location: '', memo: '', moodTags: [], lat: null, lng: null, placeUrl: '' }
 const SEOUL = { lat: 37.5665, lng: 126.9780 }
 
 // 모바일은 클립보드 paste가 잘 안 되므로 안내 문구 숨김
@@ -467,6 +467,20 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
         <p className="text-sm text-warm-light leading-relaxed mb-3">{item.memo}</p>
       )}
 
+      {item.placeUrl && (
+        <a href={item.placeUrl} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-warm-brown bg-cream-100 hover:bg-cream-200 border border-cream-300 rounded-full px-3 py-1.5 mb-3 transition-colors">
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
+            <circle cx="12" cy="8" r="2" />
+          </svg>
+          카카오맵에서 보기
+          <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+      )}
+
       {/* 액션 버튼 */}
       {(() => {
         const interests = wishlistInterestsMap[item.id] || []
@@ -660,7 +674,7 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
 
   function handleNameChange(e) {
     const q = e.target.value
-    setForm(p => ({ ...p, name: q }))
+    setForm(p => ({ ...p, name: q, placeUrl: '' }))   // 직접 입력 시 검색 링크 무효화
     clearTimeout(placeTimerRef.current)
     if (!q.trim()) { setPlaceSuggestions([]); setShowPlaceDropdown(false); return }
     placeTimerRef.current = setTimeout(async () => {
@@ -679,6 +693,7 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
       location: place.road_address_name || place.address_name || '',
       lat: parseFloat(place.y) || null,
       lng: parseFloat(place.x) || null,
+      placeUrl: place.place_url || '',
     }))
     setPlaceSuggestions([])
     setShowPlaceDropdown(false)
@@ -1095,6 +1110,16 @@ function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail, i
             지도에서 확인
           </button>
         )}
+        {item.placeUrl && (
+          <a href={item.placeUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1 px-3 py-2 rounded-2xl border border-cream-300 text-warm-brown text-xs font-medium hover:bg-cream-100 transition-colors active:scale-95">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
+              <circle cx="12" cy="8" r="2" />
+            </svg>
+            카카오맵
+          </a>
+        )}
       </div>
     </div>
   )
@@ -1177,7 +1202,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
       const item = pendingEditRef.current
       if (!item) return
       pendingEditRef.current = null
-      setEditForm({ name: item.name || '', location: item.location || '', memo: item.memo || '', moodTags: item.moodTags || [], lat: item.lat || null, lng: item.lng || null })
+      setEditForm({ name: item.name || '', location: item.location || '', memo: item.memo || '', moodTags: item.moodTags || [], lat: item.lat || null, lng: item.lng || null, placeUrl: item.placeUrl || '' })
       setEditPhotoPreview(item.photo || '')
       setEditingWish(item)
     }
@@ -1684,7 +1709,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
         ? await uploadPhotoToStorage(addPhotoPreview, currentSpace?.id)
         : addPhotoPreview
     }
-    const newItem = await addWishlistItem({ name: addForm.name.trim(), memo: addForm.memo.trim(), location: addForm.location.trim(), lat, lng, moodTags: addForm.moodTags, photo: photoUrl })
+    const newItem = await addWishlistItem({ name: addForm.name.trim(), memo: addForm.memo.trim(), location: addForm.location.trim(), lat, lng, moodTags: addForm.moodTags, photo: photoUrl, placeUrl: addForm.placeUrl || '' })
     if (newItem?.id) {
       try { await addWishlistInterest(newItem.id) } catch {}
       // 같은 스페이스 다른 멤버들에게 알림 (메인 기능과 분리: try/catch)
@@ -1729,7 +1754,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
     } else if (!editPhotoPreview) {
       photoUrl = ''
     }
-    await updateWishlistItem(editingWish.id, { name: editForm.name.trim(), memo: editForm.memo.trim(), location: editForm.location.trim(), lat, lng, moodTags: editForm.moodTags, photo: photoUrl })
+    await updateWishlistItem(editingWish.id, { name: editForm.name.trim(), memo: editForm.memo.trim(), location: editForm.location.trim(), lat, lng, moodTags: editForm.moodTags, photo: photoUrl, placeUrl: editForm.placeUrl || '' })
     setEditingWish(null)
     setSavingEdit(false)
   }

@@ -270,6 +270,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     }
     return {
       title: '', restaurantName: '', location: '', lat: null, lng: null,
+      placeUrl: '',
       review: '', memo: '', tag: '',
       mealTime: getAutoMealTime(),  // 현재 시간 자동 감지
       ...initial,
@@ -385,7 +386,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     }
   }
 
-  // 카카오 장소 선택 → 이름 + 위치 + 좌표 자동 입력
+  // 카카오 장소 선택 → 이름 + 위치 + 좌표 + 카카오맵 링크 자동 입력
   function handlePlaceSelect(place) {
     setForm(prev => ({
       ...prev,
@@ -393,8 +394,14 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       location: place.road_address_name || place.address_name || prev.location,
       lat: parseFloat(place.y),
       lng: parseFloat(place.x),
+      placeUrl: place.place_url || '',
     }))
     setGeoStatus('found')
+  }
+
+  // 가게 이름 직접 입력 시 → 검색으로 들어온 카카오 링크는 무효화(잘못된 링크 방지)
+  function handleNameChange(v) {
+    setForm(prev => ({ ...prev, restaurantName: v, placeUrl: '' }))
   }
 
   const needsGeo = form.tag === '외식' || form.tag === '카페'
@@ -818,7 +825,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
               label="식당 이름"
               value={form.restaurantName}
               placeholder="어디서 드셨나요?"
-              onChange={v => set('restaurantName', v)}
+              onChange={handleNameChange}
               onSelect={handlePlaceSelect}
             />
             <LocationField
@@ -837,7 +844,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
               label="카페 이름"
               value={form.restaurantName}
               placeholder="어느 카페였나요?"
-              onChange={v => set('restaurantName', v)}
+              onChange={handleNameChange}
               onSelect={handlePlaceSelect}
             />
             <LocationField
@@ -855,8 +862,8 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
             label="가게 이름"
             value={form.restaurantName}
             placeholder="어느 가게에서 시켰나요?"
-            onChange={v => set('restaurantName', v)}
-            onSelect={place => set('restaurantName', place.place_name)}
+            onChange={handleNameChange}
+            onSelect={place => setForm(p => ({ ...p, restaurantName: place.place_name, placeUrl: place.place_url || '' }))}
           />
         )}
 
