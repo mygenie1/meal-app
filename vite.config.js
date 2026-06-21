@@ -19,8 +19,11 @@ export default defineConfig({
         theme_color: '#6b4f3a',
         background_color: '#fdfcf9',
         display: 'standalone',
-        start_url: 'https://siktakilgi.com/',
-        scope: 'https://siktakilgi.com/',
+        // ★ 상대경로 — manifest 서빙 origin(www) 기준으로 해석되어 항상 same-origin.
+        // 절대값(apex)이면 www에서 cross-origin으로 무시됨 → iOS standalone/푸시 인식 실패.
+        id: '/',
+        start_url: '/',
+        scope: '/',
         lang: 'ko',
         icons: [
           {
