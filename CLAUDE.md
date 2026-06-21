@@ -742,10 +742,10 @@ _shared/
 
 ---
 
-## ★ 알림 시스템 — 해결 완료(안드로이드 인앱+푸시), iOS 미확인
+## ★ 알림 시스템 — 풀스택 완성 (인앱 + 안드로이드 푸시 + iOS 푸시 + 딥링크)
 
 ### 증상 (2026-06-17~)
-인앱 알림 + FCM 푸시 알림 전체 미작동. → **2026-06-20 단계별 진단으로 안드로이드 완전 동작**.
+인앱 알림 + FCM 푸시 알림 전체 미작동. → **2026-06-20 안드로이드 완전 동작 → 2026-06-21 iOS 푸시·딥링크·유도 배너까지 완성**.
 
 ### 1) 인앱 알림 (해결)
 
@@ -798,15 +798,36 @@ _shared/
   FCM SW가 자기 registration/구독을 소유 → **백그라운드+포그라운드 양쪽 표시 정상화**.
 - 결과: **안드로이드 PWA에서 인앱+푸시 완전 동작 확인** (2026-06-20).
 
-**★ iOS 미확인 (남은 TODO)**
-- iOS 웹푸시는 16.4+ & **홈 화면 추가된 PWA(standalone)**에서만 동작.
-- 추후 iOS 실기기에서 권한 허용 → 토큰 등록 → 백그라운드 표시 확인 필요.
+### 4) 푸시(FCM) — iOS 해결 (2026-06-21)
 
-**★ 테스트 시 SW 캐시 주의**
-- 설치형 PWA는 옛 SW가 끈질기게 남음 → 새 SW 적용하려면
-  **PWA 완전 삭제 + 사이트 데이터 삭제 후 재설치**. (일반 PWA 캐시보다 더 끈질김)
-- 검증: `chrome://inspect` → Application → Service Workers에서
-  `/firebase-cloud-messaging-push-scope`에 `firebase-messaging-sw.js`가 activated인지 확인.
+iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자 제스처 권한**.
+
+**원인C — 권한 요청이 부팅 시 자동 호출** → **해결됨**
+- iOS는 `Notification.requestPermission()`을 **사용자 탭(제스처) 안에서만** 허용. 부팅 자동 호출은 차단(안드로이드는 허용돼서 됐던 것).
+- 해결: `firebase.js requestFCMToken({ prompt })` — `prompt:false`(부팅)는 `granted`일 때만 조용히 토큰 등록, `'default'`면 프롬프트 안 함. `prompt:true`(버튼 탭)일 때만 권한 요청.
+- SettingsModal "알림 켜기" 버튼 + 유도 배너 버튼이 제스처 진입점. `getMessagingInstance`에 `isSupported()` 게이트 추가.
+
+**원인D (핵심) — manifest start_url/scope가 cross-origin이라 iOS가 무시** → **해결됨**
+- 사이트는 `www.siktakilgi.com` 서빙(apex는 308→www)인데, manifest `start_url`/`scope`가 절대값 `https://siktakilgi.com/`(apex) → manifest 받은 origin(www)과 **cross-origin → 무시**("start_url ignored" 경고) → iOS가 정상 standalone PWA로 미인식 → 설정>알림에 앱 미등록·권한 팝업 안 뜸 (위치 권한은 standalone 무관이라 떴음).
+- 해결: `vite.config.js` manifest `start_url:'/'`, `scope:'/'`, `id:'/'` (상대경로 → 서빙 origin 기준 same-origin). `index.html`에 표준 `mobile-web-app-capable` 보강.
+
+### 5) 알림 클릭 딥링크 — 해당 게시글 열기 (인앱/푸시, 안드로이드/iOS, 콜드/웜)
+- **send-push**: `webpush.fcm_options.link = https://www.siktakilgi.com/?meal=<meal_id>` (meal 없으면 홈), `data.meal_id` 유지.
+- **SW notificationclick** (`firebase-messaging-sw.js`): `data.meal_id` 읽어
+  - 기존 창 있으면 `client.focus()` + `postMessage({type:'OPEN_MEAL', mealId})` (★ 안드로이드 — focus만으론 이동 안 됨)
+  - 없으면 `openWindow('/?meal=<id>')` (콜드스타트/iOS)
+- **앱 수신** (`App.jsx` AppContent): warm = `serviceWorker` message 리스너 → `navigate('/', {state:{openMealId}})` / cold = 마운트 시 `?meal=` 파싱 → state 변환 + URL 정리.
+- **게시글 열기 공유**: `HomePage.openMealById(mealId)` — 인앱 NotificationPanel·푸시 딥링크 공용. 데이터 로딩 전이면 spaces 변경 시 재시도, 열거나 못 찾으면 state 정리(재오픈 방지·graceful).
+- 포그라운드 알림도 FCM SW(전용 스코프)로 표시 → 그 SW notificationclick이 클릭 처리(`AppContext` onFCMMessage).
+
+### 6) 알림 목록 무한스크롤 + 유도 배너
+- **무한스크롤**: 최초 4개 + 끝 도달 시 10개씩(cursor 방식, `created_at` 기준). 안읽은 뱃지는 목록과 별개로 `count` 쿼리. 알림창 높이 `75dvh → 40dvh`.
+- **유도 배너 2종 (standalone로 배타적)**: not-standalone → `InstallBanner`(앱 설치), standalone+`permission==='default'` → `NotifyBanner`(알림 켜기, 버튼 탭 = `registerFCMToken({prompt:true})` 재사용). 거부/닫기 → "설정 > 알림 받기에서 켤 수 있어요" 안내 + **각 7일 억제**(localStorage).
+
+**★ 테스트 시 SW/manifest 캐시 주의**
+- 설치형 PWA는 옛 SW/manifest가 끈질기게 남음 → **PWA 완전 삭제 + 사이트 데이터 삭제 후 재설치**. (일반 PWA 캐시보다 더 끈질김)
+- iOS는 manifest 변경 후 **재설치 필수**(설치 시점 manifest가 고정됨).
+- 검증: `chrome://inspect`(안드로이드) → Service Workers에서 `/firebase-cloud-messaging-push-scope`에 `firebase-messaging-sw.js` activated 확인. iOS는 Mac 없으면 화면 로그/`fcm_tokens` DB로 판별.
 
 ---
 
@@ -820,17 +841,18 @@ _shared/
 - 구글 플레이 개발자 계정: $25 (일회성)
 
 ### 출시 전 체크리스트
-- [ ] 관리자 비밀번호 변경 (현재 노출된 초기 비밀번호 사용 중)
+- [x] 알림 — 인앱 + 안드로이드 + **iOS** FCM 푸시 + 클릭 딥링크 완성 (2026-06-21)
+- [ ] **온보딩 뒤로가기 버튼이 제목 가리는 문제** 수정 (진행 중 — 헤더 분리/여백)
+- [ ] 관리자 비밀번호 변경 (현재 채팅에 노출된 초기 비밀번호 사용 중)
 - [ ] 오너 승계 실제 테스트 (멤버 2명 스페이스에서 오너 탈퇴 시나리오)
 - [ ] 이메일 인증메일 실제 수신 확인
   - Supabase 기본 SMTP: 하루 3건 제한 → 출시 전 별도 SMTP 서비스(Resend 등) 연동 검토
-- [ ] www → non-www 리다이렉트 설정 (siktakilgi.com으로 통일)
-- [ ] 약관/개인정보처리방침 내용 최종 검토 + 시행일 확인
+- [ ] 약관/개인정보처리방침 내용 최종 검토 + 시행일을 출시일로
 - [ ] admin@siktakilgi.com 수신 테스트 (다음 스마트워크 메일)
-- [x] 알림 — 인앱 + 안드로이드 FCM 푸시 동작 확인 (2026-06-20, SW 전용 스코프 분리로 해결)
-- [ ] iOS Safari 푸시 알림 동작 확인 (iOS 16.4+ & 홈화면 추가 PWA 필요) — 실기기 미확인
+- [ ] 테스트 계정 / 유령 데이터 정리
+- [ ] assetlinks.json 게시 및 TWA 검증 (PWABuilder, 플레이스토어 $25)
 - [ ] Android TWA 포그라운드 알림 아이콘 확인
-- [ ] assetlinks.json 게시 및 TWA 검증
+- [ ] (선택) www/non-www 도메인 일관성 정리 (현재 apex 308→www, manifest 상대경로라 동작에는 문제 없음)
 
 ---
 
@@ -852,6 +874,11 @@ _shared/
 | 카카오 place_url | **검색으로 장소 선택 시에만** 저장됨 — 직접 입력/기존 데이터는 링크 없음, 이름 직접 수정 시 placeUrl 비움 |
 | 새 컬럼 insert 전 마이그레이션 | place_url 등 새 컬럼은 **배포(push) 전에 ADD COLUMN 먼저** — 없으면 insert 전체가 실패(저장 회귀) |
 | 통합검색 로직 수정 | `lib/unifiedSearch.js` 한 곳만 고치면 홈/지도 양쪽 반영 (UnifiedSearch 공용) |
+| iOS 알림 권한 요청 | `Notification.requestPermission()`은 **사용자 탭(제스처) 안에서만** — 부팅 자동 호출은 iOS가 차단(안드로이드는 허용). 버튼에서만 `prompt:true` |
+| manifest start_url/scope 절대값 | 서빙 origin과 cross-origin이면 무시("ignored" 경고) → iOS standalone 미인식·푸시 불가. **상대경로 `/`** 사용 |
+| iOS 푸시 안 됨 | 16.4+ & 홈화면 PWA(standalone) & 제스처 권한 3개 모두 필수. manifest 변경 후 **재설치** 필요(설치 시점 고정) |
+| 알림 클릭 이동 안 됨 | SW notificationclick에서 `data.meal_id`로 딥링크 — 기존 창은 `focus()`만으론 이동 안 됨, `postMessage(OPEN_MEAL)` 필요(안드로이드) |
+| iOS 원격 디버깅 | Mac+Safari 필요 → Mac 없으면 화면 로그/`fcm_tokens` DB로 판별 |
 
 ---
 
@@ -997,19 +1024,28 @@ npm run dev
 | 검색 공유 모듈화 | lib/unifiedSearch.js + UnifiedSearch/FeedCard/WishResultCard 추출 → 홈/지도 공용 |
 | 지도 탭 검색 | 장식용 돋보기 → 실제 검색(UnifiedSearch 오버레이), meal→상세 / wishlist→위시탭+핀 이동 |
 | 카카오 장소 링크 | meals/wishlist place_url 컬럼, 검색 선택 시 저장, 상세/카드에 "카카오맵에서 보기" 링크 |
+| iOS 푸시 — 제스처 권한 | requestFCMToken({prompt}), 부팅은 granted만 조용히 등록, 버튼 탭에서만 권한 요청, isSupported 게이트 |
+| iOS 푸시 — manifest 상대경로 | start_url/scope/id를 '/'로 (절대값 apex라 www와 cross-origin→무시→standalone 미인식 해결) + mobile-web-app-capable |
+| 알림 클릭 딥링크 | send-push link=/?meal=, SW notificationclick focus+postMessage/openWindow, App warm+cold, openMealById 공유 |
+| 알림 무한스크롤 | 최초 4개+10개씩 cursor, 안읽은 뱃지 별도 count, 알림창 75dvh→40dvh |
+| 집밥 재료 차분 동기화 | 수정 시 기존 used_ingredients 대비 delta만 재고 조정(이중 차감 없음), 가상행으로 차감된 원본 표시 |
+| 유도 배너 2종 | not-standalone→앱설치, standalone+권한default→알림켜기(registerFCMToken 재사용), 각 7일 억제 |
+| iOS 댓글 입력 넘침 수정 | flex min-width:auto 넘침 → 입력행 min-w-0 (댓글/검색/닉네임 입력 공통) |
 
 ---
 
 ## 다음 단계
 
-**알림 — 남은 1건**
-- **iOS 푸시 실기기 확인** — iOS 16.4+ & 홈화면 추가 PWA에서 권한 허용 → 토큰 등록 → 표시 확인.
-  (인앱 + 안드로이드 FCM 푸시는 완료 — "알림 시스템" 섹션 참조)
+**알림 — 완료** ✅
+- 인앱 + 안드로이드/iOS 푸시 + 클릭 딥링크 + 무한스크롤 + 유도 배너 모두 완성 ("알림 시스템" 섹션 참조)
+
+**진행 중 / 다음 차례**
+- **온보딩 뒤로가기 버튼이 제목 가리는 문제** 수정 (헤더 분리/여백)
 
 **출시 준비**
-- **TWA(PWABuilder) 패키지 생성** — 구글 플레이스토어 등록
-- **assetlinks.json** — siktakilgi.com/.well-known/ 게시
+- **TWA(PWABuilder) 패키지 생성** — 구글 플레이스토어 등록 ($25), assetlinks.json 게시
 - **이메일 SMTP 교체** — Resend 등 별도 SMTP (Supabase 기본 하루 3건 제한)
+- **관리자 비번 변경 / 오너 승계 실테스트 / 약관 시행일 / 테스트·유령 데이터 정리**
 - **출시 전 체크리스트** (위 "출시 준비" 섹션 참조)
 
 **보류 (재추진 시 실현성 검증부터)**
