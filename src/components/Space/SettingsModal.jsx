@@ -17,19 +17,8 @@ export default function SettingsModal({ isOpen, onClose }) {
   const isStandalone = typeof window !== 'undefined' &&
     (window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches)
   const [pushPerm, setPushPerm] = useState(pushSupported ? Notification.permission : 'unsupported')
-  const [pushStatus, setPushStatus] = useState('')   // 화면 검증 로그(임시)
+  const [pushStatus, setPushStatus] = useState('')   // "알림 켜기" 시도 결과 표시
   const [pushBusy, setPushBusy] = useState(false)
-
-  // ── [디버그/임시] iOS PWA 진단용 — 출시 전 제거 예정 ──
-  // 실제 로드된 manifest의 start_url/scope 확인 ('/'(새것) vs 절대값(옛 캐시) 판별)
-  const [manifestInfo, setManifestInfo] = useState('로딩...')
-  useEffect(() => {
-    if (!isOpen) return
-    fetch('/manifest.webmanifest')
-      .then(r => r.json())
-      .then(m => setManifestInfo(`start_url=${m.start_url} · scope=${m.scope}`))
-      .catch(e => setManifestInfo('로드 실패: ' + (e?.message || e)))
-  }, [isOpen])
 
   async function handleEnablePush() {
     if (!user) return
@@ -404,7 +393,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                       </p>
                     </div>
                   </div>
-                  {/* [디버그] 버튼을 granted 외에는 항상 노출 — iOS에서 탭 후 결과 확인 가능 */}
+                  {/* granted가 아니면 항상 "알림 켜기" 노출 — iOS는 제스처(탭)로만 권한 요청 가능 */}
                   {pushPerm === 'granted' ? (
                     <span className="shrink-0 text-xs text-warm-brown font-medium">켜짐</span>
                   ) : (
@@ -483,19 +472,6 @@ export default function SettingsModal({ isOpen, onClose }) {
                 </svg>
                 <p className="text-sm text-red-400">회원 탈퇴</p>
               </button>
-            </div>
-          </section>
-
-          {/* ── [디버그/임시] iOS PWA 진단 패널 — 출시 전 제거 예정 ── */}
-          <section>
-            <p className="text-[11px] font-semibold text-warm-light tracking-widest uppercase mb-3">디버그 · iOS 진단 (임시)</p>
-            <div className="bg-white rounded-2xl border border-cream-200 p-4 space-y-1.5 text-[11px] text-warm-dark font-mono break-all">
-              <p>navigator.standalone: {String(typeof navigator !== 'undefined' ? navigator.standalone : 'n/a')}</p>
-              <p>display-mode: standalone = {String(typeof window !== 'undefined' && !!window.matchMedia?.('(display-mode: standalone)').matches)}</p>
-              <p>Notification.permission: {typeof Notification !== 'undefined' ? Notification.permission : 'no-Notification'}</p>
-              <p>origin: {typeof window !== 'undefined' ? window.location.origin : 'n/a'}</p>
-              <p>manifest: {manifestInfo}</p>
-              {pushStatus && <p className="text-warm-brown">최근 시도: {pushStatus}</p>}
             </div>
           </section>
 
