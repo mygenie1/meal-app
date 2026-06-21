@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import TutorialFlow from './components/Tutorial/TutorialFlow'
 import InstallBanner from './components/common/InstallBanner'
+import NotifyBanner from './components/common/NotifyBanner'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminUsersPage from './pages/admin/AdminUsersPage'
@@ -335,7 +336,9 @@ function AppContent() {
         </Routes>
       </main>
       <BottomNav />
+      {/* 배너 A(설치)는 not-standalone, 배너 B(알림)는 standalone에서만 → 동시 노출 안 됨 */}
       <InstallBanner />
+      <NotifyBanner />
     </div>
   )
 }

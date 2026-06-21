@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 
-const DISMISSED_KEY = 'install_banner_dismissed'
+const DISMISS_UNTIL_KEY = 'install_banner_dismissed_until'   // 재노출 억제 만료 timestamp(ms)
+const SUPPRESS_DAYS = 7
 
 function isStandalone() {
   return (
@@ -20,7 +21,8 @@ export default function InstallBanner() {
   const [prompt, setPrompt] = useState(null)
 
   useEffect(() => {
-    if (isStandalone() || localStorage.getItem(DISMISSED_KEY) === 'true') return
+    if (isStandalone()) return
+    if (Date.now() < Number(localStorage.getItem(DISMISS_UNTIL_KEY) || 0)) return
 
     if (isIOSSafari()) {
       setIsIOS(true)
@@ -49,7 +51,7 @@ export default function InstallBanner() {
 
   function handleDismiss() {
     setShow(false)
-    localStorage.setItem(DISMISSED_KEY, 'true')
+    localStorage.setItem(DISMISS_UNTIL_KEY, String(Date.now() + SUPPRESS_DAYS * 24 * 60 * 60 * 1000))
   }
 
   async function handleInstall() {
@@ -82,7 +84,7 @@ export default function InstallBanner() {
               </p>
             ) : (
               <p className="text-xs text-cream-300 mt-0.5">
-                홈화면에 추가하면 앱처럼 사용할 수 있어요
+                홈 화면에 추가하면 앱처럼 쓰고 알림도 받을 수 있어요
               </p>
             )}
           </div>
