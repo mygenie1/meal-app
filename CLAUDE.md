@@ -612,6 +612,37 @@ getOriginalUrl(entry)  // → 원본 URL
 - `viewingMeal` 상태를 MapPage에서 관리 (MealMap 외부)
 - `<MealMap onViewMeal={setViewingMeal} />` + `<MealDetailModal meal={viewingMeal} />`
 - MealDetailModal을 MealMap 외부에 렌더 → CSS 스태킹 이슈 방지
+- 헤더 돋보기 = 통합검색(`UnifiedSearch`) 오버레이 트리거 (아래 "통합검색" 참조)
+
+### 통합검색 (UnifiedSearch) — 홈/지도 공용
+게시글(meals) + 가고 싶은 곳(wishlist)을 한 검색에서 함께 찾고, 결과에 타입 배지 표시.
+
+- **공유 모듈** (복제 금지 — 한쪽 수정 시 양쪽 반영):
+  - `lib/unifiedSearch.js` `runUnifiedSearch(meals, wishlist, q)` → `{ type:'meal'|'wishlist', item }[]`
+    - meal 필터: title/restaurantName/review/memo · wishlist 필터: name/location/memo/category
+    - meal은 날짜 desc + 끼니순 정렬 후 검색
+  - `components/common/UnifiedSearch.jsx` — 전체화면 오버레이(z-[70]): 검색 입력 헤더 + 결과 목록 + 빈/힌트 상태
+  - `components/MealRecord/FeedCard.jsx` (meal 결과 + 홈 피드 공용, `photoArrOf` 포함)
+  - `components/common/WishResultCard.jsx` (wishlist 결과 카드, "가보고 싶은 곳" 배지)
+- **홈(HomePage)**: 헤더 돋보기 → UnifiedSearch. meal 클릭 → `setSelectedMeal`(상세), wishlist 클릭 → `navigate('/map', { state:{ tab:'wish', wishId } })`
+- **지도(MapPage)**: 헤더 돋보기 → 동일 UnifiedSearch. meal 클릭 → `setViewingMeal`(상세), wishlist 클릭 → 위시탭 전환 + 핀 이동
+- **wishlist 결과 → 핀 이동**: MapPage가 `focusWishId` + `focusWishNonce`(재클릭도 재이동) prop으로 MealMap에 전달 → MealMap이 `wishFlyTarget` + `highlightedWishId` + 카드 scrollIntoView (홈 딥링크는 마운트 시 nonce=1)
+
+### 카카오 장소 링크 (place_url)
+카카오 `keywordSearch` 결과의 `place_url`(`http://place.map.kakao.com/{id}`)을 저장 → 게시물/위시리스트에서 "카카오맵에서 보기" 링크.
+
+- DB: `meals.place_url`, `wishlist.place_url` (text, nullable) — `place-url-migration.sql` (적용 완료)
+- 매핑(AppContext): `rowToMeal`/`mealToRow`/`rowToWishlist`/`addWishlistItem`/`updateWishlistItem`에 `placeUrl` ↔ `place_url`, `MEAL_LIST_SELECT`에 포함
+- 저장: MealForm(외식/카페/배달)·MealMap 위시 폼의 장소 선택 시 `place.place_url` 저장
+  - **이름 직접 타이핑 시 placeUrl 비움** (이름·링크 불일치 방지 — `handleNameChange`)
+- 표시: MealDetailModal / 위시 상세·리스트 카드에 링크 (있을 때만, `target="_blank" rel="noopener noreferrer"`)
+- ★ 링크는 **검색으로 장소 선택한 것부터** 생김 — 기존 데이터/직접입력은 링크 미표시(회귀 없음), 재저장(장소 재선택) 시 생성
+
+### [보류] 지도 공유 링크(naver.me/kko.to) 붙여넣기 → 장소 자동 추출
+- **정식 "URL→장소" API 없음**: 카카오 로컬·네이버 검색 API 모두 키워드/좌표 기반만 제공, 단축URL→장소 엔드포인트 없음
+- 우회(리다이렉트 추적 + `og:title` 추출 → 카카오 재검색)는 **best-effort**: 성공률 불확실, 네이버 단축링크 특히 취약, 지도 페이지 스크래핑/비공식 API는 약관 회색지대
+- **핵심 가치는 이미 확보**: 검색으로 장소 선택 시 place_url이 저장됨
+- **결론: 보류.** 재추진 시 ① og:title이 카카오/네이버에서 쓸 만한지 실현성 검증 → ② best-effort + 실패 시 수동 입력 폴백 전제로 재검토
 
 ### Supabase Realtime
 - `meals`, `ingredients` 테이블 Realtime 구독 (spacesChannel 제거 — 나가기/참가는 DB 직접 조회로 대체)
@@ -818,6 +849,9 @@ _shared/
 | `get_space_members` 내부 변수명 | sm 대신 `sm0` 별칭 필수 (RETURNS TABLE의 user_id 컬럼과 충돌) |
 | Edge Function CORS — PATCH 메서드 | 상태 변경은 `POST + action` 패턴 사용 (CORS Allow-Methods에 PATCH 누락 이슈) |
 | admin sub 계정 권한 | super는 role 체크로 우회, sub는 permissions jsonb 배열 확인 필수 |
+| 카카오 place_url | **검색으로 장소 선택 시에만** 저장됨 — 직접 입력/기존 데이터는 링크 없음, 이름 직접 수정 시 placeUrl 비움 |
+| 새 컬럼 insert 전 마이그레이션 | place_url 등 새 컬럼은 **배포(push) 전에 ADD COLUMN 먼저** — 없으면 insert 전체가 실패(저장 회귀) |
+| 통합검색 로직 수정 | `lib/unifiedSearch.js` 한 곳만 고치면 홈/지도 양쪽 반영 (UnifiedSearch 공용) |
 
 ---
 
@@ -959,6 +993,10 @@ npm run dev
 | FK 삭제 규칙 정리 | meals/comments/ratings.user_id ON DELETE SET NULL, notifications.user_id ON DELETE CASCADE |
 | 유령 멤버 근본 해결 | space_members.user_id에 FK 없던 것 → 잔존 유령 DELETE + FK ON DELETE CASCADE 추가 |
 | FCM 푸시 SW 스코프 분리 | Workbox/FCM SW가 scope `/` 충돌 → FCM SW를 전용 스코프로 등록(firebase.js), 안드로이드 인앱+푸시 완전 동작 |
+| 통합검색 wishlist 포함 | 홈 검색이 meals+wishlist, "가보고 싶은 곳" 배지, 결과 클릭 시 핀 이동 |
+| 검색 공유 모듈화 | lib/unifiedSearch.js + UnifiedSearch/FeedCard/WishResultCard 추출 → 홈/지도 공용 |
+| 지도 탭 검색 | 장식용 돋보기 → 실제 검색(UnifiedSearch 오버레이), meal→상세 / wishlist→위시탭+핀 이동 |
+| 카카오 장소 링크 | meals/wishlist place_url 컬럼, 검색 선택 시 저장, 상세/카드에 "카카오맵에서 보기" 링크 |
 
 ---
 
@@ -973,6 +1011,9 @@ npm run dev
 - **assetlinks.json** — siktakilgi.com/.well-known/ 게시
 - **이메일 SMTP 교체** — Resend 등 별도 SMTP (Supabase 기본 하루 3건 제한)
 - **출시 전 체크리스트** (위 "출시 준비" 섹션 참조)
+
+**보류 (재추진 시 실현성 검증부터)**
+- **지도 공유 링크 붙여넣기 → 장소 자동 추출** — 정식 URL→장소 API 없음, best-effort만 가능. 검색 선택 시 place_url 저장으로 핵심 가치는 확보됨 ("통합검색" 섹션의 [보류] 참조)
 
 **장기**
 - **Claude Design으로 전체 UI 개선** — 전반적인 디자인 리뉴얼
