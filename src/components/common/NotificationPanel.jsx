@@ -82,7 +82,7 @@ export default function NotificationPanel({ open, onClose, onSelectMeal }) {
       <div className="absolute inset-0 bg-black/25" onClick={onClose} />
 
       {/* panel — top sheet */}
-      <div className="absolute top-0 left-0 right-0 bg-cream-50 rounded-b-3xl shadow-2xl max-h-[75dvh] flex flex-col overflow-hidden"
+      <div className="absolute top-0 left-0 right-0 bg-cream-50 rounded-b-3xl shadow-2xl max-h-[40dvh] flex flex-col overflow-hidden"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}>
 
         {/* 헤더 */}

@@ -284,8 +284,20 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
     () => (initial?.lat && initial?.lng) ? 'found' : 'idle'
   )
   const [ingredientsOpen, setIngredientsOpen] = useState(false)
-  // 사용 재료 선택 — { [ingredientId]: useQty } (저장 시 remaining에서 차감)
-  const [usedItems, setUsedItems] = useState({})
+  // 사용 재료 선택 — { [ingredientId 또는 'used:이름' 가상키]: useQty }
+  // 신규: remaining에서 차감 / 수정: 기존 used_ingredients를 초기값으로 (기록만 갱신, 차감 없음)
+  const [usedItems, setUsedItems] = useState(() => {
+    if (initial?.tag === '집밥' && Array.isArray(initial?.usedIngredients) && initial.usedIngredients.length) {
+      const remaining = currentSpace?.ingredients?.remaining || []
+      const seed = {}
+      initial.usedIngredients.forEach(u => {
+        const match = remaining.find(h => h.text === u.name)
+        seed[match ? match.id : `used:${u.name}`] = u.qty
+      })
+      return seed
+    }
+    return {}
+  })
   // 즉석 재료 추가 폼 — UI 전용 로컬 상태
   const [ingInput, setIngInput] = useState('')
   const [ingQty, setIngQty] = useState(1)
@@ -421,13 +433,18 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       }
     }
 
-    // 신규 집밥: 사용 재료 스냅샷 (저장 성공 후 remaining에서 차감)
-    const pendingDeductions = (!initial && form.tag === '집밥')
-      ? homeIngredients
+    // 사용 재료 기록 — 신규/수정 공통: 현재 선택을 used_ingredients로 저장
+    const selectedUsedArr = form.tag === '집밥'
+      ? usableIngredients
           .filter(i => (usedItems[i.id] ?? 0) > 0)
+          .map(i => ({ name: i.text, qty: usedItems[i.id] }))
+      : []
+    // 재고 차감 스냅샷 — ★ 신규 작성 시에만. 수정은 기록만 갱신(remaining 불변, 이중 차감 금지)
+    const pendingDeductions = (!initial && form.tag === '집밥')
+      ? usableIngredients
+          .filter(i => !i.virtual && (usedItems[i.id] ?? 0) > 0)
           .map(i => ({ ...i, useQty: usedItems[i.id] }))
       : []
-    const usedArr = pendingDeductions.map(i => ({ name: i.text, qty: i.useQty }))
 
     // 사진 Storage 업로드 — base64는 URL로 교체, 이미 URL이면 그대로
     setUploading(true)
@@ -445,10 +462,10 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
         lng,
         photos: uploadedPhotos,
         photo: uploadedPhotos[0] || '',
-        // 신규: 선택한 사용 재료 저장 / 수정: 기존 값 보존
-        usedIngredients: !initial
-          ? (usedArr.length > 0 ? usedArr : null)
-          : (initial.usedIngredients ?? null),
+        // 집밥: 현재 선택을 기록(신규·수정 공통) / 그 외: 기존 값 보존
+        usedIngredients: form.tag === '집밥'
+          ? (selectedUsedArr.length > 0 ? selectedUsedArr : null)
+          : (initial?.usedIngredients ?? null),
       })
 
       // 재료 차감 — 신규 집밥 + 저장 성공 시 1회만 (복구 없음)
@@ -532,6 +549,18 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
   // 집밥 재료 = ingredients 테이블 remaining 타입 (재료 탭 "남은 재료"와 동일 데이터 공유)
   // 집밥은 이미 산(냉장고에 남은) 재료를 쓰는 것이므로 남은 재료 목록을 보여줌
   const homeIngredients = currentSpace?.ingredients?.remaining || []
+  // 재료 사용 UI/저장 목록 = 남은 재료 + (수정 시) 이미 차감돼 remaining에 없는 기존 사용 재료(가상 행)
+  const usableIngredients = (() => {
+    const list = homeIngredients.map(i => ({ ...i }))
+    if (initial?.tag === '집밥' && Array.isArray(initial?.usedIngredients)) {
+      initial.usedIngredients.forEach(u => {
+        if (!list.some(h => h.text === u.name)) {
+          list.push({ id: `used:${u.name}`, text: u.name, quantity: u.qty, virtual: true })
+        }
+      })
+    }
+    return list
+  })()
   const style = TAG_STYLE[form.tag] || {}
 
   // 즉석 재료 추가 — remaining에 즉시 insert 후 목록에 바로 표시
@@ -953,10 +982,10 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
                   </button>
                 </div>
 
-                {/* 남은 재료 목록 — 체크 선택 + 사용 개수 */}
-                {homeIngredients.length > 0 ? (
+                {/* 남은 재료 목록 — 체크 선택 + 사용 개수 (수정 시 기존 사용 재료도 표시) */}
+                {usableIngredients.length > 0 ? (
                   <div className="space-y-2">
-                    {homeIngredients.map(item => {
+                    {usableIngredients.map(item => {
                       const isChecked = !!(usedItems[item.id])
                       const useQty = usedItems[item.id] || 1
                       return (
@@ -984,7 +1013,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
                           {/* 재료명 + 남은 개수 */}
                           <div className="flex-1 min-w-0">
                             <span className="text-sm text-warm-dark block truncate">{item.text}</span>
-                            <span className="text-[10px] text-cream-400">남은 {item.quantity}개</span>
+                            <span className="text-[10px] text-cream-400">{item.virtual ? '이전 기록' : `남은 ${item.quantity}개`}</span>
                           </div>
 
                           {/* 사용 개수 스테퍼 — 체크 시만 표시 */}
