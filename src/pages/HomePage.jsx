@@ -6,12 +6,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import MealDetailModal from '../components/MealRecord/MealDetailModal'
 import Modal from '../components/common/Modal'
 import DayDetail from '../components/MealRecord/DayDetail'
-import LazyImage from '../components/common/LazyImage'
-import { getOriginalUrl, getThumbUrl } from '../lib/uploadPhoto'
-import AuthorBadge from '../components/common/AuthorBadge'
-import { linkify } from '../lib/linkify'
+import { getThumbUrl } from '../lib/uploadPhoto'
 import NotificationPanel, { NotificationBell } from '../components/common/NotificationPanel'
 import Avatar from '../components/common/Avatar'
+import FeedCard, { photoArrOf } from '../components/MealRecord/FeedCard'
+import UnifiedSearch from '../components/common/UnifiedSearch'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700',
@@ -41,10 +40,6 @@ function avgRatingOf(ratingsMap, meal) {
   return meal.rating || 0
 }
 
-function photoArrOf(meal) {
-  return meal.photos?.length > 0 ? meal.photos : (meal.photo ? [meal.photo] : [])
-}
-
 // 포크+스푼 로고
 function ForkSpoonIcon({ className }) {
   return (
@@ -56,120 +51,12 @@ function ForkSpoonIcon({ className }) {
   )
 }
 
-// 포크+나이프 아이콘 (사진 없는 카드/빈 상태)
-function UtensilsIcon({ className }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v7m0 0a2 2 0 002-2V3m-2 7v8m3-15v18M19 3c-1.5 1-2 3-2 6 0 2 .5 3 2 3v6" />
-    </svg>
-  )
-}
-
 // 리포트 헤더 장식 (반짝이)
 function SparkleIcon({ className }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" stroke="none">
       <path d="M12 2l1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7z" />
     </svg>
-  )
-}
-
-function PinIcon({ className }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth="1.7" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
-      <circle cx="12" cy="8" r="2" />
-    </svg>
-  )
-}
-
-// ── RECENT 피드 카드 ──────────────────────────────────────────────────
-function FeedCard({ meal, onClick }) {
-  const { ratingsMap } = useApp()
-  const dateObj = parseISO(meal.date)
-  const title = meal.title || meal.restaurantName || '식사 기록'
-  const cover = meal.photosLoaded
-    ? (photoArrOf(meal).map(getOriginalUrl).find(Boolean) || '')
-    : ''
-  const mealRatings = ratingsMap?.[meal.id] || []
-  const avgRating = mealRatings.length > 0
-    ? Math.floor(mealRatings.reduce((s, r) => s + r.rating, 0) / mealRatings.length)
-    : meal.rating || 0
-  const ratingCount = mealRatings.length
-  const subPlace = meal.title && meal.restaurantName ? meal.restaurantName : null
-  const tagLine = [meal.mealTime, meal.tag].filter(Boolean).join(' · ')
-
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left bg-white rounded-2xl border border-cream-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
-    >
-      {/* 4:3 풀블리드 사진 */}
-      <div className="relative w-full aspect-[4/3] bg-cream-100">
-        {cover ? (
-          <LazyImage src={cover} className="w-full h-full" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <UtensilsIcon className="w-8 h-8 text-cream-300" />
-          </div>
-        )}
-
-        {/* 날짜칩 (좌상단) */}
-        <span className="absolute top-2.5 left-2.5 text-[11px] font-medium text-warm-dark bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full shadow-sm">
-          {format(dateObj, 'M.d eee', { locale: ko })}
-        </span>
-
-        {/* 끼니·태그 pill (우상단) */}
-        {tagLine && (
-          <span className="absolute top-2.5 right-2.5 text-[11px] font-medium text-warm-brown bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded-full shadow-sm">
-            {tagLine}
-          </span>
-        )}
-
-        {/* 가고 싶었던 곳 (좌하단) */}
-        {meal.fromWishlist && (
-          <span className="absolute bottom-2.5 left-2.5 text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/90 text-white font-medium flex items-center gap-0.5">
-            <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-            가고 싶었던 곳
-          </span>
-        )}
-      </div>
-
-      {/* 하단 정보 */}
-      <div className="px-4 py-3">
-        <div className="flex items-start justify-between gap-2">
-          <p className="font-semibold text-warm-dark text-base leading-snug truncate">{title}</p>
-          {avgRating > 0 && (
-            <div className="flex items-center gap-1 shrink-0 mt-0.5">
-              <span className="star-filled text-sm leading-none">★</span>
-              <span className="text-xs font-semibold text-warm-dark leading-none">{avgRating}</span>
-              {ratingCount >= 2 && <span className="text-[10px] text-cream-400 leading-none">·{ratingCount}</span>}
-            </div>
-          )}
-        </div>
-
-        {subPlace && (
-          <p className="text-xs text-warm-light mt-0.5 truncate">{subPlace}</p>
-        )}
-
-        {meal.location && (
-          <p className="text-xs text-warm-light mt-1 flex items-center gap-1">
-            <PinIcon className="w-3 h-3 shrink-0" />
-            <span className="truncate">{meal.location}</span>
-          </p>
-        )}
-
-        {meal.review && (
-          <p className="text-xs text-warm-light mt-1.5 line-clamp-1 leading-relaxed break-words">
-            {linkify(meal.review)}
-          </p>
-        )}
-
-        <AuthorBadge meal={meal} className="mt-2" />
-      </div>
-    </button>
   )
 }
 
@@ -187,35 +74,6 @@ function SubStat({ value, label, active, onClick }) {
   )
 }
 
-// 통합검색 결과용 — 가보고 싶은 곳 카드 (FeedCard는 meal 전용이라 별도)
-function WishResultCard({ wish, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left bg-cream-50 rounded-2xl shadow-sm border border-cream-200 p-4 flex items-start gap-3 hover:bg-cream-100 active:scale-[0.99] transition-colors"
-    >
-      <div className="w-10 h-10 rounded-xl bg-cream-200 flex items-center justify-center shrink-0">
-        <svg className="w-5 h-5 text-warm-brown" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-[10px] font-semibold text-white bg-warm-brown px-1.5 py-0.5 rounded-full leading-none">가보고 싶은 곳</span>
-          {wish.category && <span className="text-[10px] text-warm-light">{wish.category}</span>}
-        </div>
-        <p className="text-sm font-semibold text-warm-dark truncate">{wish.name || '이름 없는 장소'}</p>
-        {wish.location && <p className="text-xs text-warm-light truncate mt-0.5">{wish.location}</p>}
-        {wish.memo && <p className="text-xs text-cream-400 truncate mt-0.5">{wish.memo}</p>}
-      </div>
-      <svg className="w-4 h-4 text-cream-300 shrink-0 mt-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-      </svg>
-    </button>
-  )
-}
-
 export default function HomePage() {
   const { currentSpace, spaces, loadMealPhotos, ratingsMap, user } = useApp()
   const navigate = useNavigate()
@@ -228,10 +86,8 @@ export default function HomePage() {
   const [tagFilter, setTagFilter] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const sentinelRef = useRef(null)
   const requestedPhotosRef = useRef(new Set())
-  const searchInputRef = useRef(null)
   const today = useMemo(() => new Date(), [])
   const [reportMonth, setReportMonth] = useState(() => startOfMonth(new Date()))
 
@@ -430,29 +286,6 @@ export default function HomePage() {
   const visibleMeals = filteredMeals.slice(0, visibleCount)
   const hasMore = visibleCount < filteredMeals.length
 
-  // 검색 결과 — 게시글(meals) + 가보고 싶은 곳(wishlist) 혼합 { type, item }
-  const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    if (!q) return []
-    const mealHits = sortedMeals
-      .filter(m =>
-        (m.title && m.title.toLowerCase().includes(q)) ||
-        (m.restaurantName && m.restaurantName.toLowerCase().includes(q)) ||
-        (m.review && m.review.toLowerCase().includes(q)) ||
-        (m.memo && m.memo.toLowerCase().includes(q))
-      )
-      .map(m => ({ type: 'meal', item: m }))
-    const wishHits = wishlist
-      .filter(w =>
-        (w.name && w.name.toLowerCase().includes(q)) ||
-        (w.location && w.location.toLowerCase().includes(q)) ||
-        (w.memo && w.memo.toLowerCase().includes(q)) ||
-        (w.category && w.category.toLowerCase().includes(q))
-      )
-      .map(w => ({ type: 'wishlist', item: w }))
-    return [...mealHits, ...wishHits]
-  }, [searchQuery, sortedMeals, wishlist])
-
   // 필터 변경 시 페이지 리셋
   useEffect(() => { setVisibleCount(PAGE_SIZE) }, [ratingFilter, tagFilter])
 
@@ -468,19 +301,6 @@ export default function HomePage() {
       }
     })
   }, [visibleMeals])
-
-  // 검색 결과 사진 로드 (meal 타입만)
-  useEffect(() => {
-    if (!searchQuery.trim()) return
-    searchResults.forEach(r => {
-      if (r.type !== 'meal') return
-      const m = r.item
-      if (!m.photosLoaded && !requestedPhotosRef.current.has(m.id)) {
-        requestedPhotosRef.current.add(m.id)
-        loadMealPhotos(m.id)
-      }
-    })
-  }, [searchResults])
 
   // 무한 스크롤
   useEffect(() => {
@@ -526,37 +346,7 @@ export default function HomePage() {
   // ── 헤더 (로고 + 벨 + 아바타) ───────────────────────────────────────
   const Header = (
     <header className="sticky top-0 z-40 bg-cream-50/90 backdrop-blur-sm border-b border-cream-200 px-4 py-3">
-      {searchOpen ? (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => { setSearchOpen(false); setSearchQuery('') }}
-            className="p-1 -ml-1 text-warm-light hover:text-warm-brown transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <input
-            ref={searchInputRef}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="제목, 식당명, 한줄평, 메모 검색"
-            autoFocus
-            className="flex-1 bg-transparent text-base text-warm-dark outline-none placeholder-cream-400"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-cream-400 hover:text-warm-light transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between">
           {/* 로고 + 워드마크 */}
           <div className="flex items-center gap-2">
             <ForkSpoonIcon className="w-5 h-5 text-warm-brown" />
@@ -584,7 +374,6 @@ export default function HomePage() {
             </button>
           </div>
         </div>
-      )}
     </header>
   )
 
@@ -617,44 +406,7 @@ export default function HomePage() {
     <>
       {Header}
 
-      {/* 검색 결과 화면 */}
-      {searchOpen && (
-        <div className="pb-28 pt-4 px-4">
-          {!searchQuery.trim() ? (
-            <div className="flex flex-col items-center justify-center text-center py-20">
-              <svg className="w-10 h-10 text-cream-300 mb-3" fill="none" stroke="currentColor" strokeWidth="1.4" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-              </svg>
-              <p className="text-sm text-cream-400">검색어를 입력해주세요</p>
-              <p className="text-xs text-cream-300 mt-1">제목, 식당명, 한줄평, 메모, 가보고 싶은 곳</p>
-            </div>
-          ) : searchResults.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center py-20">
-              <p className="text-sm font-medium text-warm-dark mb-1">검색 결과가 없어요</p>
-              <p className="text-xs text-warm-light">다른 키워드로 검색해보세요</p>
-            </div>
-          ) : (
-            <>
-              <p className="text-xs text-warm-light mb-3">
-                <span className="font-medium text-warm-brown">"{searchQuery}"</span> 검색 결과 {searchResults.length}건
-              </p>
-              <div className="space-y-4">
-                {searchResults.map(r => r.type === 'meal' ? (
-                  <FeedCard key={`m-${r.item.id}`} meal={r.item} onClick={() => setSelectedMeal(r.item)} />
-                ) : (
-                  <WishResultCard
-                    key={`w-${r.item.id}`}
-                    wish={r.item}
-                    onClick={() => navigate('/map', { state: { tab: 'wish', wishId: r.item.id } })}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      <div className={`pb-28 ${searchOpen ? 'hidden' : ''}`}>
+      <div className="pb-28">
         {/* 날짜 + 인사 */}
         <div className="px-4 pt-5 pb-3">
           <p className="text-xs text-warm-light">
@@ -1069,6 +821,13 @@ export default function HomePage() {
           const meal = spaces.flatMap(s => s.meals).find(m => m.id === mealId)
           if (meal) setSelectedMeal(meal)
         }}
+      />
+
+      <UnifiedSearch
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onSelectMeal={m => { setSearchOpen(false); setSelectedMeal(m) }}
+        onSelectWish={w => { setSearchOpen(false); navigate('/map', { state: { tab: 'wish', wishId: w.id } }) }}
       />
     </>
   )

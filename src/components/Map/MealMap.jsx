@@ -1101,7 +1101,7 @@ function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail, i
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────
-export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRandom, focusWishId }) {
+export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRandom, focusWishId, focusWishNonce }) {
   const { currentSpace, addMeal, addWishlistItem, updateWishlistItem, deleteWishlistItem, cacheGeocoords, loadMealPhotos, user, wishlistInterestsMap, addWishlistInterest, removeWishlistInterest } = useApp()
 
   const [activeTab, setActiveTab] = useState(initialTab === 'wishlist' ? 'wishlist' : 'map')
@@ -1185,7 +1185,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
     return () => window.removeEventListener('popstate', openPendingEdit)
   }, [])
 
-  // 홈 "오늘 어디가지?" → 가고싶은곳 탭 + 랜덤 추천 / 검색 결과 클릭 → 특정 핀 이동 (마운트 1회)
+  // 홈 "오늘 어디가지?" → 가고싶은곳 탭 + 랜덤 추천 (마운트 1회)
   useEffect(() => {
     if (initialTab === 'wishlist') {
       onTabChange?.('wishlist')
@@ -1193,21 +1193,27 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
         const t = setTimeout(() => handleRandomPick(), 300)
         return () => clearTimeout(t)
       }
-      // 통합검색에서 '가보고 싶은 곳' 결과 클릭 → 해당 핀으로 이동 + 카드 강조
-      if (focusWishId) {
-        const w = (currentSpace?.wishlist || []).find(x => x.id === focusWishId)
-        if (w && w.lat != null && w.lng != null) {
-          setHighlightedWishId(w.id)
-          setWishFlyTarget([w.lat, w.lng])   // wishMapReady 후 panTo (mapReady 전 클릭도 안전)
-          const t = setTimeout(() => {
-            document.getElementById(`wish-card-${w.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          }, 500)
-          return () => clearTimeout(t)
-        }
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 통합검색에서 '가보고 싶은 곳' 결과 클릭 → 해당 핀으로 이동 + 카드 강조
+  // (홈 진입=마운트 시 nonce, 지도 내 검색=클릭마다 nonce 증가 → 재클릭도 재이동)
+  useEffect(() => {
+    if (!focusWishId) return
+    setActiveTab('wishlist')
+    onTabChange?.('wishlist')
+    const w = (currentSpace?.wishlist || []).find(x => x.id === focusWishId)
+    if (w && w.lat != null && w.lng != null) {
+      setHighlightedWishId(w.id)
+      setWishFlyTarget([w.lat, w.lng])   // wishMapReady 후 panTo (mapReady 전에도 안전)
+      const t = setTimeout(() => {
+        document.getElementById(`wish-card-${w.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 500)
+      return () => clearTimeout(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusWishNonce])
 
   // ── 파생 상태 ─────────────────────────────────────────────────
   const meals = useMemo(() => (currentSpace?.meals || []).filter(m => m.location), [currentSpace?.meals])
