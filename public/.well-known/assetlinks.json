@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.siktakilgi.app",
+    "sha256_cert_fingerprints": ["C7:12:26:11:1D:63:BE:99:4F:84:C6:76:90:61:47:F9:EC:53:F4:7F:5F:1C:5E:14:BA:15:92:8F:62:91:32:11"]
+  }
+}]
