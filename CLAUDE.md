@@ -102,6 +102,8 @@ style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
 ```
 meal-app/
 ├── public/
+│   ├── .well-known/
+│   │   └── assetlinks.json              TWA Digital Asset Links (com.siktakilgi.app ↔ www.siktakilgi.com)
 │   ├── favicon.svg
 │   ├── icon.svg                         PWA 아이콘 원본 (포크+스푼, warm-brown)
 │   ├── icon-192x192.png                 PWA 아이콘
@@ -668,7 +670,7 @@ getOriginalUrl(entry)  // → 원본 URL
 - 앱 이름: 식탁일기 / 테마 컬러: #6b4f3a
 - 오프라인 감지 시 OfflineBanner 표시 (App.jsx)
 - Workbox로 앱 쉘 전체 프리캐시 → 오프라인에서도 앱 로드 가능
-- manifest `start_url` / `scope` = `https://siktakilgi.com/` (vite.config.js VitePWA 설정)
+- manifest `start_url` / `scope` / `id` = `'/'` (상대경로 — apex 절대값이면 www와 cross-origin으로 무시됨. vite.config.js VitePWA 설정)
 
 ### 아바타 정책
 - 모든 계정(카카오·이메일 공통): kakaocdn / k.kakaocdn URL → 유효하지 않은 것으로 간주
@@ -833,26 +835,61 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 
 ## 출시 준비
 
-### 배포 방식 — TWA (Trusted Web Activity)
-- **PWABuilder**로 PWA → 구글 플레이스토어 TWA 패키지 생성
-- 앱 업데이트: git push → Vercel 자동 배포로 끝 (앱 껍데기 변경 시만 재패키징)
-- **assetlinks.json** 을 `https://siktakilgi.com/.well-known/assetlinks.json`에 게시 필요
-  - TWA가 siktakilgi.com을 신뢰하는 도메인으로 확인하는 파일
-- 구글 플레이 개발자 계정: $25 (일회성)
+### 플레이스토어(안드로이드 TWA) — 진행 중
+
+**완료된 단계**
+- [x] PWABuilder로 `.aab` 생성 완료. Package ID: `com.siktakilgi.app`
+- [x] 서명 키(`signing.keystore` + `signing-key-info`) 생성 — ★ 별도 안전 백업 필수
+  - 앱 업데이트 시 반드시 'Use mine'으로 같은 키 사용. 분실 시 업데이트 불가.
+- [x] `public/.well-known/assetlinks.json` 게시 (SHA256 지문 포함)
+  - `vercel.json`에 `.well-known/:path*` 명시적 정적 서빙 규칙 추가 (SPA catch-all 우선 방지)
+  - Google Digital Asset Links API 검증 통과 — `www.siktakilgi.com ↔ com.siktakilgi.app` 연결 확인
+- [x] 앱 업데이트 방식 확정: `git push` → Vercel 자동 배포 (앱 껍데기 변경 시만 재패키징)
+
+**대기 중**
+- [ ] 구글 플레이 개발자 계정($25 일회성) — 등록 요청 완료, **승인 대기 중**
+
+**승인 후 다음 단계**
+1. 플레이 콘솔에서 앱 생성 → `.aab` 업로드 → 스토어 정보 입력 → 심사 제출
+2. 제출 시 필요한 준비물:
+   - 스크린샷 (폰 기준 최소 2장)
+   - 짧은 설명(80자) / 자세한 설명(4000자)
+   - 피처 그래픽 (1024×500)
+   - 512 아이콘 (있음)
+   - 개인정보처리방침 URL (`https://siktakilgi.com/privacy` — 있음)
+   - 카테고리, 콘텐츠 등급
+   → 스토어 등록물(설명/그래픽/스크린샷)은 Claude Design에 브랜딩 프롬프트로 제작 의뢰 예정
+
+### 애플 앱스토어 — 보류
+
+- iOS는 PWA(홈화면 추가)로 이미 푸시까지 동작 → 당장 불필요
+- 애플 앱스토어: 연 $99 + Mac 필수(Xcode) + TWA 방식 심사 거부 위험
+- **결정**: 구글 출시 완성 후, Mac 확보되면 검토
+  - 길 A: PWABuilder iOS 시도 → 거부 시 길 B: Capacitor 래핑
+
+### 배포 방식 요약
+
+| 항목 | 내용 |
+|---|---|
+| 안드로이드 | TWA (PWABuilder) — 플레이스토어 |
+| iOS | PWA 홈화면 추가 (현재) / 앱스토어 보류 |
+| 앱 업데이트 | `git push` → Vercel 자동 배포 (TWA 재패키징 불필요) |
+| Package ID | `com.siktakilgi.app` |
+| 서명 키 | 별도 안전 백업 — 분실 시 업데이트 불가 |
 
 ### 출시 전 체크리스트
 - [x] 알림 — 인앱 + 안드로이드 + **iOS** FCM 푸시 + 클릭 딥링크 완성 (2026-06-21)
-- [ ] **온보딩 뒤로가기 버튼이 제목 가리는 문제** 수정 (진행 중 — 헤더 분리/여백)
+- [x] assetlinks.json 게시 + Digital Asset Links 검증 통과 (2026-06-22)
+- [ ] 구글 플레이 개발자 계정 승인 대기 → 콘솔 업로드/심사 제출
+- [ ] 스토어 등록물 제작 (스크린샷/설명/피처 그래픽 — Claude Design 의뢰 예정)
 - [ ] 관리자 비밀번호 변경 (현재 채팅에 노출된 초기 비밀번호 사용 중)
 - [ ] 오너 승계 실제 테스트 (멤버 2명 스페이스에서 오너 탈퇴 시나리오)
 - [ ] 이메일 인증메일 실제 수신 확인
   - Supabase 기본 SMTP: 하루 3건 제한 → 출시 전 별도 SMTP 서비스(Resend 등) 연동 검토
-- [ ] 약관/개인정보처리방침 내용 최종 검토 + 시행일을 출시일로
+- [ ] 약관/개인정보처리방침 시행일을 출시일로 변경
 - [ ] admin@siktakilgi.com 수신 테스트 (다음 스마트워크 메일)
 - [ ] 테스트 계정 / 유령 데이터 정리
-- [ ] assetlinks.json 게시 및 TWA 검증 (PWABuilder, 플레이스토어 $25)
 - [ ] Android TWA 포그라운드 알림 아이콘 확인
-- [ ] (선택) www/non-www 도메인 일관성 정리 (현재 apex 308→www, manifest 상대경로라 동작에는 문제 없음)
 
 ---
 
@@ -1031,25 +1068,33 @@ npm run dev
 | 집밥 재료 차분 동기화 | 수정 시 기존 used_ingredients 대비 delta만 재고 조정(이중 차감 없음), 가상행으로 차감된 원본 표시 |
 | 유도 배너 2종 | not-standalone→앱설치, standalone+권한default→알림켜기(registerFCMToken 재사용), 각 7일 억제 |
 | iOS 댓글 입력 넘침 수정 | flex min-width:auto 넘침 → 입력행 min-w-0 (댓글/검색/닉네임 입력 공통) |
+| TWA .aab 생성 | PWABuilder로 안드로이드 TWA 패키지 생성. Package ID: com.siktakilgi.app. 서명 키 별도 백업 |
+| assetlinks.json 게시 | public/.well-known/assetlinks.json (SHA256 지문), vercel.json .well-known 정적 서빙 규칙 추가 |
+| Digital Asset Links 검증 | www.siktakilgi.com ↔ com.siktakilgi.app 연결 확인. apex→www 308 리다이렉트도 정상 |
+| manifest 상대경로 수정 | vite.config.js start_url/scope/id를 '/'로 (apex 절대값 → www cross-origin 문제 해결) |
 
 ---
 
 ## 다음 단계
 
-**알림 — 완료** ✅
-- 인앱 + 안드로이드/iOS 푸시 + 클릭 딥링크 + 무한스크롤 + 유도 배너 모두 완성 ("알림 시스템" 섹션 참조)
+**플레이스토어(안드로이드 TWA) — 대기 중** ⏳
+- `.aab` 생성·서명 완료, assetlinks.json 검증 통과
+- **구글 플레이 개발자 계정 승인 대기 중** → 승인되면 콘솔 업로드 → 스토어 정보 입력 → 심사 제출
+- 스토어 등록물(스크린샷/설명/피처 그래픽) → Claude Design 브랜딩 프롬프트 제작 의뢰 예정
 
-**진행 중 / 다음 차례**
-- **온보딩 뒤로가기 버튼이 제목 가리는 문제** 수정 (헤더 분리/여백)
+**출시 전 체크리스트** (우선순위순)
+1. (대기) 구글 개발자 계정 승인 → 플레이 콘솔 업로드/제출
+2. 스토어 등록물 제작 (Claude Design 의뢰)
+3. 관리자 비번 변경
+4. 오너 승계 실테스트
+5. 이메일 인증메일 수신 확인 (SMTP 한도 — Resend 교체 검토)
+6. 약관 시행일을 출시일로 변경
+7. admin@ 수신 테스트, 테스트 계정 정리
+→ 전체 목록은 위 "출시 준비" 섹션 체크리스트 참조
 
-**출시 준비**
-- **TWA(PWABuilder) 패키지 생성** — 구글 플레이스토어 등록 ($25), assetlinks.json 게시
-- **이메일 SMTP 교체** — Resend 등 별도 SMTP (Supabase 기본 하루 3건 제한)
-- **관리자 비번 변경 / 오너 승계 실테스트 / 약관 시행일 / 테스트·유령 데이터 정리**
-- **출시 전 체크리스트** (위 "출시 준비" 섹션 참조)
-
-**보류 (재추진 시 실현성 검증부터)**
-- **지도 공유 링크 붙여넣기 → 장소 자동 추출** — 정식 URL→장소 API 없음, best-effort만 가능. 검색 선택 시 place_url 저장으로 핵심 가치는 확보됨 ("통합검색" 섹션의 [보류] 참조)
+**보류**
+- **애플 앱스토어** — iOS는 PWA 홈화면 추가로 푸시까지 동작. Mac 확보 후 재검토 (PWABuilder iOS → 실패 시 Capacitor)
+- **지도 공유 링크 붙여넣기 → 장소 자동 추출** — 정식 URL→장소 API 없음, best-effort만 가능. 검색 선택 시 place_url 저장으로 핵심 가치 확보됨
 
 **장기**
 - **Claude Design으로 전체 UI 개선** — 전반적인 디자인 리뉴얼
