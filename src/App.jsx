@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
+import { trackPageView, sanitizePath } from './lib/analytics'
 import BottomNav from './components/common/BottomNav'
 import HomePage from './pages/HomePage'
 import CalendarPage from './pages/CalendarPage'
@@ -384,9 +385,24 @@ function RootRouter() {
   )
 }
 
+// GA4 SPA 라우트 추적: location 변경마다 page_view 1건 전송.
+// 최초 마운트 때도 1회 전송(초기 페이지뷰) + 정제 경로 기준 연속 중복 제거.
+function GAListener() {
+  const location = useLocation()
+  const lastPath = useRef(null)
+  useEffect(() => {
+    const path = sanitizePath(location.pathname, location.search)
+    if (path === lastPath.current) return // ?meal= 제거 후 동일 경로 재진입 등 연속 중복 차단
+    lastPath.current = path
+    trackPageView(location.pathname, location.search)
+  }, [location.pathname, location.search])
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <GAListener />
       <RootRouter />
     </BrowserRouter>
   )
