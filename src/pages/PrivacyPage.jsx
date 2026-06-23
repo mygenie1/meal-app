@@ -88,6 +88,10 @@ export default function PrivacyPage() {
                   <td className="py-1.5 px-2 text-warm-light">푸시 알림(FCM) 발송</td>
                 </tr>
                 <tr>
+                  <td className="py-1.5 px-2 text-warm-dark">Google LLC (Google Analytics)</td>
+                  <td className="py-1.5 px-2 text-warm-light">서비스 이용 통계·방문 분석</td>
+                </tr>
+                <tr>
                   <td className="py-1.5 px-2 text-warm-dark">Vercel Inc.</td>
                   <td className="py-1.5 px-2 text-warm-light">웹 서버 호스팅</td>
                 </tr>
@@ -99,6 +103,7 @@ export default function PrivacyPage() {
             </table>
           </div>
           <p className="mt-1.5">각 수탁사의 개인정보 처리 방침은 해당 업체 홈페이지에서 확인하실 수 있습니다.</p>
+          <p className="mt-1.5"><span className="font-medium">Google Analytics 안내</span>: 식탁일기는 서비스 개선을 위해 Google Analytics(GA4)를 사용하여 방문 통계를 수집합니다. 수집 항목은 페이지뷰, 기기·브라우저 정보, 대략적 위치(국가/지역 수준)이며, 이 과정에서 쿠키가 사용됩니다. 식탁일기는 이메일·계정 식별자(user_id) 등 개인을 식별할 수 있는 정보를 Google Analytics로 전송하지 않으며, 익명화된 이용 통계만 수집합니다.</p>
         </Section>
 
         <Section title="5. 제휴 마케팅 (쿠팡 파트너스)">
