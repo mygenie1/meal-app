@@ -1,0 +1,9 @@
+# 식탁일기 robots.txt
+# 로그인 기반 SPA — 앱 본체는 로그인 뒤라 어차피 빈 셸. 별도 차단 불필요.
+# 관리자 경로만 색인 제외.
+
+User-agent: *
+Allow: /
+Disallow: /admin
+
+Sitemap: https://www.siktakilgi.com/sitemap.xml
