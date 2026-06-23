@@ -852,6 +852,23 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 - **★ 두 인증 메타 태그(`google-site-verification` / `naver-site-verification`)는
   index.html `<head>`에 있음 — 절대 건드리지 말 것.**
 
+### Google Analytics (GA4) — 연동 완료 (2026-06-23)
+- **측정 ID**: `G-BBFV8FZ4LG`. index.html `<head>`에 gtag 스니펫,
+  `config(..., { send_page_view: false })` — 자동 페이지뷰 끄고 라우터에서 수동 전송(중복 방지).
+  localhost/127.0.0.1은 `window['ga-disable-G-BBFV8FZ4LG']=true`로 차단(개발 데이터 오염 방지).
+- **src/lib/analytics.js** `trackPageView(pathname, search)`:
+  - SPA 라우트 변경 시 `gtag('event','page_view', {page_path, page_location, page_title})` 수동 전송.
+  - **민감/일회성 쿼리(`meal`, `code`, `access_token`, `refresh_token`)는 page_path에서 제거**,
+    `page_location`은 `origin + 정제경로`만(해시 토큰 유출 방지).
+  - `import.meta.env.PROD`에서만 전송. **사용자 식별정보(user_id/이메일) 절대 미전송.**
+- **App.jsx `GAListener`**: `useLocation` 구독 → 최초 1회 + 라우트 변경마다 페이지뷰,
+  `useRef`로 정제경로 기준 연속 중복 제거(콜드스타트 `?meal=`→`/` replace 중복 방지).
+- **개인정보처리방침(/privacy)**: 처리 위탁 섹션에 Google LLC(Google Analytics) 추가 +
+  쿠키 사용·식별정보 미전송·익명 통계만 수집 명시.
+- **★ head 마크업 깨짐 교훈**: GA 추가 중 google verification 태그가 `>` 없이 안 닫혀
+  떠도는 `>`가 화면 좌상단에 텍스트로 노출됐음(수정 완료). index.html `<head>` 직접 편집 시
+  각 `<meta>`/`<link>`가 독립적으로 self-close(`/>`) 됐는지 반드시 확인.
+
 ### 현황 / 한계
 - 로그인 기반 SPA → 목표는 **"앱 발견성"**(브랜드 검색 + 공유 미리보기 + 공개페이지 위생).
   내부 콘텐츠(사용자 기록)는 로그인 뒤라 검색 대상 아님 — **의도된 정상**.
@@ -880,11 +897,11 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
   - Google Digital Asset Links API 검증 통과 — `www.siktakilgi.com ↔ com.siktakilgi.app` 연결 확인
 - [x] 앱 업데이트 방식 확정: `git push` → Vercel 자동 배포 (앱 껍데기 변경 시만 재패키징)
 
-**대기 중**
-- [ ] 구글 플레이 개발자 계정($25 일회성) — 등록 요청 완료, **승인 대기 중**
+- [x] **구글 플레이 개발자 계정($25 일회성) — 승인 완료** ★ (2026-06-23)
 
-**승인 후 다음 단계**
-1. 플레이 콘솔에서 앱 생성 → `.aab` 업로드 → 스토어 정보 입력 → 심사 제출
+**다음 단계 (업로드 직전 — 내일 진행)**
+1. 플레이 콘솔에서 앱 생성 → 스토어 등록정보 입력 → `.aab` 업로드 →
+   콘텐츠 등급/데이터 안전 설문 → 검토 제출
 2. 제출 시 필요한 준비물:
    - 스크린샷 (폰 기준 최소 2장)
    - 짧은 설명(80자) / 자세한 설명(4000자)
@@ -900,6 +917,7 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 - 애플 앱스토어: 연 $99 + Mac 필수(Xcode) + TWA 방식 심사 거부 위험
 - **결정**: 구글 출시 완성 후, Mac 확보되면 검토
   - 길 A: PWABuilder iOS 시도 → 거부 시 길 B: Capacitor 래핑
+- ★ 개발용 아이폰은 **iOS 17+ 모델 필요**(개발자 로그인/사이드로드 요건) — 아이폰 8 불가
 
 ### 배포 방식 요약
 
@@ -915,13 +933,15 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 - [x] 알림 — 인앱 + 안드로이드 + **iOS** FCM 푸시 + 클릭 딥링크 완성 (2026-06-21)
 - [x] assetlinks.json 게시 + Digital Asset Links 검증 통과 (2026-06-22)
 - [x] SEO 1순위 — title/canonical/og:url(www) + robots/sitemap + 구글/네이버 등록 (2026-06-23)
-- [ ] 구글 플레이 개발자 계정 승인 대기 → 콘솔 업로드/심사 제출
+- [x] Google Analytics(GA4) 연동 + SPA 라우트 추적 + 방침 GA 고지 (2026-06-23)
+- [x] 구글 플레이 개발자 계정 승인 완료 (2026-06-23)
+- [ ] **플레이 콘솔 앱 생성 → 등록정보 입력 → .aab 업로드 → 설문 → 검토 제출 (내일, 1순위)**
 - [ ] 스토어 등록물 제작 (스크린샷/설명/피처 그래픽 — Claude Design 의뢰 예정)
+- [ ] **약관/개인정보처리방침 시행일(EFFECTIVE_DATE 현재 2026-06-19)을 출시일로 변경**
 - [ ] 관리자 비밀번호 변경 (현재 채팅에 노출된 초기 비밀번호 사용 중)
 - [ ] 오너 승계 실제 테스트 (멤버 2명 스페이스에서 오너 탈퇴 시나리오)
 - [ ] 이메일 인증메일 실제 수신 확인
   - Supabase 기본 SMTP: 하루 3건 제한 → 출시 전 별도 SMTP 서비스(Resend 등) 연동 검토
-- [ ] 약관/개인정보처리방침 시행일을 출시일로 변경
 - [ ] admin@siktakilgi.com 수신 테스트 (다음 스마트워크 메일)
 - [ ] 테스트 계정 / 유령 데이터 정리
 - [ ] Android TWA 포그라운드 알림 아이콘 확인
@@ -954,6 +974,9 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 | 검색엔진 소유권 인증 메타 | index.html `<head>`의 `google-site-verification`/`naver-site-verification` 태그 삭제 금지 (지우면 소유권 인증 풀림) |
 | robots.txt/sitemap.xml 서빙 | public/에 두면 정적 파일이라 SPA catch-all rewrite보다 우선 서빙됨 (assetlinks.json과 동일) |
 | canonical/도메인 신호 | www로 통일 (서빙이 www, apex는 308→www). og:url·canonical 모두 `https://www.siktakilgi.com/` |
+| index.html `<head>` 직접 편집 | 각 `<meta>`/`<link>`가 독립 self-close(`/>`)인지 확인 — 한 태그라도 `>` 빠지면 떠도는 `>`가 화면에 텍스트로 새어나옴(실제 발생) |
+| GA 페이지뷰에 쿼리/식별정보 포함 | `analytics.js`가 `meal`/`code`/토큰 쿼리 제거 + user_id/이메일 미전송. 새 민감 쿼리 추가 시 `STRIP_PARAMS`에도 추가 |
+| GA 자동 페이지뷰 중복 | index.html은 `send_page_view:false`, 페이지뷰는 라우터(GAListener)에서만 수동 전송 — config에서 다시 켜지 말 것 |
 
 ---
 
@@ -1111,23 +1134,26 @@ npm run dev
 | Digital Asset Links 검증 | www.siktakilgi.com ↔ com.siktakilgi.app 연결 확인. apex→www 308 리다이렉트도 정상 |
 | manifest 상대경로 수정 | vite.config.js start_url/scope/id를 '/'로 (apex 절대값 → www cross-origin 문제 해결) |
 | SEO 1순위 | title 보강 + canonical + og:url www 통일 + robots.txt/sitemap.xml(정적 우선 서빙) + 구글/네이버 등록 |
+| Google Analytics(GA4) | G-BBFV8FZ4LG, gtag(send_page_view:false), analytics.js trackPageView SPA 라우트 추적, 민감 쿼리 제거, PROD만 전송, 방침 GA 고지 |
+| index.html head 마크업 수정 | google verification 태그 미닫힘 → 떠도는 '>' 화면 노출 수정, 각 meta/link 독립 self-close |
 
 ---
 
 ## 다음 단계
 
-**플레이스토어(안드로이드 TWA) — 대기 중** ⏳
+**플레이스토어(안드로이드 TWA) — 업로드 직전** 🚀
 - `.aab` 생성·서명 완료, assetlinks.json 검증 통과
-- **구글 플레이 개발자 계정 승인 대기 중** → 승인되면 콘솔 업로드 → 스토어 정보 입력 → 심사 제출
+- **구글 플레이 개발자 계정 승인 완료** ★ (2026-06-23)
+- **다음(내일): 플레이 콘솔 앱 생성 → 등록정보 입력 → .aab 업로드 → 콘텐츠등급/데이터안전 설문 → 검토 제출**
 - 스토어 등록물(스크린샷/설명/피처 그래픽) → Claude Design 브랜딩 프롬프트 제작 의뢰 예정
 
 **출시 전 체크리스트** (우선순위순)
-1. (대기) 구글 개발자 계정 승인 → 플레이 콘솔 업로드/제출
+1. **플레이 콘솔 업로드/제출 (내일, 1순위)**
 2. 스토어 등록물 제작 (Claude Design 의뢰)
-3. 관리자 비번 변경
-4. 오너 승계 실테스트
-5. 이메일 인증메일 수신 확인 (SMTP 한도 — Resend 교체 검토)
-6. 약관 시행일을 출시일로 변경
+3. 약관/방침 시행일(EFFECTIVE_DATE 2026-06-19)을 출시일로 변경
+4. 관리자 비번 변경
+5. 오너 승계 실테스트
+6. 이메일 인증메일 수신 확인 (SMTP 한도 — Resend 교체 검토)
 7. admin@ 수신 테스트, 테스트 계정 정리
 → 전체 목록은 위 "출시 준비" 섹션 체크리스트 참조
 
