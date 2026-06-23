@@ -833,6 +833,40 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 
 ---
 
+## SEO / 검색 노출
+
+### 1순위 — 완료 (2026-06-23)
+- **index.html 메타 보강** (기존 OG/트위터카드/파비콘은 이미 양호 — 보강만):
+  - `<title>` `식탁일기` → `식탁일기 - 함께한 식사의 기록`
+  - `<link rel="canonical" href="https://www.siktakilgi.com/">` 추가
+  - `og:url` apex → www 통일 (`https://www.siktakilgi.com/`) — 서빙이 www이므로 도메인 신호 일원화
+- **public/robots.txt** 신규: 전체 크롤 허용 + `/admin` 제외 + `Sitemap:` 위치 명시
+- **public/sitemap.xml** 신규: 공개 3페이지(`/`, `/terms`, `/privacy`), www 기준, lastmod 포함
+- **★ robots.txt / sitemap.xml 정적 서빙**: public/ 파일은 Vite가 dist 루트로 복사,
+  Vercel이 **정적 파일을 SPA catch-all rewrite보다 우선** 서빙 (assetlinks.json과 동일 원리).
+  빌드 후 dist 포함 + 배포 후 URL 직접 반환 확인 완료.
+- **Google Search Console**: `google-site-verification` 메타 태그로 소유권 인증 완료,
+  sitemap 제출 → 상태 성공, 발견 3페이지.
+- **네이버 서치어드바이저**: `naver-site-verification` 메타 태그로 소유권 인증,
+  robots.txt 검증, sitemap 제출 + 웹페이지 수집 요청 완료.
+- **★ 두 인증 메타 태그(`google-site-verification` / `naver-site-verification`)는
+  index.html `<head>`에 있음 — 절대 건드리지 말 것.**
+
+### 현황 / 한계
+- 로그인 기반 SPA → 목표는 **"앱 발견성"**(브랜드 검색 + 공유 미리보기 + 공개페이지 위생).
+  내부 콘텐츠(사용자 기록)는 로그인 뒤라 검색 대상 아님 — **의도된 정상**.
+- 공개(크롤 가능) 페이지: `/`(로그인), `/terms`, `/privacy`.
+- 실제 검색 노출은 수집·색인까지 **며칠~몇 주** 소요.
+
+### 2순위 — 남은 것 (선택/나중)
+- **비로그인 정적 소개 콘텐츠**: SPA 빈 셸이라 검색엔진이 "이 앱이 뭔지" 읽을 정적 텍스트 부족.
+  index.html `<noscript>` 소개 또는 랜딩 정적 콘텐츠 추가 시 신규 유입에 도움.
+  (브랜드 검색은 이미 되므로 급하지 않음)
+- **라우트별 title/description** (`/terms`, `/privacy`).
+- **JSON-LD WebApplication 스키마** (선택).
+
+---
+
 ## 출시 준비
 
 ### 플레이스토어(안드로이드 TWA) — 진행 중
@@ -880,6 +914,7 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 ### 출시 전 체크리스트
 - [x] 알림 — 인앱 + 안드로이드 + **iOS** FCM 푸시 + 클릭 딥링크 완성 (2026-06-21)
 - [x] assetlinks.json 게시 + Digital Asset Links 검증 통과 (2026-06-22)
+- [x] SEO 1순위 — title/canonical/og:url(www) + robots/sitemap + 구글/네이버 등록 (2026-06-23)
 - [ ] 구글 플레이 개발자 계정 승인 대기 → 콘솔 업로드/심사 제출
 - [ ] 스토어 등록물 제작 (스크린샷/설명/피처 그래픽 — Claude Design 의뢰 예정)
 - [ ] 관리자 비밀번호 변경 (현재 채팅에 노출된 초기 비밀번호 사용 중)
@@ -916,6 +951,9 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 | iOS 푸시 안 됨 | 16.4+ & 홈화면 PWA(standalone) & 제스처 권한 3개 모두 필수. manifest 변경 후 **재설치** 필요(설치 시점 고정) |
 | 알림 클릭 이동 안 됨 | SW notificationclick에서 `data.meal_id`로 딥링크 — 기존 창은 `focus()`만으론 이동 안 됨, `postMessage(OPEN_MEAL)` 필요(안드로이드) |
 | iOS 원격 디버깅 | Mac+Safari 필요 → Mac 없으면 화면 로그/`fcm_tokens` DB로 판별 |
+| 검색엔진 소유권 인증 메타 | index.html `<head>`의 `google-site-verification`/`naver-site-verification` 태그 삭제 금지 (지우면 소유권 인증 풀림) |
+| robots.txt/sitemap.xml 서빙 | public/에 두면 정적 파일이라 SPA catch-all rewrite보다 우선 서빙됨 (assetlinks.json과 동일) |
+| canonical/도메인 신호 | www로 통일 (서빙이 www, apex는 308→www). og:url·canonical 모두 `https://www.siktakilgi.com/` |
 
 ---
 
@@ -1072,6 +1110,7 @@ npm run dev
 | assetlinks.json 게시 | public/.well-known/assetlinks.json (SHA256 지문), vercel.json .well-known 정적 서빙 규칙 추가 |
 | Digital Asset Links 검증 | www.siktakilgi.com ↔ com.siktakilgi.app 연결 확인. apex→www 308 리다이렉트도 정상 |
 | manifest 상대경로 수정 | vite.config.js start_url/scope/id를 '/'로 (apex 절대값 → www cross-origin 문제 해결) |
+| SEO 1순위 | title 보강 + canonical + og:url www 통일 + robots.txt/sitemap.xml(정적 우선 서빙) + 구글/네이버 등록 |
 
 ---
 
