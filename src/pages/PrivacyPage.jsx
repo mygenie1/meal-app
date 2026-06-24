@@ -116,7 +116,7 @@ export default function PrivacyPage() {
           <p>이용자는 언제든지 다음 권리를 행사할 수 있습니다.</p>
           <ul className="list-disc list-inside space-y-1 ml-1">
             <li>개인정보 열람·수정: 앱 내 설정 화면에서 직접 변경</li>
-            <li>계정 삭제(탈퇴): 설정 → 회원탈퇴 (즉시 처리)</li>
+            <li>계정 삭제(탈퇴): 설정 → 회원탈퇴 (즉시 처리) — <a href="/account-deletion" className="font-medium text-warm-brown underline underline-offset-2">계정 삭제 안내</a></li>
             <li>개인정보 처리에 관한 문의·이의 제기: {CONTACT}</li>
           </ul>
         </Section>

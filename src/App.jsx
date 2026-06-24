@@ -23,6 +23,7 @@ import AdminAdminsPage from './pages/admin/AdminAdminsPage'
 import AdminBannersPage from './pages/admin/AdminBannersPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
+import AccountDeletionPage from './pages/AccountDeletionPage'
 
 function OfflineBanner() {
   return (
@@ -360,12 +361,13 @@ function AdminRoutes() {
   )
 }
 
-// /terms, /privacy 경로는 AppProvider·인증 불필요 (비로그인 접근 보장)
+// /terms, /privacy, /account-deletion 경로는 AppProvider·인증 불필요 (비로그인 접근 보장)
 function PublicRoutes() {
   return (
     <Routes>
       <Route path="/terms"   element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/account-deletion" element={<AccountDeletionPage />} />
     </Routes>
   )
 }
@@ -375,7 +377,7 @@ function RootRouter() {
   if (location.pathname.startsWith('/admin')) {
     return <AdminRoutes />
   }
-  if (location.pathname === '/terms' || location.pathname === '/privacy') {
+  if (location.pathname === '/terms' || location.pathname === '/privacy' || location.pathname === '/account-deletion') {
     return <PublicRoutes />
   }
   return (
