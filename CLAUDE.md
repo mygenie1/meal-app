@@ -1174,3 +1174,6 @@ npm run dev
     body 스크롤 → 내부 컨테이너 스크롤(height:100svh; overflow-y:auto) 리팩터링이나,
     Modal body-lock(window.scrollY 기반)·sticky 헤더·safe-area·무한스크롤 전부 재검증
     필요해 리스크가 큼. 출시 후 여유 있을 때 진행. 삼성 인터넷 사용자에게만 영향.
+  - 가벼운 억제법 조사 완료(2026-06-25) — 웹/메타(overscroll-behavior 등)/매니페스트(display
+    fullscreen·minimal-ui)/TWA(Chrome 강제·WebView 폴백)로는 불가하거나 효과 불확실+재패키징·부작용 큼.
+    배포 가능한 유일 해법은 #7 내부 스크롤 리팩터링뿐임을 확인. (다음엔 재조사 불필요)
