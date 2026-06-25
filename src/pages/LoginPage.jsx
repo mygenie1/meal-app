@@ -2,30 +2,48 @@ import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { supabase } from '../lib/supabase'
 
+// 실제 제공 기능만 — 과장/허위 없이. 비로그인 크롤러가 읽는 유일한 콘텐츠(SEO)이므로 텍스트로 렌더.
 const FEATURES = [
   {
-    text: '사진과 함께 식사 기록',
+    title: '함께 기록하는 식사',
+    desc: '집밥·외식·카페·배달을 사진과 별점, 메모로 남겨요. 달력으로 그날의 식탁을 한눈에.',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
   },
   {
-    text: '우리만의 맛집 지도',
+    title: '우리만의 맛집 지도',
+    desc: '다녀온 곳과 가보고 싶은 곳을 지도에 핀으로. 우리끼리만 아는 맛집 지도를 만들어요.',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
         <circle cx="12" cy="8" r="2" />
       </svg>
     ),
   },
   {
-    text: '함께 공유하는 식사 다이어리',
+    title: '함께 공유하는 식탁',
+    desc: '가족·연인·친구를 초대해 서로의 기록에 별점과 댓글을 남기고, 새 기록은 알림으로 연결돼요.',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+        <circle cx="9" cy="7" r="3" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 20c0-3.314 2.686-5 6-5s6 1.686 6 5" />
+        <circle cx="17" cy="7" r="2.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 20c0-2.761-1.79-4.5-4.5-4.5" />
+      </svg>
+    ),
+  },
+  {
+    title: '냉장고 재료 관리',
+    desc: '살 것과 남은 재료를 정리하고, 남은 재료로 집밥을 기록하면 수량이 자동으로 차감돼요.',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+        <rect x="9" y="3" width="6" height="4" rx="1" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
       </svg>
     ),
   },
@@ -117,36 +135,69 @@ export default function LoginPage() {
     setError('')
   }
 
+  function scrollToStart() {
+    document.getElementById('start')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
-    <div className="min-h-svh bg-cream-50 flex flex-col">
-      <div className="w-full max-w-sm mx-auto px-8 flex-1 flex flex-col">
-        {/* 로고 */}
-        <div className="flex flex-col items-center pt-16 pb-6">
-          <div className="w-16 h-16 bg-warm-brown rounded-2xl flex items-center justify-center mb-4 shadow-sm">
-            <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 2v6a2 2 0 0 0 2 2v12M9 2v6a2 2 0 0 1-2 2" />
-              <path d="M16 2c-1.7 0-3 1.8-3 4s1.3 4 3 4 3-1.8 3-4-1.3-4-3-4zM16 10v12" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-warm-dark tracking-tight">식탁 일기</h1>
-          <p className="text-sm text-warm-light mt-1.5 text-center leading-relaxed">
-            함께한 식사 순간을 기록하고<br />
-            우리만의 맛집 지도를 만들어보세요
+    <div className="min-h-svh bg-cream-50">
+      <div className="w-full max-w-md mx-auto px-6 pb-12">
+        {/* ── 히어로 ───────────────────────────── */}
+        <header
+          className="flex flex-col items-center text-center pb-10"
+          style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}
+        >
+          <img
+            src="/icon.svg"
+            alt="식탁일기 로고"
+            width="80"
+            height="80"
+            className="w-20 h-20 rounded-[1.4rem] shadow-sm mb-5"
+          />
+          <p className="text-[11px] font-bold tracking-[0.2em] text-warm-brown/70 mb-2">함께 먹는 사람들의 식사 다이어리</p>
+          <h1 className="text-[2rem] leading-tight font-bold text-warm-dark tracking-tight">식탁일기</h1>
+          <p className="text-[15px] text-warm-light mt-3 leading-relaxed max-w-[19rem]">
+            함께한 식사 순간을 사진으로 기록하고,
+            우리만의 맛집 지도를 만들어요.
           </p>
-        </div>
+          <button
+            onClick={scrollToStart}
+            className="mt-7 inline-flex items-center gap-1.5 bg-warm-brown text-white px-6 py-3 rounded-full text-sm font-semibold shadow-sm hover:bg-warm-dark transition-colors active:scale-[0.98]"
+          >
+            지금 시작하기
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M19 12l-7 7-7-7" />
+            </svg>
+          </button>
+        </header>
 
-        {/* 기능 소개 */}
-        <div className="space-y-2.5 mb-6">
-          {FEATURES.map(({ icon, text }) => (
-            <div key={text} className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3 border border-cream-200">
-              <span className="text-warm-brown shrink-0">{icon}</span>
-              <span className="text-sm text-warm-dark">{text}</span>
-            </div>
-          ))}
-        </div>
+        {/* ── 기능 소개 (실제 텍스트 — SEO) ─────────── */}
+        <section className="pb-12">
+          <div className="text-center mb-6">
+            <p className="text-[11px] font-bold tracking-[0.2em] text-warm-brown mb-1.5">WHAT YOU CAN DO</p>
+            <h2 className="text-lg font-bold text-warm-dark">식탁일기로 할 수 있는 것</h2>
+          </div>
+          <div className="space-y-3">
+            {FEATURES.map(({ icon, title, desc }) => (
+              <div key={title} className="flex gap-4 bg-white rounded-2xl px-4 py-4 border border-cream-200 shadow-sm">
+                <span className="shrink-0 w-11 h-11 rounded-xl bg-cream-100 text-warm-brown flex items-center justify-center">
+                  {icon}
+                </span>
+                <div className="min-w-0 pt-0.5">
+                  <h3 className="text-[15px] font-semibold text-warm-dark mb-1">{title}</h3>
+                  <p className="text-[13px] text-warm-light leading-relaxed">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-        {/* 로그인 영역 */}
-        <div className="mt-auto pb-10">
+        {/* ── 로그인 영역 (기존 로직·문구 그대로 보존) ── */}
+        <section id="start" className="scroll-mt-6 pt-2">
+          <div className="text-center mb-6">
+            <h2 className="text-lg font-bold text-warm-dark">지금 바로 시작해요</h2>
+            <p className="text-[13px] text-warm-light mt-1">카카오 또는 이메일로 간편하게</p>
+          </div>
           {/* 탭 전환 */}
           <div className="flex bg-cream-100 rounded-2xl p-1 mb-5">
             <button
@@ -290,7 +341,19 @@ export default function LoginPage() {
               )}
             </>
           )}
-        </div>
+        </section>
+
+        {/* ── 푸터 ───────────────────────────── */}
+        <footer className="pt-10 pb-6 text-center">
+          <p className="text-xs text-cream-400 leading-relaxed">
+            운영: 팀 마이지니 · 문의 admin@siktakilgi.com
+          </p>
+          <div className="flex items-center justify-center gap-3 mt-2 text-xs">
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-warm-light underline">이용약관</a>
+            <span className="text-cream-300">·</span>
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-warm-light underline">개인정보처리방침</a>
+          </div>
+        </footer>
       </div>
     </div>
   )
