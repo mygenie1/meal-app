@@ -7,6 +7,8 @@ const FEATURES = [
   {
     title: '함께 기록하는 식사',
     desc: '집밥·외식·카페·배달을 사진과 별점, 메모로 남겨요. 달력으로 그날의 식탁을 한눈에.',
+    img: '/landing/mockup-home.png',
+    imgAlt: '식탁일기 홈 화면 — 함께 기록한 식사 피드와 이번 달 식탁 리포트',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -17,6 +19,8 @@ const FEATURES = [
   {
     title: '우리만의 맛집 지도',
     desc: '다녀온 곳과 가보고 싶은 곳을 지도에 핀으로. 우리끼리만 아는 맛집 지도를 만들어요.',
+    img: '/landing/mockup-map.png',
+    imgAlt: '식탁일기 지도 화면 — 다녀온 곳과 가보고 싶은 곳을 핀으로 표시한 우리만의 맛집 지도',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" />
@@ -27,6 +31,8 @@ const FEATURES = [
   {
     title: '함께 공유하는 식탁',
     desc: '가족·연인·친구를 초대해 서로의 기록에 별점과 댓글을 남기고, 새 기록은 알림으로 연결돼요.',
+    img: '/landing/mockup-record.png',
+    imgAlt: '식탁일기 식사 상세 화면 — 사진과 별점, 메모에 댓글로 함께 공유하는 식탁',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
         <circle cx="9" cy="7" r="3" />
@@ -39,6 +45,8 @@ const FEATURES = [
   {
     title: '냉장고 재료 관리',
     desc: '살 것과 남은 재료를 정리하고, 남은 재료로 집밥을 기록하면 수량이 자동으로 차감돼요.',
+    img: '/landing/mockup-ingredients.png',
+    imgAlt: '식탁일기 재료 사용 화면 — 집밥을 기록하면 남은 재료 수량이 자동으로 차감',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
@@ -141,59 +149,87 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-svh bg-cream-50">
-      <div className="w-full max-w-md mx-auto px-6 pb-12">
-        {/* ── 히어로 ───────────────────────────── */}
-        <header
-          className="flex flex-col items-center text-center pb-10"
-          style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}
-        >
-          <img
-            src="/icon.svg"
-            alt="식탁일기 로고"
-            width="80"
-            height="80"
-            className="w-20 h-20 rounded-[1.4rem] shadow-sm mb-5"
-          />
-          <p className="text-[11px] font-bold tracking-[0.2em] text-warm-brown/70 mb-2">함께 먹는 사람들의 식사 다이어리</p>
-          <h1 className="text-[2rem] leading-tight font-bold text-warm-dark tracking-tight">식탁일기</h1>
-          <p className="text-[15px] text-warm-light mt-3 leading-relaxed max-w-[19rem]">
-            함께한 식사 순간을 사진으로 기록하고,
-            우리만의 맛집 지도를 만들어요.
-          </p>
-          <button
-            onClick={scrollToStart}
-            className="mt-7 inline-flex items-center gap-1.5 bg-warm-brown text-white px-6 py-3 rounded-full text-sm font-semibold shadow-sm hover:bg-warm-dark transition-colors active:scale-[0.98]"
-          >
-            지금 시작하기
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M19 12l-7 7-7-7" />
-            </svg>
-          </button>
+      <div className="w-full pb-12">
+        {/* ── 히어로 (모바일: 세로 적층 / 데스크탑: 좌우 분할) ── */}
+        <header className="px-6" style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}>
+          <div className="max-w-5xl mx-auto flex flex-col items-center text-center pb-12 md:flex-row md:text-left md:items-center md:gap-12 md:pb-16">
+            <div className="flex flex-col items-center md:items-start md:flex-1">
+              <img
+                src="/icon.svg"
+                alt="식탁일기 로고"
+                width="80"
+                height="80"
+                className="w-20 h-20 rounded-[1.4rem] shadow-sm mb-5"
+              />
+              <p className="text-[11px] font-bold tracking-[0.2em] text-warm-brown/70 mb-2">함께 먹는 사람들의 식사 다이어리</p>
+              <h1 className="text-[2rem] md:text-[2.5rem] leading-tight font-bold text-warm-dark tracking-tight">식탁일기</h1>
+              <p className="text-[15px] md:text-base text-warm-light mt-3 leading-relaxed max-w-[19rem]">
+                함께한 식사 순간을 사진으로 기록하고,
+                우리만의 맛집 지도를 만들어요.
+              </p>
+              <button
+                onClick={scrollToStart}
+                className="mt-7 inline-flex items-center gap-1.5 bg-warm-brown text-white px-6 py-3 rounded-full text-sm font-semibold shadow-sm hover:bg-warm-dark transition-colors active:scale-[0.98]"
+              >
+                지금 시작하기
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M19 12l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+            <div className="mt-12 md:mt-0 md:flex-1 w-full flex justify-center">
+              <img
+                src="/landing/mockup-hero.png"
+                alt="식탁일기 앱 화면 미리보기 — 함께 기록한 식사와 이번 달 식탁 리포트"
+                onError={e => { e.currentTarget.style.display = 'none' }}
+                className="w-[230px] sm:w-[260px] md:w-auto md:max-h-[440px] drop-shadow-[0_24px_48px_rgba(107,79,58,0.22)]"
+              />
+            </div>
+          </div>
         </header>
 
-        {/* ── 기능 소개 (실제 텍스트 — SEO) ─────────── */}
-        <section className="pb-12">
-          <div className="text-center mb-6">
-            <p className="text-[11px] font-bold tracking-[0.2em] text-warm-brown mb-1.5">WHAT YOU CAN DO</p>
-            <h2 className="text-lg font-bold text-warm-dark">식탁일기로 할 수 있는 것</h2>
-          </div>
-          <div className="space-y-3">
-            {FEATURES.map(({ icon, title, desc }) => (
-              <div key={title} className="flex gap-4 bg-white rounded-2xl px-4 py-4 border border-cream-200 shadow-sm">
-                <span className="shrink-0 w-11 h-11 rounded-xl bg-cream-100 text-warm-brown flex items-center justify-center">
-                  {icon}
-                </span>
-                <div className="min-w-0 pt-0.5">
-                  <h3 className="text-[15px] font-semibold text-warm-dark mb-1">{title}</h3>
-                  <p className="text-[13px] text-warm-light leading-relaxed">{desc}</p>
+        {/* ── 기능 소개 (실제 텍스트 + 목업 — SEO) ───── */}
+        <section className="px-6 pb-12">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-10 md:mb-16">
+              <p className="text-[11px] font-bold tracking-[0.2em] text-warm-brown mb-1.5">WHAT YOU CAN DO</p>
+              <h2 className="text-xl font-bold text-warm-dark">식탁일기로 할 수 있는 것</h2>
+            </div>
+            <div className="space-y-14 md:space-y-24">
+              {FEATURES.map(({ icon, title, desc, img, imgAlt }, i) => (
+                <div
+                  key={title}
+                  className={`flex flex-col items-center gap-7 md:gap-14 md:items-center ${
+                    i % 2 === 1 ? 'md:flex-row-reverse' : 'md:flex-row'
+                  }`}
+                >
+                  <div className="md:flex-1 w-full flex justify-center">
+                    {img && (
+                      <img
+                        src={img}
+                        alt={imgAlt}
+                        loading="lazy"
+                        onError={e => { e.currentTarget.style.display = 'none' }}
+                        className="w-[210px] sm:w-[240px] drop-shadow-[0_20px_40px_rgba(107,79,58,0.20)]"
+                      />
+                    )}
+                  </div>
+                  <div className="md:flex-1 flex flex-col items-center text-center md:items-start md:text-left">
+                    <span className="w-12 h-12 rounded-2xl bg-cream-100 text-warm-brown flex items-center justify-center mb-4">
+                      {icon}
+                    </span>
+                    <h3 className="text-xl font-bold text-warm-dark mb-2">{title}</h3>
+                    <p className="text-[15px] text-warm-light leading-relaxed max-w-sm">{desc}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
 
         {/* ── 로그인 영역 (기존 로직·문구 그대로 보존) ── */}
-        <section id="start" className="scroll-mt-6 pt-2">
+        <section id="start" className="scroll-mt-6 pt-2 px-6">
+          <div className="max-w-md mx-auto">
           <div className="text-center mb-6">
             <h2 className="text-lg font-bold text-warm-dark">지금 바로 시작해요</h2>
             <p className="text-[13px] text-warm-light mt-1">카카오 또는 이메일로 간편하게</p>
@@ -341,10 +377,11 @@ export default function LoginPage() {
               )}
             </>
           )}
+          </div>
         </section>
 
         {/* ── 푸터 ───────────────────────────── */}
-        <footer className="pt-10 pb-6 text-center">
+        <footer className="px-6 pt-10 pb-6 text-center">
           <p className="text-xs text-cream-400 leading-relaxed">
             운영: 팀 마이지니 · 문의 admin@siktakilgi.com
           </p>

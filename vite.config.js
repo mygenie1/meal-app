@@ -47,6 +47,9 @@ export default defineConfig({
       workbox: {
         // 앱 쉘 전체 프리캐시
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // 랜딩 목업(public/landing/*)은 비로그인 화면에서만 쓰이고 용량이 커서 프리캐시 제외 →
+        // 설치형 PWA가 불필요하게 ~4MB를 받지 않게. 랜딩 방문 시 일반 네트워크로 로드됨.
+        globIgnores: ['**/landing/**'],
         // SPA: 오프라인에서도 라우팅 유지
         navigateFallback: 'index.html',
         // /admin 경로는 SW 캐시 폴백에서 제외 → 항상 네트워크에서 최신 번들 로드
