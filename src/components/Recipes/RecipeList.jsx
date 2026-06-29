@@ -9,7 +9,7 @@ function normalize(s) {
   return (s || '').trim().toLowerCase()
 }
 
-function RecipeCard({ recipe, onClick }) {
+function RecipeCard({ recipe, cookCount = 0, onClick }) {
   const ingCount = recipe.ingredients?.length || 0
   return (
     <button
@@ -37,8 +37,12 @@ function RecipeCard({ recipe, onClick }) {
         {recipe.memo && (
           <p className="text-xs text-warm-light mt-1 line-clamp-2 break-words">{recipe.memo}</p>
         )}
-        {ingCount > 0 && (
-          <p className="text-[11px] text-cream-400 mt-1.5">재료 {ingCount}개</p>
+        {(ingCount > 0 || cookCount > 0) && (
+          <p className="text-[11px] text-cream-400 mt-1.5">
+            {ingCount > 0 && `재료 ${ingCount}개`}
+            {ingCount > 0 && cookCount > 0 && ' · '}
+            {cookCount > 0 && `${cookCount}번 해먹음`}
+          </p>
         )}
       </div>
     </button>
@@ -54,6 +58,15 @@ export default function RecipeList() {
   const recipes = currentSpace?.recipes || []
   // 상세는 최신 데이터를 currentSpace에서 조회 → 수정 직후 즉시 갱신
   const detail = detailId ? (recipes.find(r => r.id === detailId) || null) : null
+
+  // 레시피별 해먹은 횟수 = recipe_id로 연결된 식사 기록 수
+  const cookCounts = useMemo(() => {
+    const counts = {}
+    ;(currentSpace?.meals || []).forEach(m => {
+      if (m.recipeId) counts[m.recipeId] = (counts[m.recipeId] || 0) + 1
+    })
+    return counts
+  }, [currentSpace?.meals])
 
   const filtered = useMemo(() => {
     const q = normalize(query)
@@ -128,7 +141,12 @@ export default function RecipeList() {
       ) : (
         <div className="space-y-3">
           {filtered.map(recipe => (
-            <RecipeCard key={recipe.id} recipe={recipe} onClick={() => setDetailId(recipe.id)} />
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              cookCount={cookCounts[recipe.id] || 0}
+              onClick={() => setDetailId(recipe.id)}
+            />
           ))}
         </div>
       )}

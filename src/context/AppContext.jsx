@@ -47,11 +47,12 @@ function rowToMeal(row, { photosLoaded = true } = {}) {
     avatarUrl: row.avatar_url || '',
     usedIngredients: row.used_ingredients ?? null,
     placeUrl: row.place_url || '',
+    recipeId: row.recipe_id || null,
   }
 }
 
 // 목록 조회 시 photos(base64 대용량) 제외 → 타임아웃 방지
-const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, lat, lng, rating, review, memo, tag, meal_time, from_wishlist, user_id, nickname, avatar_url, created_at, used_ingredients, place_url'
+const MEAL_LIST_SELECT = 'id, space_id, date, title, restaurant_name, location, lat, lng, rating, review, memo, tag, meal_time, from_wishlist, user_id, nickname, avatar_url, created_at, used_ingredients, place_url, recipe_id'
 
 // 앱 내부 meal 객체 → DB insert/update 용
 function mealToRow(data) {
@@ -76,6 +77,8 @@ function mealToRow(data) {
   // (레거시 데이터 보존 — MealForm은 더 이상 rating을 보내지 않으므로 수정 시 기존 값 유지)
   if (data.rating !== undefined) row.rating = data.rating
   if (data.usedIngredients !== undefined) row.used_ingredients = data.usedIngredients
+  // 레시피 연결 — 명시적으로 전달된 경우에만 기록(기존 meal 저장 회귀 방지)
+  if (data.recipeId !== undefined) row.recipe_id = data.recipeId
   return row
 }
 

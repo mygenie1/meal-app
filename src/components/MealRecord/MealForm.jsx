@@ -253,13 +253,17 @@ function LocationField({ form, geoStatus, onLocationChange, onLocationBlur }) {
 }
 
 // ─── MealForm 메인 컴포넌트 ───────────────────────────────────────────────
-export default function MealForm({ date, onSubmit, onCancel, initial }) {
+export default function MealForm({ date, onSubmit, onCancel, initial, prefill }) {
   const { currentSpace, addIngredient, updateIngredientQuantity, deleteIngredient, user, ratingsMap, addOrUpdateRating, deleteRating } = useApp()
 
-  const [step, setStep] = useState(() => initial?.tag ? 'form' : 'tag')
+  // ★ seed = 값 프리필 전용 소스. 신규/수정 판정은 오직 initial로 (prefill은 신규 유지).
+  //   "이 레시피로 기록하기"는 prefill로 값만 채우고 initial은 비워 → !initial 차감·알림 경로 정상.
+  const seed = initial ?? prefill ?? null
+
+  const [step, setStep] = useState(() => seed?.tag ? 'form' : 'tag')
   const [uploading, setUploading] = useState(false)
   const [formDate, setFormDate] = useState(
-    () => initial?.date ?? format(date, 'yyyy-MM-dd')
+    () => seed?.date ?? format(date, 'yyyy-MM-dd')
   )
   const [form, setForm] = useState(() => {
     // 별점은 ratings 테이블로 통일 — 수정 모드에서는 내(작성자) ratings row로 초기화
@@ -273,15 +277,15 @@ export default function MealForm({ date, onSubmit, onCancel, initial }) {
       placeUrl: '',
       review: '', memo: '', tag: '',
       mealTime: getAutoMealTime(),  // 현재 시간 자동 감지
-      ...initial,
+      ...seed,
       rating: initialRating,
-      photos: initial?.photos?.length > 0
-        ? initial.photos
-        : (initial?.photo ? [initial.photo] : []),
+      photos: seed?.photos?.length > 0
+        ? seed.photos
+        : (seed?.photo ? [seed.photo] : []),
     }
   })
   const [geoStatus, setGeoStatus] = useState(
-    () => (initial?.lat && initial?.lng) ? 'found' : 'idle'
+    () => (seed?.lat && seed?.lng) ? 'found' : 'idle'
   )
   const [ingredientsOpen, setIngredientsOpen] = useState(false)
   // 사용 재료 선택 — { [ingredientId 또는 'used:이름' 가상키]: useQty }

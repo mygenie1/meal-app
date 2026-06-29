@@ -340,7 +340,7 @@ meals          id, space_id(FK), date, title, restaurant_name, location, lat, ln
                photos(TEXT[], Storage URL 또는 JSON photo 객체 문자열 배열),
                meal_time(아침|점심|저녁), user_id(FK ON DELETE SET NULL), created_at,
                used_ingredients(jsonb, nullable) — 집밥 저장 시 사용 재료 스냅샷,
-               recipe_id(FK → recipes ON DELETE SET NULL, nullable) — 레시피 연결(Phase 3에서 사용)
+               recipe_id(FK → recipes ON DELETE SET NULL, nullable) — "이 레시피로 기록하기"로 연결(Phase 3)
 ingredients    id, space_id(FK), type(toBuy|remaining), text, quantity(integer default 1),
                done, created_at  ← ★ 컬럼명은 quantity (qty 아님)
 recipes        id, space_id(FK → spaces ON DELETE CASCADE),
@@ -985,7 +985,8 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 | index.html `<head>` 직접 편집 | 각 `<meta>`/`<link>`가 독립 self-close(`/>`)인지 확인 — 한 태그라도 `>` 빠지면 떠도는 `>`가 화면에 텍스트로 새어나옴(실제 발생) |
 | GA 페이지뷰에 쿼리/식별정보 포함 | `analytics.js`가 `meal`/`code`/토큰 쿼리 제거 + user_id/이메일 미전송. 새 민감 쿼리 추가 시 `STRIP_PARAMS`에도 추가 |
 | GA 자동 페이지뷰 중복 | index.html은 `send_page_view:false`, 페이지뷰는 라우터(GAListener)에서만 수동 전송 — config에서 다시 켜지 말 것 |
-| 두 개의 히스토리-Modal 동시 전환 | 한 Modal을 닫으며(setState null) 다른 Modal을 같은 틱에 열면, 닫히는 Modal cleanup의 `history.back()`이 비동기 popstate를 쏘고 그걸 **방금 열린 Modal의 리스너가 잡아 즉시 닫음**(창 안 뜸·에러 없음). → 두 번째 모달 대신 **같은 모달 인스턴스 안 뷰 전환**으로 처리 (RecipeDetailModal detail↔cart↔edit 패턴) |
+| 두 개의 히스토리-Modal 동시 전환 | 한 Modal을 닫으며(setState null) 다른 Modal을 같은 틱에 열면, 닫히는 Modal cleanup의 `history.back()`이 비동기 popstate를 쏘고 그걸 **방금 열린 Modal의 리스너가 잡아 즉시 닫음**(창 안 뜸·에러 없음). → 두 번째 모달 대신 **같은 모달 인스턴스 안 뷰 전환**으로 처리 (RecipeDetailModal detail↔cart↔edit↔record 패턴) |
+| MealForm 프리필 시 차감·알림 죽음 | MealForm은 `initial`이 truthy면 수정 모드로 판정해 차감·new_meal 알림을 건너뜀(`!initial` 가드). 신규인데 값만 채우려면 `initial` 말고 **`prefill` prop** 사용(seed=initial??prefill는 값-init에만, 판정은 initial). "이 레시피로 기록하기"가 이 경로 — initial 쓰면 신규 집밥 차감/알림이 죽음 |
 
 ---
 
@@ -1148,6 +1149,7 @@ npm run dev
 | 레시피 관리 Phase 1 | recipes/recipe_ingredients 테이블 + meals.recipe_id 컬럼 + RLS, AppContext rowToRecipe/add·update·deleteRecipe + 로드, 재료 탭 재료/레시피 토글 + RecipeList/RecipeForm/RecipeDetailModal(이름/메모/링크 http(s)검증/사진/재료배열) + 자체검색. 담기·식사연결·통합검색은 Phase 2~4 |
 | 레시피 관리 Phase 2 | RecipeDetailModal "재료 담기" — detail↔cart 뷰 전환, 없는것만/전체 토글, 보유(remaining)/장바구니(toBuy) 정규화 완전일치 비교로 분류(have/incart/new), 체크박스 수동 가감, 체크된 재료를 addIngredient('toBuy', "이름 (분량)", 1) 반복 INSERT(quantity=1 고정, 차감/냉장고 불변), 로컬 토스트 |
 | 레시피 수정 버튼 무반응 수정 | 원인=상세 모달 닫기+수정 폼 모달 열기가 같은 틱→상세 cleanup의 history.back() popstate가 새 폼 모달을 즉시 닫음. 수정을 RecipeDetailModal 안 'edit' 뷰(detail↔cart↔edit)로 이동(중첩 모달 제거), 추가만 standalone 모달 유지. RecipeList는 detailId로 최신 recipe 조회→수정 직후 상세 갱신 |
+| 레시피 관리 Phase 3 | 식사기록 연결. MealForm에 `prefill` prop 추가(seed=initial??prefill, 값-init만 seed / 신규·수정 판정·차감·알림은 initial 유지 — !initial 경로 그대로 작동). RecipeDetailModal "이 레시피로 기록하기" → 'record' 뷰에서 신규 집밥 MealForm(prefill={tag:집밥, title, recipeId}) → addMeal에 recipe_id 저장. meals select/rowToMeal/mealToRow에 recipe_id↔recipeId 매핑(조건부 set으로 회귀 방지). 해먹은 횟수 = meals 중 recipeId 일치 count(상세·카드 표시) |
 
 ---
 

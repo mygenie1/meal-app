@@ -3,6 +3,7 @@ import Modal from '../common/Modal'
 import { useApp } from '../../context/AppContext'
 import { linkify } from '../../lib/linkify'
 import RecipeForm from './RecipeForm'
+import MealForm from '../MealRecord/MealForm'
 
 // 재료명 매칭용 정규화 — 완전일치 비교 (부분일치 금지: "소금"이 "맛소금"에 걸리는 오탐 방지)
 function normalize(s) {
@@ -19,9 +20,9 @@ function buildBuyText(ing) {
 // onSave(recipeId, data): 수정 저장 / onDelete(recipe): 삭제
 // 수정은 두 번째 히스토리-모달을 띄우지 않고 같은 모달 안 'edit' 뷰로 처리 (popstate 충돌 방지)
 export default function RecipeDetailModal({ recipe, isOpen, onClose, onSave, onDelete }) {
-  const { currentSpace, addIngredient } = useApp()
+  const { currentSpace, addIngredient, addMeal } = useApp()
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [view, setView] = useState('detail')   // 'detail' | 'cart' | 'edit'
+  const [view, setView] = useState('detail')   // 'detail' | 'cart' | 'edit' | 'record'
   const [onlyMissing, setOnlyMissing] = useState(true) // true=없는것만, false=전체
   const [checked, setChecked] = useState({})    // { [idx]: bool }
   const [busy, setBusy] = useState(false)
@@ -65,6 +66,9 @@ export default function RecipeDetailModal({ recipe, isOpen, onClose, onSave, onD
 
   if (!recipe) return null
 
+  // 해먹은 횟수 = 이 레시피로 연결된 식사 기록 수
+  const cookCount = (currentSpace?.meals || []).filter(m => m.recipeId === recipe.id).length
+
   async function handleDelete() {
     await onDelete(recipe)
     setConfirmDelete(false)
@@ -73,6 +77,15 @@ export default function RecipeDetailModal({ recipe, isOpen, onClose, onSave, onD
   async function handleSaveEdit(data) {
     await onSave(recipe.id, data)
     setView('detail')
+  }
+
+  // "이 레시피로 기록하기" — 신규 집밥 기록(prefill로 값만, initial은 비움 → 차감·알림 정상)
+  // DayDetail.handleAdd 패턴: 뷰 전환 후 addMeal 반환(MealForm이 차감/알림에 반환값 사용)
+  function handleRecord(data) {
+    setView('detail')
+    setToast('식사 기록을 저장했어요')
+    setTimeout(() => setToast(''), 2200)
+    return addMeal(data)
   }
 
   function openCart() {
@@ -240,12 +253,50 @@ export default function RecipeDetailModal({ recipe, isOpen, onClose, onSave, onD
             onCancel={() => setView('detail')}
           />
         </div>
+      ) : view === 'record' ? (
+        /* ── 이 레시피로 기록하기 (신규 집밥 — prefill, initial 비움) ── */
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setView('detail')}
+              className="p-1 -ml-1 text-warm-light hover:text-warm-brown transition-colors"
+              aria-label="뒤로"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h3 className="text-sm font-semibold text-warm-dark">이 레시피로 기록하기</h3>
+          </div>
+          <MealForm
+            date={new Date()}
+            prefill={{ tag: '집밥', title: recipe.name, recipeId: recipe.id }}
+            onSubmit={handleRecord}
+            onCancel={() => setView('detail')}
+          />
+        </div>
       ) : (
         /* ── 상세 ── */
         <div className="space-y-4">
           {recipe.photo && (
             <img src={recipe.photo} alt="" className="w-full max-h-60 object-cover rounded-2xl" />
           )}
+
+          {/* 이 레시피로 기록하기 (신규 집밥 기록) + 해먹은 횟수 */}
+          <div>
+            <button
+              onClick={() => setView('record')}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-warm-brown text-white font-medium hover:bg-warm-dark transition-colors active:scale-95"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              이 레시피로 기록하기
+            </button>
+            {cookCount > 0 && (
+              <p className="text-center text-xs text-warm-light mt-2">지금까지 {cookCount}번 해먹었어요</p>
+            )}
+          </div>
 
           {/* 외부 링크 */}
           {recipe.linkUrl && (
