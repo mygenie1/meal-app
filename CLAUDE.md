@@ -1145,6 +1145,7 @@ npm run dev
 | Google Analytics(GA4) | G-BBFV8FZ4LG, gtag(send_page_view:false), analytics.js trackPageView SPA 라우트 추적, 민감 쿼리 제거, PROD만 전송, 방침 GA 고지 |
 | index.html head 마크업 수정 | google verification 태그 미닫힘 → 떠도는 '>' 화면 노출 수정, 각 meta/link 독립 self-close |
 | 레시피 관리 Phase 1 | recipes/recipe_ingredients 테이블 + meals.recipe_id 컬럼 + RLS, AppContext rowToRecipe/add·update·deleteRecipe + 로드, 재료 탭 재료/레시피 토글 + RecipeList/RecipeForm/RecipeDetailModal(이름/메모/링크 http(s)검증/사진/재료배열) + 자체검색. 담기·식사연결·통합검색은 Phase 2~4 |
+| 레시피 관리 Phase 2 | RecipeDetailModal "재료 담기" — detail↔cart 뷰 전환, 없는것만/전체 토글, 보유(remaining)/장바구니(toBuy) 정규화 완전일치 비교로 분류(have/incart/new), 체크박스 수동 가감, 체크된 재료를 addIngredient('toBuy', "이름 (분량)", 1) 반복 INSERT(quantity=1 고정, 차감/냉장고 불변), 로컬 토스트 |
 
 ---
 
