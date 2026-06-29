@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Modal from '../common/Modal'
 import { useApp } from '../../context/AppContext'
 import { linkify } from '../../lib/linkify'
+import RecipeForm from './RecipeForm'
 
 // 재료명 매칭용 정규화 — 완전일치 비교 (부분일치 금지: "소금"이 "맛소금"에 걸리는 오탐 방지)
 function normalize(s) {
@@ -15,11 +16,12 @@ function buildBuyText(ing) {
 }
 
 // 레시피 상세 모달 — 자체 Modal 포함 (MealDetailModal 패턴)
-// onEdit(recipe): 수정 진입 / onDelete(recipe): 삭제
-export default function RecipeDetailModal({ recipe, isOpen, onClose, onEdit, onDelete }) {
+// onSave(recipeId, data): 수정 저장 / onDelete(recipe): 삭제
+// 수정은 두 번째 히스토리-모달을 띄우지 않고 같은 모달 안 'edit' 뷰로 처리 (popstate 충돌 방지)
+export default function RecipeDetailModal({ recipe, isOpen, onClose, onSave, onDelete }) {
   const { currentSpace, addIngredient } = useApp()
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [view, setView] = useState('detail')   // 'detail' | 'cart'
+  const [view, setView] = useState('detail')   // 'detail' | 'cart' | 'edit'
   const [onlyMissing, setOnlyMissing] = useState(true) // true=없는것만, false=전체
   const [checked, setChecked] = useState({})    // { [idx]: bool }
   const [busy, setBusy] = useState(false)
@@ -66,6 +68,11 @@ export default function RecipeDetailModal({ recipe, isOpen, onClose, onEdit, onD
   async function handleDelete() {
     await onDelete(recipe)
     setConfirmDelete(false)
+  }
+
+  async function handleSaveEdit(data) {
+    await onSave(recipe.id, data)
+    setView('detail')
   }
 
   function openCart() {
@@ -212,6 +219,27 @@ export default function RecipeDetailModal({ recipe, isOpen, onClose, onEdit, onD
             </button>
           </div>
         </div>
+      ) : view === 'edit' ? (
+        /* ── 수정 (같은 모달 안 뷰 전환 — 중첩 모달/popstate 충돌 방지) ── */
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setView('detail')}
+              className="p-1 -ml-1 text-warm-light hover:text-warm-brown transition-colors"
+              aria-label="뒤로"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h3 className="text-sm font-semibold text-warm-dark">레시피 수정</h3>
+          </div>
+          <RecipeForm
+            initial={recipe}
+            onSubmit={handleSaveEdit}
+            onCancel={() => setView('detail')}
+          />
+        </div>
       ) : (
         /* ── 상세 ── */
         <div className="space-y-4">
@@ -294,7 +322,7 @@ export default function RecipeDetailModal({ recipe, isOpen, onClose, onEdit, onD
             ) : (
               <>
                 <button
-                  onClick={() => onEdit(recipe)}
+                  onClick={() => setView('edit')}
                   className="flex-1 py-3 rounded-2xl bg-warm-brown text-white font-medium hover:bg-warm-dark transition-colors active:scale-95"
                 >
                   수정

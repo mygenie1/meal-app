@@ -985,6 +985,7 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 | index.html `<head>` 직접 편집 | 각 `<meta>`/`<link>`가 독립 self-close(`/>`)인지 확인 — 한 태그라도 `>` 빠지면 떠도는 `>`가 화면에 텍스트로 새어나옴(실제 발생) |
 | GA 페이지뷰에 쿼리/식별정보 포함 | `analytics.js`가 `meal`/`code`/토큰 쿼리 제거 + user_id/이메일 미전송. 새 민감 쿼리 추가 시 `STRIP_PARAMS`에도 추가 |
 | GA 자동 페이지뷰 중복 | index.html은 `send_page_view:false`, 페이지뷰는 라우터(GAListener)에서만 수동 전송 — config에서 다시 켜지 말 것 |
+| 두 개의 히스토리-Modal 동시 전환 | 한 Modal을 닫으며(setState null) 다른 Modal을 같은 틱에 열면, 닫히는 Modal cleanup의 `history.back()`이 비동기 popstate를 쏘고 그걸 **방금 열린 Modal의 리스너가 잡아 즉시 닫음**(창 안 뜸·에러 없음). → 두 번째 모달 대신 **같은 모달 인스턴스 안 뷰 전환**으로 처리 (RecipeDetailModal detail↔cart↔edit 패턴) |
 
 ---
 
@@ -1146,6 +1147,7 @@ npm run dev
 | index.html head 마크업 수정 | google verification 태그 미닫힘 → 떠도는 '>' 화면 노출 수정, 각 meta/link 독립 self-close |
 | 레시피 관리 Phase 1 | recipes/recipe_ingredients 테이블 + meals.recipe_id 컬럼 + RLS, AppContext rowToRecipe/add·update·deleteRecipe + 로드, 재료 탭 재료/레시피 토글 + RecipeList/RecipeForm/RecipeDetailModal(이름/메모/링크 http(s)검증/사진/재료배열) + 자체검색. 담기·식사연결·통합검색은 Phase 2~4 |
 | 레시피 관리 Phase 2 | RecipeDetailModal "재료 담기" — detail↔cart 뷰 전환, 없는것만/전체 토글, 보유(remaining)/장바구니(toBuy) 정규화 완전일치 비교로 분류(have/incart/new), 체크박스 수동 가감, 체크된 재료를 addIngredient('toBuy', "이름 (분량)", 1) 반복 INSERT(quantity=1 고정, 차감/냉장고 불변), 로컬 토스트 |
+| 레시피 수정 버튼 무반응 수정 | 원인=상세 모달 닫기+수정 폼 모달 열기가 같은 틱→상세 cleanup의 history.back() popstate가 새 폼 모달을 즉시 닫음. 수정을 RecipeDetailModal 안 'edit' 뷰(detail↔cart↔edit)로 이동(중첩 모달 제거), 추가만 standalone 모달 유지. RecipeList는 detailId로 최신 recipe 조회→수정 직후 상세 갱신 |
 
 ---
 

@@ -48,11 +48,12 @@ function RecipeCard({ recipe, onClick }) {
 export default function RecipeList() {
   const { currentSpace, addRecipe, updateRecipe, deleteRecipe } = useApp()
   const [query, setQuery] = useState('')
-  const [formOpen, setFormOpen] = useState(false)
-  const [editing, setEditing] = useState(null)   // 수정 중인 레시피 (null이면 신규)
-  const [detail, setDetail] = useState(null)      // 상세 모달 대상 레시피
+  const [addOpen, setAddOpen] = useState(false)   // 추가 폼 모달 (수정은 상세 모달 안 'edit' 뷰에서 처리)
+  const [detailId, setDetailId] = useState(null)  // 상세 모달 대상 레시피 id
 
   const recipes = currentSpace?.recipes || []
+  // 상세는 최신 데이터를 currentSpace에서 조회 → 수정 직후 즉시 갱신
+  const detail = detailId ? (recipes.find(r => r.id === detailId) || null) : null
 
   const filtered = useMemo(() => {
     const q = normalize(query)
@@ -70,24 +71,13 @@ export default function RecipeList() {
     )
   }
 
-  function openAdd() {
-    setEditing(null)
-    setFormOpen(true)
-  }
-  function openEdit(recipe) {
-    setDetail(null)
-    setEditing(recipe)
-    setFormOpen(true)
-  }
-  async function handleSubmit(data) {
-    if (editing) await updateRecipe(editing.id, data)
-    else await addRecipe(data)
-    setFormOpen(false)
-    setEditing(null)
+  async function handleAdd(data) {
+    await addRecipe(data)
+    setAddOpen(false)
   }
   async function handleDelete(recipe) {
     await deleteRecipe(recipe.id)
-    setDetail(null)
+    setDetailId(null)
   }
 
   return (
@@ -113,7 +103,7 @@ export default function RecipeList() {
           )}
         </div>
         <button
-          onClick={openAdd}
+          onClick={() => setAddOpen(true)}
           className="px-4 py-2 rounded-xl bg-warm-brown text-white text-sm font-medium hover:bg-warm-dark transition-colors active:scale-95 shrink-0"
         >
           추가
@@ -138,30 +128,30 @@ export default function RecipeList() {
       ) : (
         <div className="space-y-3">
           {filtered.map(recipe => (
-            <RecipeCard key={recipe.id} recipe={recipe} onClick={() => setDetail(recipe)} />
+            <RecipeCard key={recipe.id} recipe={recipe} onClick={() => setDetailId(recipe.id)} />
           ))}
         </div>
       )}
 
-      {/* 추가/수정 모달 */}
+      {/* 추가 모달 (수정은 상세 모달 안 'edit' 뷰에서 처리 — 모달 중첩 방지) */}
       <Modal
-        isOpen={formOpen}
-        onClose={() => { setFormOpen(false); setEditing(null) }}
-        title={editing ? '레시피 수정' : '레시피 추가'}
+        isOpen={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="레시피 추가"
       >
         <RecipeForm
-          initial={editing}
-          onSubmit={handleSubmit}
-          onCancel={() => { setFormOpen(false); setEditing(null) }}
+          initial={null}
+          onSubmit={handleAdd}
+          onCancel={() => setAddOpen(false)}
         />
       </Modal>
 
-      {/* 상세 모달 */}
+      {/* 상세 모달 (수정/삭제/재료담기 포함) */}
       <RecipeDetailModal
         recipe={detail}
         isOpen={!!detail}
-        onClose={() => setDetail(null)}
-        onEdit={openEdit}
+        onClose={() => setDetailId(null)}
+        onSave={updateRecipe}
         onDelete={handleDelete}
       />
     </div>
