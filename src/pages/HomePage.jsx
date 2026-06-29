@@ -11,6 +11,7 @@ import NotificationPanel, { NotificationBell } from '../components/common/Notifi
 import Avatar from '../components/common/Avatar'
 import FeedCard, { photoArrOf } from '../components/MealRecord/FeedCard'
 import UnifiedSearch from '../components/common/UnifiedSearch'
+import RecipeDetailModal from '../components/Recipes/RecipeDetailModal'
 
 const TAG_STYLES = {
   '집밥': 'bg-green-50 text-green-700',
@@ -75,7 +76,7 @@ function SubStat({ value, label, active, onClick }) {
 }
 
 export default function HomePage() {
-  const { currentSpace, spaces, loadMealPhotos, ratingsMap, user } = useApp()
+  const { currentSpace, spaces, loadMealPhotos, ratingsMap, user, updateRecipe, deleteRecipe } = useApp()
   const navigate = useNavigate()
   const location = useLocation()
   const [selectedMeal, setSelectedMeal] = useState(null)
@@ -86,6 +87,7 @@ export default function HomePage() {
   const [tagFilter, setTagFilter] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [searchRecipeId, setSearchRecipeId] = useState(null) // 통합검색에서 연 레시피 상세
   const sentinelRef = useRef(null)
   const requestedPhotosRef = useRef(new Set())
   const today = useMemo(() => new Date(), [])
@@ -843,6 +845,16 @@ export default function HomePage() {
         onClose={() => setSearchOpen(false)}
         onSelectMeal={m => { setSearchOpen(false); setSelectedMeal(m) }}
         onSelectWish={w => { setSearchOpen(false); navigate('/map', { state: { tab: 'wish', wishId: w.id } }) }}
+        onSelectRecipe={r => { setSearchOpen(false); setSearchRecipeId(r.id) }}
+      />
+
+      {/* 통합검색에서 연 레시피 상세 (RecipeDetailModal 재사용 — 담기/기록/수정 그대로) */}
+      <RecipeDetailModal
+        recipe={searchRecipeId ? (currentSpace?.recipes?.find(r => r.id === searchRecipeId) || null) : null}
+        isOpen={!!searchRecipeId}
+        onClose={() => setSearchRecipeId(null)}
+        onSave={updateRecipe}
+        onDelete={async r => { await deleteRecipe(r.id); setSearchRecipeId(null) }}
       />
     </>
   )

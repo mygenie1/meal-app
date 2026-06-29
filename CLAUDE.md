@@ -625,17 +625,20 @@ getOriginalUrl(entry)  // → 원본 URL
 - 헤더 돋보기 = 통합검색(`UnifiedSearch`) 오버레이 트리거 (아래 "통합검색" 참조)
 
 ### 통합검색 (UnifiedSearch) — 홈/지도 공용
-게시글(meals) + 가고 싶은 곳(wishlist)을 한 검색에서 함께 찾고, 결과에 타입 배지 표시.
+게시글(meals) + 가고 싶은 곳(wishlist) + 레시피(recipe)를 한 검색에서 함께 찾고, 결과에 타입 배지 표시.
 
 - **공유 모듈** (복제 금지 — 한쪽 수정 시 양쪽 반영):
-  - `lib/unifiedSearch.js` `runUnifiedSearch(meals, wishlist, q)` → `{ type:'meal'|'wishlist', item }[]`
-    - meal 필터: title/restaurantName/review/memo · wishlist 필터: name/location/memo/category
-    - meal은 날짜 desc + 끼니순 정렬 후 검색
-  - `components/common/UnifiedSearch.jsx` — 전체화면 오버레이(z-[70]): 검색 입력 헤더 + 결과 목록 + 빈/힌트 상태
+  - `lib/unifiedSearch.js` `runUnifiedSearch(meals, wishlist, q, { recipes = [] } = {})` → `{ type:'meal'|'wishlist'|'recipe', item }[]`
+    - meal 필터: title/restaurantName/review/memo · wishlist 필터: name/location/memo/category · recipe 필터: name/memo
+    - meal은 날짜 desc + 끼니순 정렬 후 검색. 결과 순서: meal → wishlist → recipe
+    - ★ recipes는 4번째 **옵션 인자(비파괴)** — 미전달 시 기존과 100% 동일. 직접 호출처는 UnifiedSearch.jsx 1곳
+  - `components/common/UnifiedSearch.jsx` — 전체화면 오버레이(z-[70]): 검색 입력 헤더 + 결과 목록 + 빈/힌트 상태. `onSelectMeal/onSelectWish/onSelectRecipe` prop
   - `components/MealRecord/FeedCard.jsx` (meal 결과 + 홈 피드 공용, `photoArrOf` 포함)
   - `components/common/WishResultCard.jsx` (wishlist 결과 카드, "가보고 싶은 곳" 배지)
-- **홈(HomePage)**: 헤더 돋보기 → UnifiedSearch. meal 클릭 → `setSelectedMeal`(상세), wishlist 클릭 → `navigate('/map', { state:{ tab:'wish', wishId } })`
-- **지도(MapPage)**: 헤더 돋보기 → 동일 UnifiedSearch. meal 클릭 → `setViewingMeal`(상세), wishlist 클릭 → 위시탭 전환 + 핀 이동
+  - `components/common/RecipeResultCard.jsx` (recipe 결과 카드, "레시피" 배지, 사진/이름/메모)
+- **홈(HomePage)**: 헤더 돋보기 → UnifiedSearch. meal 클릭 → `setSelectedMeal`(상세), wishlist 클릭 → `navigate('/map', { state:{ tab:'wish', wishId } })`, recipe 클릭 → `RecipeDetailModal`(상세)
+- **지도(MapPage)**: 헤더 돋보기 → 동일 UnifiedSearch. meal 클릭 → `setViewingMeal`(상세), wishlist 클릭 → 위시탭 전환 + 핀 이동, recipe 클릭 → `RecipeDetailModal`(상세)
+  - ★ Home/Map 둘 다 `RecipeDetailModal` 재사용(onSave=updateRecipe, onDelete=deleteRecipe) — 검색에서 열어도 담기/기록/수정 그대로
 - **wishlist 결과 → 핀 이동**: MapPage가 `focusWishId` + `focusWishNonce`(재클릭도 재이동) prop으로 MealMap에 전달 → MealMap이 `wishFlyTarget` + `highlightedWishId` + 카드 scrollIntoView (홈 딥링크는 마운트 시 nonce=1)
 
 ### 카카오 장소 링크 (place_url)
@@ -1150,6 +1153,7 @@ npm run dev
 | 레시피 관리 Phase 2 | RecipeDetailModal "재료 담기" — detail↔cart 뷰 전환, 없는것만/전체 토글, 보유(remaining)/장바구니(toBuy) 정규화 완전일치 비교로 분류(have/incart/new), 체크박스 수동 가감, 체크된 재료를 addIngredient('toBuy', "이름 (분량)", 1) 반복 INSERT(quantity=1 고정, 차감/냉장고 불변), 로컬 토스트 |
 | 레시피 수정 버튼 무반응 수정 | 원인=상세 모달 닫기+수정 폼 모달 열기가 같은 틱→상세 cleanup의 history.back() popstate가 새 폼 모달을 즉시 닫음. 수정을 RecipeDetailModal 안 'edit' 뷰(detail↔cart↔edit)로 이동(중첩 모달 제거), 추가만 standalone 모달 유지. RecipeList는 detailId로 최신 recipe 조회→수정 직후 상세 갱신 |
 | 레시피 관리 Phase 3 | 식사기록 연결. MealForm에 `prefill` prop 추가(seed=initial??prefill, 값-init만 seed / 신규·수정 판정·차감·알림은 initial 유지 — !initial 경로 그대로 작동). RecipeDetailModal "이 레시피로 기록하기" → 'record' 뷰에서 신규 집밥 MealForm(prefill={tag:집밥, title, recipeId}) → addMeal에 recipe_id 저장. meals select/rowToMeal/mealToRow에 recipe_id↔recipeId 매핑(조건부 set으로 회귀 방지). 해먹은 횟수 = meals 중 recipeId 일치 count(상세·카드 표시) |
+| 레시피 관리 Phase 4 | 통합검색 레시피 연동(마지막). runUnifiedSearch 4번째 옵션 인자 `{recipes}`(비파괴, 미전달 시 기존 동일) + recipe 필터(name/memo) → meal→wish→recipe 순. UnifiedSearch에 RecipeResultCard("레시피" 배지) + onSelectRecipe. Home/Map 둘 다 RecipeDetailModal 재사용(검색에서도 담기/기록/수정 동작) |
 
 ---
 

@@ -1,9 +1,10 @@
 // 통합검색 공유 로직 — 홈/지도 양쪽에서 동일하게 사용 (복제 금지)
-// meals + wishlist를 질의어로 검색해 { type: 'meal' | 'wishlist', item } 혼합 배열 반환
+// meals + wishlist + recipes를 질의어로 검색해 { type: 'meal' | 'wishlist' | 'recipe', item } 혼합 배열 반환
+// ★ recipes는 4번째 옵션 인자(비파괴) — 미전달 시 기존과 100% 동일 동작
 
 const MEAL_TIME_ORDER = { 아침: 0, 점심: 1, 저녁: 2 }
 
-export function runUnifiedSearch(meals, wishlist, query) {
+export function runUnifiedSearch(meals, wishlist, query, { recipes = [] } = {}) {
   const q = (query || '').trim().toLowerCase()
   if (!q) return []
 
@@ -31,5 +32,13 @@ export function runUnifiedSearch(meals, wishlist, query) {
     )
     .map(w => ({ type: 'wishlist', item: w }))
 
-  return [...mealHits, ...wishHits]
+  const recipeHits = (recipes || [])
+    .filter(r =>
+      (r.name && r.name.toLowerCase().includes(q)) ||
+      (r.memo && r.memo.toLowerCase().includes(q))
+    )
+    .map(r => ({ type: 'recipe', item: r }))
+
+  // 순서: meal → wishlist → recipe
+  return [...mealHits, ...wishHits, ...recipeHits]
 }

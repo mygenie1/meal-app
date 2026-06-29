@@ -3,10 +3,11 @@ import { useApp } from '../../context/AppContext'
 import { runUnifiedSearch } from '../../lib/unifiedSearch'
 import FeedCard from '../MealRecord/FeedCard'
 import WishResultCard from './WishResultCard'
+import RecipeResultCard from './RecipeResultCard'
 
-// 통합검색 오버레이 — 홈/지도 공용. 게시글(meal) + 가보고 싶은 곳(wishlist) 검색.
-// onSelectMeal(meal): meal 결과 클릭, onSelectWish(wish): wishlist 결과 클릭 (호출 측에서 이동 처리)
-export default function UnifiedSearch({ open, onClose, onSelectMeal, onSelectWish }) {
+// 통합검색 오버레이 — 홈/지도 공용. 게시글(meal) + 가보고 싶은 곳(wishlist) + 레시피(recipe) 검색.
+// onSelectMeal(meal) / onSelectWish(wish) / onSelectRecipe(recipe): 결과 클릭 (호출 측에서 이동 처리)
+export default function UnifiedSearch({ open, onClose, onSelectMeal, onSelectWish, onSelectRecipe }) {
   const { currentSpace, loadMealPhotos } = useApp()
   const [query, setQuery] = useState('')
   const requestedRef = useRef(new Set())
@@ -14,10 +15,11 @@ export default function UnifiedSearch({ open, onClose, onSelectMeal, onSelectWis
 
   const meals = currentSpace?.meals || []
   const wishlist = currentSpace?.wishlist || []
+  const recipes = currentSpace?.recipes || []
 
   const results = useMemo(
-    () => runUnifiedSearch(meals, wishlist, query),
-    [meals, wishlist, query]
+    () => runUnifiedSearch(meals, wishlist, query, { recipes }),
+    [meals, wishlist, recipes, query]
   )
 
   // 열릴 때 입력 초기화 + 포커스
@@ -65,7 +67,7 @@ export default function UnifiedSearch({ open, onClose, onSelectMeal, onSelectWis
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="제목, 식당명, 한줄평, 메모, 가보고 싶은 곳 검색"
+            placeholder="제목, 식당명, 한줄평, 메모, 가보고 싶은 곳, 레시피 검색"
             autoFocus
             className="flex-1 min-w-0 bg-transparent text-base text-warm-dark outline-none placeholder-cream-400"
           />
@@ -91,7 +93,7 @@ export default function UnifiedSearch({ open, onClose, onSelectMeal, onSelectWis
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
             <p className="text-sm text-cream-400">검색어를 입력해주세요</p>
-            <p className="text-xs text-cream-300 mt-1">제목, 식당명, 한줄평, 메모, 가보고 싶은 곳</p>
+            <p className="text-xs text-cream-300 mt-1">제목, 식당명, 한줄평, 메모, 가보고 싶은 곳, 레시피</p>
           </div>
         ) : results.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center py-20">
@@ -106,8 +108,10 @@ export default function UnifiedSearch({ open, onClose, onSelectMeal, onSelectWis
             <div className="space-y-4">
               {results.map(r => r.type === 'meal' ? (
                 <FeedCard key={`m-${r.item.id}`} meal={r.item} onClick={() => onSelectMeal?.(r.item)} />
-              ) : (
+              ) : r.type === 'wishlist' ? (
                 <WishResultCard key={`w-${r.item.id}`} wish={r.item} onClick={() => onSelectWish?.(r.item)} />
+              ) : (
+                <RecipeResultCard key={`r-${r.item.id}`} recipe={r.item} onClick={() => onSelectRecipe?.(r.item)} />
               ))}
             </div>
           </>

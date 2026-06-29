@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useApp } from '../context/AppContext'
 import MealMap from '../components/Map/MealMap'
 import MealDetailModal from '../components/MealRecord/MealDetailModal'
 import UnifiedSearch from '../components/common/UnifiedSearch'
+import RecipeDetailModal from '../components/Recipes/RecipeDetailModal'
 
 export default function MapPage() {
   const { state } = useLocation()
+  const { currentSpace, updateRecipe, deleteRecipe } = useApp()
   const wantWishTab = state?.tab === 'wish'
   const [viewingMeal, setViewingMeal] = useState(null)
   const [isWishTab, setIsWishTab] = useState(wantWishTab)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [searchRecipeId, setSearchRecipeId] = useState(null) // 통합검색에서 연 레시피 상세
   // 가고 싶은 곳 핀 포커스 — { id, nonce }. nonce가 바뀔 때마다 MealMap이 재이동.
   const [wishFocus, setWishFocus] = useState(
     wantWishTab && state?.wishId ? { id: state.wishId, nonce: 1 } : null
@@ -57,6 +61,16 @@ export default function MapPage() {
           setIsWishTab(true)
           setWishFocus(f => ({ id: w.id, nonce: (f?.nonce || 0) + 1 }))
         }}
+        onSelectRecipe={r => { setSearchOpen(false); setSearchRecipeId(r.id) }}
+      />
+
+      {/* 통합검색에서 연 레시피 상세 (RecipeDetailModal 재사용 — 담기/기록/수정 그대로) */}
+      <RecipeDetailModal
+        recipe={searchRecipeId ? (currentSpace?.recipes?.find(r => r.id === searchRecipeId) || null) : null}
+        isOpen={!!searchRecipeId}
+        onClose={() => setSearchRecipeId(null)}
+        onSave={updateRecipe}
+        onDelete={async r => { await deleteRecipe(r.id); setSearchRecipeId(null) }}
       />
     </div>
   )
