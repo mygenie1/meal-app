@@ -105,6 +105,32 @@ function rowToWishlist(row) {
   }
 }
 
+// 레시피 row → 앱 내부 객체 (place_url의 placeUrl 매핑 전례 그대로 camelCase)
+// recipe_ingredients 중첩 배열을 ingredients(camelCase)로, sort_order 기준 정렬
+function rowToRecipe(row) {
+  const ings = Array.isArray(row.recipe_ingredients) ? row.recipe_ingredients : []
+  return {
+    id: row.id,
+    spaceId: row.space_id,
+    authorId: row.author_id || null,
+    name: row.name || '',
+    memo: row.memo || '',
+    linkUrl: row.link_url || '',
+    photo: row.photo || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    ingredients: [...ings]
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .map(i => ({
+        id: i.id,
+        name: i.name || '',
+        amount: i.amount || '',
+        unit: i.unit || '',
+        sortOrder: i.sort_order ?? 0,
+      })),
+  }
+}
+
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -437,6 +463,7 @@ export function AppProvider({ children }) {
         meals: [],
         ingredients: { toBuy: [], remaining: [] },
         wishlist: [],
+        recipes: [],
       }))
 
       // React 18 StrictMode에서 useEffect가 두 번 실행되므로
@@ -449,6 +476,7 @@ export function AppProvider({ children }) {
           meals: prevMap[s.id]?.meals ?? [],
           ingredients: prevMap[s.id]?.ingredients ?? { toBuy: [], remaining: [] },
           wishlist: prevMap[s.id]?.wishlist ?? [],
+          recipes: prevMap[s.id]?.recipes ?? [],
         }))
       })
       setCurrentSpaceId(prev => {
@@ -500,6 +528,17 @@ export function AppProvider({ children }) {
         try {
           const { data: wData } = await supabase.from('wishlist').select('*').eq('space_id', space.id).order('created_at')
           if (wData) wishlistData = wData
+        } catch {}
+
+        // recipes도 선택적 — 테이블 미존재/오류 시 빈 배열 (재료 동반 조회)
+        let recipesData = []
+        try {
+          const { data: rData } = await supabase
+            .from('recipes')
+            .select('*, recipe_ingredients(*)')
+            .eq('space_id', space.id)
+            .order('created_at')
+          if (rData) recipesData = rData
         } catch {}
 
         console.log(`[loadAllSpaceData] space=${space.id} DB 조회 완료, meals수=${mealsData?.length}`)
@@ -561,6 +600,7 @@ export function AppProvider({ children }) {
               remaining: (ingredientsData || []).filter(i => i.type === 'remaining').map(rowToIngredient),
             },
             wishlist: wishlistData.map(rowToWishlist),
+            recipes: recipesData.map(rowToRecipe),
           }
         }))
       } catch (err) {
@@ -685,6 +725,7 @@ export function AppProvider({ children }) {
       meals: [],
       ingredients: { toBuy: [], remaining: [] },
       wishlist: [],
+      recipes: [],
     }
     setSpaces(prev => [...prev, newSpace])
     setCurrentSpaceId(data.id)
@@ -953,6 +994,104 @@ export function AppProvider({ children }) {
     ))
   }
 
+  // ── 레시피 CRUD ─────────────────────────────────────────────
+  // 재료 배열(ingredients: [{name, amount, unit}])을 recipe_ingredients에 동반 저장
+  async function addRecipe(data) {
+    if (!currentSpaceId) return null
+
+    const { data: recipeRow, error } = await supabase
+      .from('recipes')
+      .insert({
+        space_id: currentSpaceId,
+        author_id: user?.id || null,
+        name: data.name,
+        memo: data.memo || '',
+        link_url: data.linkUrl || null,
+        photo: data.photo || '',
+      })
+      .select()
+      .single()
+
+    if (error) { console.error('[addRecipe]', error); return null }
+
+    const ingredients = Array.isArray(data.ingredients) ? data.ingredients : []
+    let savedIngredients = []
+    if (ingredients.length > 0) {
+      const rows = ingredients.map((ing, idx) => ({
+        recipe_id: recipeRow.id,
+        name: ing.name,
+        amount: ing.amount || null,
+        unit: ing.unit || null,
+        sort_order: idx,
+      }))
+      const { data: ingData, error: ingErr } = await supabase
+        .from('recipe_ingredients')
+        .insert(rows)
+        .select()
+      if (ingErr) console.error('[addRecipe ingredients]', ingErr)
+      else savedIngredients = ingData || []
+    }
+
+    const item = rowToRecipe({ ...recipeRow, recipe_ingredients: savedIngredients })
+    setSpaces(prev => prev.map(s =>
+      s.id === currentSpaceId ? { ...s, recipes: [...(s.recipes || []), item] } : s
+    ))
+    return item
+  }
+
+  // 레시피 수정 — 재료는 기존 전체 삭제 후 재삽입 (단순)
+  async function updateRecipe(id, data) {
+    const { data: recipeRow, error } = await supabase
+      .from('recipes')
+      .update({
+        name: data.name,
+        memo: data.memo || '',
+        link_url: data.linkUrl || null,
+        photo: data.photo || '',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) { console.error('[updateRecipe]', error); return null }
+
+    await supabase.from('recipe_ingredients').delete().eq('recipe_id', id)
+
+    const ingredients = Array.isArray(data.ingredients) ? data.ingredients : []
+    let savedIngredients = []
+    if (ingredients.length > 0) {
+      const rows = ingredients.map((ing, idx) => ({
+        recipe_id: id,
+        name: ing.name,
+        amount: ing.amount || null,
+        unit: ing.unit || null,
+        sort_order: idx,
+      }))
+      const { data: ingData, error: ingErr } = await supabase
+        .from('recipe_ingredients')
+        .insert(rows)
+        .select()
+      if (ingErr) console.error('[updateRecipe ingredients]', ingErr)
+      else savedIngredients = ingData || []
+    }
+
+    const item = rowToRecipe({ ...recipeRow, recipe_ingredients: savedIngredients })
+    setSpaces(prev => prev.map(s =>
+      s.id === currentSpaceId ? { ...s, recipes: (s.recipes || []).map(r => r.id === id ? item : r) } : s
+    ))
+    return item
+  }
+
+  // 레시피 삭제 (recipe_ingredients는 FK ON DELETE CASCADE로 동반 삭제)
+  async function deleteRecipe(id) {
+    const { error } = await supabase.from('recipes').delete().eq('id', id)
+    if (error) { console.error('[deleteRecipe]', error); return }
+    setSpaces(prev => prev.map(s =>
+      s.id === currentSpaceId ? { ...s, recipes: (s.recipes || []).filter(r => r.id !== id) } : s
+    ))
+  }
+
   // 가고싶은곳 추가
   async function addWishlistItem(data) {
     if (!currentSpaceId) return null
@@ -1198,6 +1337,16 @@ export function AppProvider({ children }) {
       if (wData) joinWishlistData = wData
     } catch {}
 
+    let joinRecipesData = []
+    try {
+      const { data: rData } = await supabase
+        .from('recipes')
+        .select('*, recipe_ingredients(*)')
+        .eq('space_id', spaceRow.id)
+        .order('created_at')
+      if (rData) joinRecipesData = rData
+    } catch {}
+
     const space = {
       id: spaceRow.id,
       name: spaceRow.name,
@@ -1211,6 +1360,7 @@ export function AppProvider({ children }) {
         remaining: (ingredientsData || []).filter(i => i.type === 'remaining').map(rowToIngredient),
       },
       wishlist: joinWishlistData.map(rowToWishlist),
+      recipes: joinRecipesData.map(rowToRecipe),
     }
 
     setSpaces(prev => {
@@ -1253,6 +1403,9 @@ export function AppProvider({ children }) {
         addWishlistItem,
         updateWishlistItem,
         deleteWishlistItem,
+        addRecipe,
+        updateRecipe,
+        deleteRecipe,
         wishlistInterestsMap,
         addWishlistInterest,
         removeWishlistInterest,
