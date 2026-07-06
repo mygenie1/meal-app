@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import { trackPageView, sanitizePath } from './lib/analytics'
 import { isNative } from './lib/platform'
+import { supabase } from './lib/supabase'
 import BottomNav from './components/common/BottomNav'
 import HomePage from './pages/HomePage'
 import CalendarPage from './pages/CalendarPage'
@@ -228,6 +229,36 @@ function AppContent() {
     })
     return () => { if (handle) handle.remove() }
   }, [navigate])
+
+  // 카카오 OAuth 딥링크 복귀 (네이티브): 커스텀 스킴(com.siktakilgi.app://login-callback)으로
+  // 302된 해시 토큰(#access_token&refresh_token)을 파싱 → setSession → onAuthStateChange(SIGNED_IN)
+  // → 기존 boot. 웹은 detectSessionInUrl이 처리하므로 이 리스너는 네이티브에서만 등록.
+  useEffect(() => {
+    if (!isNative()) return
+    let handle
+    import('@capacitor/app').then(({ App: CapApp }) => {
+      CapApp.addListener('appUrlOpen', async ({ url }) => {
+        if (!url || !url.startsWith('com.siktakilgi.app://')) return
+        // in-app 브라우저 닫기 (실패해도 무시)
+        try {
+          const { Browser } = await import('@capacitor/browser')
+          await Browser.close()
+        } catch { /* ignore */ }
+        // implicit flow: 토큰이 URL 해시로 실려 옴 (#access_token=...&refresh_token=...)
+        const params = new URLSearchParams(url.split('#')[1] || '')
+        const access_token = params.get('access_token')
+        const refresh_token = params.get('refresh_token')
+        if (access_token && refresh_token) {
+          const { error } = await supabase.auth.setSession({ access_token, refresh_token })
+          if (error) console.error('[OAuth-native] setSession 실패:', error)
+        } else {
+          // 취소/에러 — 조용히 로그인 화면 유지 (무한 루프 방지). 이메일 로그인이 폴백.
+          console.warn('[OAuth-native] 토큰 없음(취소/에러), 로그인 화면 유지')
+        }
+      }).then((h) => { handle = h })
+    })
+    return () => { if (handle) handle.remove() }
+  }, [])
 
   // /join?code=... 처리: 비로그인 시 코드 저장 → 로그인 후 자동 참가
   useEffect(() => {

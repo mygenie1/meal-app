@@ -708,6 +708,25 @@ export function AppProvider({ children }) {
 
   // 카카오 로그인
   async function signIn() {
+    // 네이티브(Capacitor): 커스텀 스킴으로 리다이렉트 + in-app 브라우저로 OAuth URL 오픈.
+    // implicit flow라 카카오→Supabase 콜백(https)→302 커스텀 스킴에 #access_token 해시가 실려 옴
+    // → 복귀는 App.jsx appUrlOpen 리스너가 setSession으로 처리.
+    if (isNative()) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'kakao',
+        options: {
+          redirectTo: 'com.siktakilgi.app://login-callback',
+          skipBrowserRedirect: true,
+        },
+      })
+      if (error) { console.error('카카오 로그인 오류(native):', error); return }
+      if (data?.url) {
+        const { Browser } = await import('@capacitor/browser')
+        await Browser.open({ url: data.url })
+      }
+      return
+    }
+    // 웹 — 기존 그대로 (detectSessionInUrl이 해시 토큰 자동 처리)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'kakao',
       options: { redirectTo: window.location.origin },
