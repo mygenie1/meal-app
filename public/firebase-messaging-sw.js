@@ -11,6 +11,12 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging()
 
+// 알림 아이콘/badge의 절대 origin은 canonical www로 고정.
+// self.location.origin이 apex(siktakilgi.com)면 아이콘 요청이 www로 308 리다이렉트되는데,
+// 알림 아이콘 fetch는 크로스호스트 리다이렉트를 따라가지 못해 기본 아이콘으로 대체됨.
+// send-push Edge Function의 SITE 상수와 동일 도메인으로 통일.
+const SITE = 'https://www.siktakilgi.com'
+
 // 빈 핸들러 — FCM SDK가 포그라운드 onMessage 라우팅을 유지하기 위해 필요
 // (onBackgroundMessage가 없으면 FCM SDK가 메인 스레드 onMessage를 발동하지 않음)
 // 실제 showNotification은 아래 push 핸들러가 담당
@@ -44,11 +50,10 @@ self.addEventListener('push', (event) => {
       const hasFocusedClient = clientList.some(c => c.visibilityState === 'visible')
       if (hasFocusedClient) return
 
-      const origin = self.location.origin
       return self.registration.showNotification(data.title || '식탁일기', {
         body: data.body || '',
-        icon: `${origin}/icon-192.png`,
-        badge: `${origin}/notification-icon-192.png`,
+        icon: `${SITE}/icon-192.png`,
+        badge: `${SITE}/notification-icon-192.png`,
         tag: `meal-${data.type || 'notification'}`,
         data,
         requireInteraction: false,
