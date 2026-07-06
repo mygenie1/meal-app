@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { requestFCMToken, onFCMMessage } from '../lib/firebase'
+import { isNative } from '../lib/platform'
 
 const AppContext = createContext(null)
 
@@ -182,7 +183,8 @@ export function AppProvider({ children }) {
         if (!hasBootedRef.current) {
           hasBootedRef.current = true
           boot(0, currentUser)
-          registerFCMToken(currentUser.id)
+          // 웹푸시(FCM SW) 등록은 웹에서만. 네이티브(Capacitor) 푸시는 A2에서 별도 처리.
+          if (!isNative()) registerFCMToken(currentUser.id)
         }
       } else if (event === 'INITIAL_SESSION' && !currentUser) {
         setLoading(false)

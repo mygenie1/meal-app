@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { isNative } from '../../lib/platform'
 
 const DISMISS_UNTIL_KEY = 'install_banner_dismissed_until'   // 재노출 억제 만료 timestamp(ms)
 const SUPPRESS_DAYS = 7
@@ -21,6 +22,7 @@ export default function InstallBanner() {
   const [prompt, setPrompt] = useState(null)
 
   useEffect(() => {
+    if (isNative()) return          // 네이티브 앱은 "홈화면 추가" 개념 없음 (WKWebView UA가 iOS Safari로 오인되는 것 방지)
     if (isStandalone()) return
     if (Date.now() < Number(localStorage.getItem(DISMISS_UNTIL_KEY) || 0)) return
 

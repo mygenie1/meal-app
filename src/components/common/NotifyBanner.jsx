@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '../../context/AppContext'
+import { isNative } from '../../lib/platform'
 
 // 배너 B — 설치한 PWA(standalone) 사용자에게 알림 켜기 유도.
 // 배너 A(InstallBanner)는 not-standalone에서만 뜨므로 standalone 분기로 서로 배타.
@@ -17,6 +18,7 @@ export default function NotifyBanner() {
   const [toast, setToast] = useState('')
 
   useEffect(() => {
+    if (isNative()) return                                        // 네이티브 푸시는 A2에서 별도 처리 (웹푸시 유도 스킵)
     if (!isStandalone()) return                                   // standalone에서만 (배너 A와 배타)
     if (!('Notification' in window) || !('serviceWorker' in navigator)) return  // 푸시 지원 환경만
     if (Notification.permission !== 'default') return             // granted/denied면 안 뜸

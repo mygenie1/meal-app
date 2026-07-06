@@ -11,6 +11,10 @@ export default defineConfig({
       // autoUpdate는 자동으로 SKIP_WAITING을 처리해 배너 없이 controllerchange가 발생하므로
       // 배너 방식과 충돌함 (오탐 및 무한 reload 원인).
       registerType: 'prompt',
+      // 자동 SW 등록 주입 끔 → main.jsx에서 수동 등록(네이티브 게이트).
+      // Capacitor(capacitor://localhost)에서 Workbox SW가 등록되면 프리캐시된 stale index.html을
+      // 서빙해 앱을 깨뜨릴 수 있어, 네이티브에선 등록을 건너뛰어야 함. 웹은 main.jsx에서 그대로 등록.
+      injectRegister: null,
       includeAssets: ['favicon.svg', 'icon.svg', 'icon-32.png', 'icon-180.png', 'icon-192.png', 'icon-512.png'],
       manifest: {
         name: '식탁일기',
