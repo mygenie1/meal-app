@@ -58,5 +58,11 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>내 주변 맛집과 가본 곳을 지도에 표시하기 위해 위치 정보를 사용합니다.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>
