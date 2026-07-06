@@ -7,3 +7,5 @@ DerivedData/
 .swiftpm/config/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+# cap sync가 생성하는 플러그인 심링크 (머신별, Mac 빌드 시 재생성 — 커밋 금지)
+symlinks/

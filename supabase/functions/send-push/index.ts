@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
   // 대상 유저의 FCM 토큰 조회
   const { data: tokenRows, error: tokenErr } = await supabase
     .from('fcm_tokens')
-    .select('token')
+    .select('token, platform')
     .eq('user_id', record.user_id as string)
 
   if (tokenErr) {
@@ -138,29 +138,44 @@ Deno.serve(async (req) => {
   const mealId = String(record.meal_id ?? '')
   const clickLink = mealId ? `${SITE}/?meal=${mealId}` : `${SITE}/`
 
+  // 모든 플랫폼 공통 data 페이로드 (클릭 딥링크용 meal_id 포함) — FCM 규격상 값은 모두 문자열
+  const dataPayload = {
+    meal_id: mealId,
+    type: String(record.type ?? ''),
+    space_id: String(record.space_id ?? ''),
+    title: notifTitle,
+    body: notifBody,
+  }
+
+  // 플랫폼별 FCM 메시지 구성 (A-0 설계: 단일 메시지에 섞지 않고 분기 → 웹 SW 중복 표시 방지)
+  const buildMessage = (token: string, platform: string) => {
+    if (platform === 'ios') {
+      // iOS 네이티브(Capacitor): APNs가 표시. notification + apns(aps.alert 자동 매핑).
+      // data.meal_id는 탭 시 notificationActionPerformed 딥링크에 사용.
+      return {
+        token,
+        notification: { title: notifTitle, body: notifBody },
+        apns: { payload: { aps: { sound: 'default' } } },
+        data: dataPayload,
+      }
+    }
+    // web / android(TWA) — 기존 동작 100% 유지: data-only + webpush link (SW가 showNotification)
+    return {
+      token,
+      webpush: { fcm_options: { link: clickLink } },
+      data: dataPayload,
+    }
+  }
+
   const results = await Promise.allSettled(
-    tokenRows.map(({ token }: { token: string }) =>
+    tokenRows.map(({ token, platform }: { token: string; platform?: string }) =>
       fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message: {
-            token,
-            webpush: {
-              fcm_options: { link: clickLink },
-            },
-            data: {
-              meal_id: mealId,
-              type: String(record.type ?? ''),
-              space_id: String(record.space_id ?? ''),
-              title: notifTitle,
-              body: notifBody,
-            },
-          },
-        }),
+        body: JSON.stringify({ message: buildMessage(token, platform || 'web') }),
       }).then(r => r.json())
     )
   )

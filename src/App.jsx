@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-ro
 import { useEffect, useRef, useState } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import { trackPageView, sanitizePath } from './lib/analytics'
+import { isNative } from './lib/platform'
 import BottomNav from './components/common/BottomNav'
 import HomePage from './pages/HomePage'
 import CalendarPage from './pages/CalendarPage'
@@ -213,6 +214,20 @@ function AppContent() {
     if (mealId) navigate('/', { replace: true, state: { openMealId: mealId } })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 푸시 알림 탭 → 게시글 열기 (네이티브): 웹의 SW notificationclick/postMessage/?meal= 경로가
+  // 네이티브엔 없으므로 플러그인 notificationActionPerformed로 처리 (콜드/웜 공통, data.meal_id 딥링크).
+  useEffect(() => {
+    if (!isNative()) return
+    let handle
+    import('@capacitor-firebase/messaging').then(({ FirebaseMessaging }) => {
+      FirebaseMessaging.addListener('notificationActionPerformed', (event) => {
+        const mealId = event?.notification?.data?.meal_id
+        if (mealId) navigate('/', { state: { openMealId: mealId } })
+      }).then((h) => { handle = h })
+    })
+    return () => { if (handle) handle.remove() }
+  }, [navigate])
 
   // /join?code=... 처리: 비로그인 시 코드 저장 → 로그인 후 자동 참가
   useEffect(() => {

@@ -183,8 +183,9 @@ export function AppProvider({ children }) {
         if (!hasBootedRef.current) {
           hasBootedRef.current = true
           boot(0, currentUser)
-          // 웹푸시(FCM SW) 등록은 웹에서만. 네이티브(Capacitor) 푸시는 A2에서 별도 처리.
-          if (!isNative()) registerFCMToken(currentUser.id)
+          // 웹: prompt:false(granted일 때만 조용히 등록, 자동 프롬프트 없음 — 기존 동작 유지)
+          // 네이티브(iOS): prompt:true — 네이티브는 권한 요청에 제스처 불필요(OS 시스템 프롬프트)
+          registerFCMToken(currentUser.id, { prompt: isNative() })
         }
       } else if (event === 'INITIAL_SESSION' && !currentUser) {
         setLoading(false)
@@ -374,11 +375,58 @@ export function AppProvider({ children }) {
   const MAX_RETRIES = 3
   const RETRY_DELAYS = [1500, 3000, 5000]
 
+  // iOS/Android 네이티브(Capacitor) FCM 토큰 등록 — @capacitor-firebase/messaging.
+  // APNs→FCM 스위즐링으로 통합 FCM 토큰을 발급받아 기존 send-push(FCM v1) 백엔드를 그대로 재사용.
+  // 웹 경로(requestFCMToken)와 완전 분리 — 반환 shape { ok, reason, permission }은 동일(SettingsModal 공용).
+  // 네이티브는 웹과 달리 권한 요청에 사용자 제스처가 불필요(OS 시스템 프롬프트) → 부팅 시 prompt:true로 등록 가능.
+  async function registerNativeFCMToken(userId, { prompt = false } = {}) {
+    if (!userId) return { ok: false, reason: 'no-user' }
+    console.log('[FCM-native] 등록 시작, userId:', userId, 'prompt:', prompt)
+    try {
+      // 동적 import — 웹 번들에 네이티브 플러그인이 섞이지 않게 (firebase.js 패턴과 동일)
+      const { FirebaseMessaging } = await import('@capacitor-firebase/messaging')
+
+      let { receive } = await FirebaseMessaging.checkPermissions()
+      if (receive === 'prompt' || receive === 'prompt-with-rationale') {
+        if (!prompt) return { ok: false, reason: 'needs-gesture', permission: 'default' }
+        receive = (await FirebaseMessaging.requestPermissions()).receive
+      }
+      if (receive !== 'granted') {
+        return { ok: false, reason: receive === 'denied' ? 'denied' : 'not-granted', permission: receive }
+      }
+
+      const { token } = await FirebaseMessaging.getToken()
+      if (!token) return { ok: false, reason: 'empty-token', permission: 'granted' }
+
+      // 중복 방지 조건부 INSERT (웹과 동일 패턴) — platform:'ios'로 저장 → send-push가 APNs 페이로드로 분기
+      const { data: existing } = await supabase
+        .from('fcm_tokens').select('id')
+        .eq('user_id', userId).eq('token', token).maybeSingle()
+      if (existing) {
+        console.log('[FCM-native] 토큰 이미 저장됨, 스킵')
+        return { ok: true, reason: 'already', permission: 'granted' }
+      }
+      const { error } = await supabase
+        .from('fcm_tokens').insert({ user_id: userId, token, platform: 'ios' })
+      if (error) {
+        console.error('[FCM-native] 토큰 저장 실패:', error)
+        return { ok: false, reason: 'db-error', permission: 'granted' }
+      }
+      console.log('[FCM-native] 토큰 저장 완료')
+      return { ok: true, reason: 'saved', permission: 'granted' }
+    } catch (e) {
+      console.error('[FCM-native] 토큰 등록 오류:', e)
+      return { ok: false, reason: 'error' }
+    }
+  }
+
   // FCM 토큰 등록 — 로그인 직후 한 번만 시도
   // prompt:false(부팅) → granted일 때만 조용히 토큰 등록 / prompt:true(버튼 탭) → 권한 프롬프트
   // 반환: { ok, reason, permission } — SettingsModal 화면 표시/판별용
   async function registerFCMToken(userId, { prompt = false } = {}) {
     if (!userId) return { ok: false, reason: 'no-user' }
+    // 네이티브(Capacitor)는 웹푸시 대신 네이티브 FCM 경로. 웹은 아래 기존 경로 그대로.
+    if (isNative()) return registerNativeFCMToken(userId, { prompt })
     console.log('[FCM] registerFCMToken 시작, userId:', userId, 'prompt:', prompt)
     try {
       const { token, permission, reason } = await requestFCMToken({ prompt })

@@ -1,5 +1,16 @@
 {
   "appId": "com.siktakilgi.app",
   "appName": "식탁일기",
-  "webDir": "dist"
+  "webDir": "dist",
+  "experimental": {
+    "ios": {
+      "spm": {
+        "packageOptions": {
+          "@capacitor-firebase/messaging": {
+            "symlink": true
+          }
+        }
+      }
+    }
+  }
 }
