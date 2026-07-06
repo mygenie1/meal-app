@@ -874,9 +874,12 @@ export function AppProvider({ children }) {
     const mySpaceIds = new Set((memberships || []).map(m => m.space_id))
     console.log('[leaveSpace] 남은 스페이스 수:', mySpaceIds.size)
 
-    const nextSpaces = spaces.filter(s => mySpaceIds.has(s.id))
-    setSpaces(nextSpaces)
-    setCurrentSpaceId(cur => mySpaceIds.has(cur) ? cur : (nextSpaces[0]?.id || null))
+    // 대체 현재 스페이스는 로컬에 실재하는 첫 잔여 스페이스로 (id가 state에 있음을 보장)
+    const nextFirstId = spaces.find(s => mySpaceIds.has(s.id))?.id || null
+    // ★ 필터는 functional update — RPC 대기 중 Realtime로 갱신된 최신 spaces 기준으로 걸러
+    //   stale 클로저(spaces)로 덮어써 그 갱신을 유실하는 것을 방지
+    setSpaces(prev => prev.filter(s => mySpaceIds.has(s.id)))
+    setCurrentSpaceId(cur => mySpaceIds.has(cur) ? cur : nextFirstId)
   }
 
   // 식사 기록 추가
