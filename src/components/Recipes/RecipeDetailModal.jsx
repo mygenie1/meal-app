@@ -35,10 +35,13 @@ export default function RecipeDetailModal({ recipe, isOpen, onClose, onSave, onD
   const toBuySet = new Set((currentSpace?.ingredients?.toBuy || []).map(i => normalize(i.text)))
 
   // 각 재료 분류: 'have'(보유 중) | 'incart'(장바구니에 있음) | 'new'(담기 후보)
+  // ★ incart 감지는 담을 때 만드는 text(buildBuyText, "이름 (분량 단위)")와 동일 규칙으로 비교해야
+  //   분량 포함 재료("김치 (2개)")의 중복 담기를 막음. 이름만/분량포함 양쪽 형태 모두 매칭.
   function statusOf(ing) {
-    const norm = normalize(ing.name)
-    if (toBuySet.has(norm)) return 'incart'
-    if (remainingSet.has(norm)) return 'have'
+    const nameNorm = normalize(ing.name)
+    const buyNorm = normalize(buildBuyText(ing))
+    if (toBuySet.has(buyNorm) || toBuySet.has(nameNorm)) return 'incart'
+    if (remainingSet.has(nameNorm)) return 'have'
     return 'new'
   }
 
@@ -80,12 +83,23 @@ export default function RecipeDetailModal({ recipe, isOpen, onClose, onSave, onD
   }
 
   // "이 레시피로 기록하기" — 신규 집밥 기록(prefill로 값만, initial은 비움 → 차감·알림 정상)
-  // DayDetail.handleAdd 패턴: 뷰 전환 후 addMeal 반환(MealForm이 차감/알림에 반환값 사용)
-  function handleRecord(data) {
-    setView('detail')
-    setToast('식사 기록을 저장했어요')
+  // ★ addMeal 성공 시에만 토스트+뷰 전환. 실패 시 record 뷰 유지(재시도 가능) + 실패 안내.
+  //   반환값(newMeal)은 반드시 유지 — MealForm이 차감/알림에 사용.
+  async function handleRecord(data) {
+    let newMeal = null
+    try {
+      newMeal = await addMeal(data)
+    } catch (e) {
+      console.error('[RecipeDetailModal] 식사 기록 저장 실패:', e)
+    }
+    if (newMeal) {
+      setView('detail')
+      setToast('식사 기록을 저장했어요')
+    } else {
+      setToast('저장에 실패했어요. 다시 시도해주세요')
+    }
     setTimeout(() => setToast(''), 2200)
-    return addMeal(data)
+    return newMeal
   }
 
   function openCart() {
