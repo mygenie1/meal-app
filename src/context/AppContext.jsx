@@ -183,9 +183,13 @@ export function AppProvider({ children }) {
         if (!hasBootedRef.current) {
           hasBootedRef.current = true
           boot(0, currentUser)
+          // ★ 사용자가 설정에서 알림을 끈 상태(notif_enabled==='false')면 boot에서 재등록 안 함
+          //   — 토글 OFF로 삭제한 토큰이 다음 실행 때 되살아나지 않게.
           // 웹: prompt:false(granted일 때만 조용히 등록, 자동 프롬프트 없음 — 기존 동작 유지)
           // 네이티브(iOS): prompt:true — 네이티브는 권한 요청에 제스처 불필요(OS 시스템 프롬프트)
-          registerFCMToken(currentUser.id, { prompt: isNative() })
+          if (localStorage.getItem('notif_enabled') !== 'false') {
+            registerFCMToken(currentUser.id, { prompt: isNative() })
+          }
         }
       } else if (event === 'INITIAL_SESSION' && !currentUser) {
         setLoading(false)
@@ -480,6 +484,36 @@ export function AppProvider({ children }) {
       return { ok: true, reason: 'saved', permission }
     } catch (e) {
       console.error('[FCM] 토큰 등록 오류:', e)
+      return { ok: false, reason: 'error' }
+    }
+  }
+
+  // FCM 토큰 해제 — 이 기기의 현재 토큰만 삭제 (설정 "알림" 토글 OFF).
+  // ★ send-push/DB 스키마 무변경 — 토큰 행이 없으면 send-push가 이 기기로 발송하지 않음.
+  //   삭제 범위는 "이 기기"(localStorage가 기기별) — 현재 토큰을 재취득해 그 행만 삭제.
+  async function unregisterFCMToken(userId) {
+    if (!userId) return { ok: false, reason: 'no-user' }
+    console.log('[FCM] unregisterFCMToken 시작, userId:', userId)
+    try {
+      let token = null
+      if (isNative()) {
+        const { FirebaseMessaging } = await import('@capacitor-firebase/messaging')
+        token = (await FirebaseMessaging.getToken().catch(() => ({})))?.token || null
+      } else {
+        // 현재 토큰만 취득(등록 아님) — requestFCMToken은 토큰 문자열만 반환, fcm_tokens INSERT 안 함
+        token = (await requestFCMToken({ prompt: false }))?.token || null
+      }
+      if (token) {
+        const { error } = await supabase
+          .from('fcm_tokens').delete().eq('user_id', userId).eq('token', token)
+        if (error) { console.error('[FCM] 토큰 삭제 실패:', error); return { ok: false, reason: 'db-error' } }
+        console.log('[FCM] 이 기기 토큰 삭제 완료')
+      } else {
+        console.log('[FCM] 삭제할 현재 토큰 없음(권한 미허용 등) — 스킵')
+      }
+      return { ok: true }
+    } catch (e) {
+      console.error('[FCM] 토큰 해제 오류:', e)
       return { ok: false, reason: 'error' }
     }
   }
@@ -1492,6 +1526,7 @@ export function AppProvider({ children }) {
         loadMoreNotifications,
         notifEnabled,
         setNotifEnabledPref,
+        unregisterFCMToken,
         registerFCMToken,
         markNotificationRead,
         markAllNotificationsRead,

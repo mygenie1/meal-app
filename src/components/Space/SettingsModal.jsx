@@ -6,44 +6,57 @@ import { uploadAvatar } from '../../lib/uploadPhoto'
 import { supabase } from '../../lib/supabase'
 import { version } from '../../../package.json'
 import Avatar from '../common/Avatar'
+import { isNative } from '../../lib/platform'
 
 export default function SettingsModal({ isOpen, onClose }) {
   const navigate = useNavigate()
-  const { user, signOut, deleteAccount, updateProfile, notifEnabled, setNotifEnabledPref, registerFCMToken } = useApp()
+  const { user, signOut, deleteAccount, updateProfile, notifEnabled, setNotifEnabledPref, registerFCMToken, unregisterFCMToken } = useApp()
 
-  // ── 푸시 알림(기기 알림 권한) — iOS는 반드시 사용자 탭(제스처) 안에서 권한 요청 ──
+  // ── 알림 마스터 토글 — 켜기=권한요청+토큰등록 / 끄기=이 기기 토큰 삭제 ──
+  // iOS는 반드시 사용자 탭(제스처) 안에서 권한 요청 → 토글 탭이 그 제스처.
   const pushSupported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator
   const isIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent)
   const isStandalone = typeof window !== 'undefined' &&
     (window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches)
-  const [pushPerm, setPushPerm] = useState(pushSupported ? Notification.permission : 'unsupported')
-  const [pushStatus, setPushStatus] = useState('')   // "알림 켜기" 시도 결과 표시
-  const [pushBusy, setPushBusy] = useState(false)
+  const [notifBusy, setNotifBusy] = useState(false)
+  const [notifHint, setNotifHint] = useState('')   // 거부/미지원 안내
 
-  async function handleEnablePush() {
-    if (!user) return
-    setPushBusy(true)
-    setPushStatus('요청 중...')
+  async function handleToggleNotif() {
+    if (!user || notifBusy) return
+    // 미지원 환경(웹 iOS Safari 비-standalone 등) — 네이티브는 자체 경로라 제외
+    if (!isNative() && !pushSupported) {
+      setNotifHint(isIOS && !isStandalone ? '홈 화면에 추가한 뒤 켤 수 있어요' : '이 환경은 푸시 알림을 지원하지 않아요')
+      return
+    }
+    setNotifBusy(true)
+    setNotifHint('')
     try {
-      const res = await registerFCMToken(user.id, { prompt: true })   // ★ 제스처 컨텍스트
-      setPushPerm(pushSupported ? Notification.permission : 'unsupported')
-      if (res?.ok) {
-        setPushStatus(res.reason === 'already' ? '이미 등록됨 ✓' : '알림 켜짐 · 토큰 등록됨 ✓')
+      if (notifEnabled) {
+        // 끄기: 이 기기 토큰 삭제 + 선호 off (send-push가 이 기기로 발송 못 함)
+        await unregisterFCMToken(user.id)
+        setNotifEnabledPref(false)
       } else {
-        const map = {
-          denied: '권한 거부됨 — 기기 설정에서 알림을 허용해주세요',
-          'needs-gesture': '다시 시도해주세요(권한 미결정)',
-          'messaging-null': '이 환경은 푸시 미지원',
-          'no-notification-api': '이 브라우저는 푸시 미지원',
-          'db-error': '토큰 저장 실패(네트워크)',
+        // 켜기: 권한 요청 + 토큰 등록 (토글 탭 = 제스처 → iOS 권한 OK)
+        const res = await registerFCMToken(user.id, { prompt: true })
+        if (res?.ok) {
+          setNotifEnabledPref(true)
+        } else {
+          const map = {
+            denied: '기기 설정에서 알림을 허용해주세요',
+            'needs-gesture': '다시 시도해주세요',
+            'messaging-null': '이 환경은 푸시 알림을 지원하지 않아요',
+            'no-notification-api': '이 브라우저는 푸시 알림을 지원하지 않아요',
+            'db-error': '네트워크 오류로 실패했어요. 다시 시도해주세요',
+          }
+          setNotifHint(map[res?.reason] || '알림을 켜지 못했어요')
+          // notifEnabled는 false 유지 (토글 안 켜짐)
         }
-        setPushStatus(`실패: ${map[res?.reason] || res?.reason || '알 수 없음'}`)
       }
     } catch (e) {
-      console.error('[Settings] 푸시 켜기 오류:', e)
-      setPushStatus('오류가 발생했어요')
+      console.error('[Settings] 알림 토글 오류:', e)
+      setNotifHint('오류가 발생했어요. 다시 시도해주세요')
     } finally {
-      setPushBusy(false)
+      setNotifBusy(false)
     }
   }
 
@@ -355,59 +368,32 @@ export default function SettingsModal({ isOpen, onClose }) {
             <p className="text-[11px] font-semibold text-warm-light tracking-widest uppercase mb-3">앱 설정</p>
             <div className="bg-white rounded-2xl border border-cream-200 overflow-hidden divide-y divide-cream-100">
 
-              {/* 알림 토글 */}
-              <div className="flex items-center justify-between px-4 py-3.5">
-                <div className="flex items-center gap-3">
-                  <svg className={`w-4 h-4 shrink-0 ${notifEnabled ? 'text-warm-brown' : 'text-cream-400'}`} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
-                  <div>
-                    <p className="text-sm text-warm-dark">알림</p>
-                    <p className="text-[11px] text-cream-400">{notifEnabled ? '새 기록·댓글·별점 알림 받는 중' : '알림 꺼짐'}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setNotifEnabledPref(!notifEnabled)}
-                  className={`w-10 h-6 rounded-full relative shrink-0 transition-colors duration-200 ${notifEnabled ? 'bg-warm-brown' : 'bg-cream-200'}`}
-                  aria-pressed={notifEnabled}
-                >
-                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${notifEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
-                </button>
-              </div>
-
-              {/* 푸시 알림 (기기 알림 권한) — 버튼 탭으로만 권한 요청(iOS 호환) */}
+              {/* 알림 마스터 토글 — 켜기=권한요청+토큰등록 / 끄기=이 기기 토큰 삭제(푸시 실제 차단) */}
               <div className="px-4 py-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <svg className={`w-4 h-4 shrink-0 ${pushPerm === 'granted' ? 'text-warm-brown' : 'text-cream-400'}`} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 21h4m-9-4h14l-1.405-1.405A2.032 2.032 0 0116 14.158V11a4 4 0 10-8 0v3.159c0 .538-.214 1.055-.595 1.436L6 17z" />
+                    <svg className={`w-4 h-4 shrink-0 ${notifEnabled ? 'text-warm-brown' : 'text-cream-400'}`} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                     </svg>
                     <div className="min-w-0">
-                      <p className="text-sm text-warm-dark">푸시 알림</p>
+                      <p className="text-sm text-warm-dark">알림</p>
                       <p className="text-[11px] text-cream-400">
-                        {!pushSupported
-                          ? (isIOS && !isStandalone ? '홈 화면에 추가 후 켤 수 있어요' : '이 환경은 푸시 미지원')
-                          : pushPerm === 'granted' ? '기기 알림 켜짐'
-                          : pushPerm === 'denied' ? '기기 설정에서 알림 허용 필요'
-                          : '기기로 알림 받기'}
+                        {notifBusy ? '처리 중...' : notifEnabled ? '새 기록·댓글·별점 알림 받는 중' : '알림 꺼짐'}
                       </p>
                     </div>
                   </div>
-                  {/* granted가 아니면 항상 "알림 켜기" 노출 — iOS는 제스처(탭)로만 권한 요청 가능 */}
-                  {pushPerm === 'granted' ? (
-                    <span className="shrink-0 text-xs text-warm-brown font-medium">켜짐</span>
-                  ) : (
-                    <button
-                      onClick={handleEnablePush}
-                      disabled={pushBusy}
-                      className="shrink-0 px-3 py-1.5 rounded-xl bg-warm-brown text-white text-xs font-medium hover:bg-warm-dark transition-colors disabled:opacity-60"
-                    >
-                      {pushBusy ? '요청 중...' : '알림 켜기'}
-                    </button>
-                  )}
+                  <button
+                    onClick={handleToggleNotif}
+                    disabled={notifBusy}
+                    className={`w-10 h-6 rounded-full relative shrink-0 transition-colors duration-200 disabled:opacity-60 ${notifEnabled ? 'bg-warm-brown' : 'bg-cream-200'}`}
+                    aria-pressed={notifEnabled}
+                    aria-label="알림 켜기/끄기"
+                  >
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${notifEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                  </button>
                 </div>
-                {pushStatus && (
-                  <p className="text-[11px] text-warm-light mt-2 pl-7">{pushStatus} · 권한: {pushPerm}</p>
+                {notifHint && (
+                  <p className="text-[11px] text-warm-light mt-2 pl-7">{notifHint}</p>
                 )}
               </div>
 
