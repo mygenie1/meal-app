@@ -71,7 +71,10 @@ export default defineConfig({
         // SPA: 오프라인에서도 라우팅 유지
         navigateFallback: 'index.html',
         // /admin 경로는 SW 캐시 폴백에서 제외 → 항상 네트워크에서 최신 번들 로드
-        navigateFallbackDenylist: [/^\/offline\.html/, /^\/admin/],
+        // map-embed(-test).html: 멀티페이지 엔트리 + 프리캐시 제외(globIgnores) 상태라,
+        // denylist에 없으면 navigateFallback이 index.html을 서빙해버림(iframe navigation 포함).
+        // → embed 요청이 메인 앱으로 대체되는 문제. /admin과 동일 이유로 폴백 예외 처리.
+        navigateFallbackDenylist: [/^\/offline\.html/, /^\/admin/, /^\/map-embed(-test)?\.html/],
         // 새 SW를 waiting 상태로 유지 (사용자가 배너 클릭 후 SKIP_WAITING 메시지로 활성화)
         skipWaiting: false,
         clientsClaim: true,
