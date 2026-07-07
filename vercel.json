@@ -2,7 +2,6 @@
   "rewrites": [
     { "source": "/.well-known/:path*", "destination": "/.well-known/:path*" },
     { "source": "/map-embed.html", "destination": "/map-embed.html" },
-    { "source": "/map-embed-test.html", "destination": "/map-embed-test.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

@@ -11,8 +11,6 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         'map-embed': fileURLToPath(new URL('./map-embed.html', import.meta.url)),
-        // ★ Phase 2 브라우저 검증용 임시 하네스 — Phase 4 완료 후 제거 예정
-        'map-embed-test': fileURLToPath(new URL('./map-embed-test.html', import.meta.url)),
       },
     },
   },
@@ -67,7 +65,7 @@ export default defineConfig({
         // 랜딩 목업(public/landing/*)은 비로그인 화면에서만 쓰이고 용량이 커서 프리캐시 제외 →
         // 설치형 PWA가 불필요하게 ~4MB를 받지 않게. 랜딩 방문 시 일반 네트워크로 로드됨.
         // map-embed.html: iOS iframe 전용 페이지 → 항상 네트워크 최신 로드(프리캐시 제외).
-        globIgnores: ['**/landing/**', 'map-embed.html', 'map-embed-test.html'],
+        globIgnores: ['**/landing/**', 'map-embed.html'],
         // SPA: 오프라인에서도 라우팅 유지
         navigateFallback: 'index.html',
         // /admin 경로는 SW 캐시 폴백에서 제외 → 항상 네트워크에서 최신 번들 로드

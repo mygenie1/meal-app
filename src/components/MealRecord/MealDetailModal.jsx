@@ -11,6 +11,8 @@ import AuthorBadge from '../common/AuthorBadge'
 import Avatar from '../common/Avatar'
 import { sendNotification, buildFromUser, getSpaceMemberIds } from '../../lib/notify'
 import { linkify } from '../../lib/linkify'
+import { isNative } from '../../lib/platform'
+import MapEmbedView from '../common/MapEmbedView'
 
 const TAG_STYLES = {
   집밥: 'bg-green-50 text-green-700 border-green-200',
@@ -186,6 +188,16 @@ function SmallMap({ lat, lng }) {
     })
     return () => { destroyed = true; if (overlay) overlay.setMap(null) }
   }, [lat, lng])
+
+  // 네이티브(iOS): 인라인 kakao 대신 embed iframe (mode=detail, 단일 핀). 웹/안드로이드는 기존 그대로.
+  // (네이티브에선 위 useEffect 가 containerRef 미부착이라 no-op)
+  if (isNative()) {
+    return (
+      <div className="rounded-2xl overflow-hidden" style={{ height: 150 }}>
+        <MapEmbedView mode="detail" center={{ lat, lng }} level={4} pins={[{ id: 'detail', lat, lng }]} />
+      </div>
+    )
+  }
 
   return <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ height: 150 }} />
 }

@@ -7,6 +7,8 @@ import { useApp } from '../../context/AppContext'
 import { uploadPhotoWithThumbnail, getThumbUrl } from '../../lib/uploadPhoto'
 import { supabase } from '../../lib/supabase'
 import { sendNotification, buildFromUser, getSpaceMemberIds } from '../../lib/notify'
+import { useMapEmbedRpc } from '../common/MapEmbedRpcProvider'
+import { embedSearch, embedGeocode } from '../../lib/mapEmbed'
 
 // 모바일 여부 — 모바일은 클립보드 paste가 잘 안 되므로 안내 문구 숨김
 const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
@@ -127,6 +129,7 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
   const timerRef = useRef(null)
   const wrapperRef = useRef(null)
   const scrollingRef = useRef(false)
+  const rpc = useMapEmbedRpc() // 네이티브: embed iframe RPC / 웹: null → 기존 카카오 직접호출
 
   useEffect(() => {
     function handleOutside(e) {
@@ -153,7 +156,7 @@ function RestaurantSearchField({ label, value, placeholder, onChange, onSelect }
     }
     timerRef.current = setTimeout(async () => {
       setSearching(true)
-      const results = await searchKakaoPlaces(q)
+      const results = await embedSearch(rpc, q, searchKakaoPlaces)
       setSuggestions(results)
       setShowDropdown(results.length > 0)
       setSearching(false)
@@ -255,6 +258,7 @@ function LocationField({ form, geoStatus, onLocationChange, onLocationBlur }) {
 // ─── MealForm 메인 컴포넌트 ───────────────────────────────────────────────
 export default function MealForm({ date, onSubmit, onCancel, initial, prefill }) {
   const { currentSpace, addIngredient, updateIngredientQuantity, deleteIngredient, user, ratingsMap, addOrUpdateRating, deleteRating } = useApp()
+  const rpc = useMapEmbedRpc() // 네이티브: embed iframe RPC / 웹: null → 기존 카카오 직접호출
 
   // ★ seed = 값 프리필 전용 소스. 신규/수정 판정은 오직 initial로 (prefill은 신규 유지).
   //   "이 레시피로 기록하기"는 prefill로 값만 채우고 initial은 비워 → !initial 차감·알림 경로 정상.
@@ -390,7 +394,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial, prefill })
     if (!location || form.lat) return
     setGeoStatus('loading')
     try {
-      const coords = await geocodeKakao(location)
+      const coords = await embedGeocode(rpc, location, geocodeKakao)
       if (coords) {
         setForm(prev => ({ ...prev, lat: coords[0], lng: coords[1] }))
         setGeoStatus('found')
@@ -429,7 +433,7 @@ export default function MealForm({ date, onSubmit, onCancel, initial, prefill })
     if (needsGeo && form.location.trim() && !lat && geoStatus === 'idle') {
       setGeoStatus('loading')
       try {
-        const coords = await geocodeKakao(form.location)
+        const coords = await embedGeocode(rpc, form.location, geocodeKakao)
         if (coords) { lat = coords[0]; lng = coords[1]; setGeoStatus('found') }
         else setGeoStatus('notfound')
       } catch {

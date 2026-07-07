@@ -15,6 +15,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage'
 import TutorialFlow from './components/Tutorial/TutorialFlow'
 import InstallBanner from './components/common/InstallBanner'
 import NotifyBanner from './components/common/NotifyBanner'
+import MapEmbedRpcProvider from './components/common/MapEmbedRpcProvider'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminUsersPage from './pages/admin/AdminUsersPage'
@@ -363,6 +364,7 @@ function AppContent() {
   }
 
   return (
+    <MapEmbedRpcProvider>
     <div className="min-h-svh max-w-lg mx-auto flex flex-col bg-cream-50">
       {updateReady && <UpdateBanner onReload={handleUpdate} />}
 
@@ -388,6 +390,7 @@ function AppContent() {
       <InstallBanner />
       <NotifyBanner />
     </div>
+    </MapEmbedRpcProvider>
   )
 }
 

@@ -8,8 +8,8 @@
 // 응답은 embed 가 { src:'siktak-embed', type:'search:result'|'geocode:result', reqId, ... } 로 보냄.
 // 타임아웃 시 reject, embed 가 error 필드를 담아 보내면 resolve 된 객체의 .error 로 노출(빈 결과와 구분).
 //
-// ★ Phase 3 에서는 앱에 상시 mount 하지 않는다 — map-embed-test.html 하네스에서만 검증.
-//   Phase 4 에서 숨김 iframe 을 상시 mount 하고 isNative() 분기로 MealForm/위시폼에 연결 예정.
+// ★ Phase 4: MapEmbedRpcProvider(네이티브 전용)가 숨김 iframe 을 앱에 상시 mount 하고
+//   이 인스턴스를 context 로 노출 → MealForm/위시폼이 isNative() 분기로 검색/지오코딩에 사용.
 
 const RESULT_TYPE = {
   search: 'search:result',

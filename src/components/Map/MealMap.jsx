@@ -11,6 +11,10 @@ import MealForm from '../MealRecord/MealForm'
 import FullscreenViewer from '../common/FullscreenViewer'
 import { linkify } from '../../lib/linkify'
 import { sendNotification, buildFromUser, getSpaceMemberIds } from '../../lib/notify'
+import { isNative } from '../../lib/platform'
+import MapEmbedView from '../common/MapEmbedView'
+import { useMapEmbedRpc } from '../common/MapEmbedRpcProvider'
+import { embedSearch, embedGeocode } from '../../lib/mapEmbed'
 
 // ── 상수 ──────────────────────────────────────────────────────
 const TAG_COLORS = { 집밥: '#2f9e5f', 외식: '#d6862c', 카페: '#d15c87', 배달: '#5276c4' }
@@ -620,6 +624,7 @@ function WishDetailModal({ item, onClose, onEdit, onDelete, onVisit, onViewOnMap
 
 // ── WishFormFields ─────────────────────────────────────────────
 function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef }) {
+  const rpc = useMapEmbedRpc() // 네이티브: embed iframe RPC / 웹: null → 기존 카카오 직접호출
   const [pasteToast, setPasteToast] = useState(null)
   const [placeSuggestions, setPlaceSuggestions] = useState([])
   const [showPlaceDropdown, setShowPlaceDropdown] = useState(false)
@@ -679,7 +684,7 @@ function WishFormFields({ form, setForm, photoPreview, setPhotoPreview, photoRef
     if (!q.trim()) { setPlaceSuggestions([]); setShowPlaceDropdown(false); return }
     placeTimerRef.current = setTimeout(async () => {
       setSearchingPlace(true)
-      const results = await searchKakaoPlaces(q)
+      const results = await embedSearch(rpc, q, searchKakaoPlaces)
       setPlaceSuggestions(results)
       setShowPlaceDropdown(results.length > 0)
       setSearchingPlace(false)
@@ -1128,6 +1133,7 @@ function WishListCard({ item, onVisit, onViewOnMap, highlighted, onViewDetail, i
 // ── 메인 컴포넌트 ──────────────────────────────────────────────
 export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRandom, focusWishId, focusWishNonce }) {
   const { currentSpace, addMeal, addWishlistItem, updateWishlistItem, deleteWishlistItem, cacheGeocoords, loadMealPhotos, user, wishlistInterestsMap, addWishlistInterest, removeWishlistInterest } = useApp()
+  const rpc = useMapEmbedRpc() // 네이티브: embed iframe RPC / 웹: null → 기존 카카오 직접호출
 
   const [activeTab, setActiveTab] = useState(initialTab === 'wishlist' ? 'wishlist' : 'map')
 
@@ -1567,6 +1573,35 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
     }, 50)
   }
 
+  // ── 네이티브(iOS) iframe 지도용 핀/핸들러 (isNative 일 때만 렌더에서 사용, 웹/안드로이드 무관) ──
+  // 축소 패리티: 클러스터를 대표 1핀으로 전달(카운트 배지 없음). 클러스터/좌표 클릭 → 기존 핸들러 재사용.
+  const nativeMealPins = useMemo(
+    () => clusters.map(c => ({
+      id: `${Math.round(c.coords[0] * ROUND)},${Math.round(c.coords[1] * ROUND)}`,
+      lat: c.coords[0], lng: c.coords[1], tag: c.meals[0]?.tag,
+    })),
+    [clusters]
+  )
+  function handleNativeMealPin(key) {
+    const cluster = allClusters.find(
+      c => `${Math.round(c.coords[0] * ROUND)},${Math.round(c.coords[1] * ROUND)}` === key
+    )
+    if (!cluster) return
+    setSelectedCluster(cluster)
+    handlePinClick(cluster.meals[0], cluster.coords)
+    setFlyTarget([cluster.coords[0], cluster.coords[1]]) // iframe panTo (네이티브엔 kakaoMapRef 없음)
+  }
+  const nativeWishPins = useMemo(
+    () => wishlistWithCoords.map(w => ({ id: w.id, lat: w.lat, lng: w.lng })),
+    [wishlistWithCoords]
+  )
+  function handleNativeWishPin(id) {
+    setHighlightedWishId(id)
+    setTimeout(() => {
+      document.getElementById(`wish-card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 50)
+  }
+
   // ── 가고 싶은 곳 지도 내 위치 마커 ──────────────────────────────
   useEffect(() => {
     if (!wishMapReady || !wishKakaoMapRef.current) return
@@ -1599,7 +1634,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
         meals.map(async meal => {
           if (meal.lat && meal.lng) return { meal, coords: [meal.lat, meal.lng] }
           try {
-            const coords = await geocodeKakao(meal.location)
+            const coords = await embedGeocode(rpc, meal.location, geocodeKakao)
             if (coords && currentSpace?.id) cacheGeocoords(currentSpace.id, meal.id, coords[0], coords[1])
             return { meal, coords }
           } catch { return { meal, coords: null } }
@@ -1701,7 +1736,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
     setSavingAdd(true)
     let lat = addForm.lat || null, lng = addForm.lng || null
     if (!lat && addForm.location.trim()) {
-      try { const coords = await geocodeKakao(addForm.location); if (coords) { lat = coords[0]; lng = coords[1] } } catch {}
+      try { const coords = await embedGeocode(rpc, addForm.location, geocodeKakao); if (coords) { lat = coords[0]; lng = coords[1] } } catch {}
     }
     let photoUrl = ''
     if (addPhotoPreview) {
@@ -1746,7 +1781,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
     if (editForm.lat && editForm.lng) {
       lat = editForm.lat; lng = editForm.lng
     } else if (editForm.location.trim() && editForm.location !== editingWish.location) {
-      try { const coords = await geocodeKakao(editForm.location); if (coords) { lat = coords[0]; lng = coords[1] } } catch {}
+      try { const coords = await embedGeocode(rpc, editForm.location, geocodeKakao); if (coords) { lat = coords[0]; lng = coords[1] } } catch {}
     }
     let photoUrl = editingWish.photo || ''
     if (editPhotoPreview && editPhotoPreview !== editingWish.photo) {
@@ -1892,17 +1927,31 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
           {/* 지도 — 고정 높이 */}
           <div className="shrink-0 px-4">
             <div className="relative rounded-2xl shadow-sm overflow-hidden" style={{ height: '32vh', minHeight: 240 }}>
-              <div ref={setMapContainerRef} style={{ width: '100%', height: '100%' }} />
+              {isNative() ? (
+                <MapEmbedView
+                  mode="meals"
+                  center={{ lat: SEOUL.lat, lng: SEOUL.lng }}
+                  level={5}
+                  pins={nativeMealPins}
+                  userLoc={userLocation}
+                  fly={flyTarget}
+                  selectedId={selectedClusterKey}
+                  onPinClick={handleNativeMealPin}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              ) : (
+                <div ref={setMapContainerRef} style={{ width: '100%', height: '100%' }} />
+              )}
               <div className="absolute top-3 left-3 z-10 pointer-events-none bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
                 <p className="text-xs font-medium text-warm-dark">우리가 기록한 곳 {clusters.length}곳</p>
               </div>
-              {!mapReady && !mapInitFailed && (
+              {!isNative() && !mapReady && !mapInitFailed && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-cream-50/90 z-10 pointer-events-none">
                   <div className="w-5 h-5 border-2 border-cream-200 border-t-warm-brown rounded-full animate-spin mb-2" />
                   <p className="text-xs text-warm-light">지도 불러오는 중...</p>
                 </div>
               )}
-              {mapInitFailed && (
+              {!isNative() && mapInitFailed && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-cream-50 z-10 px-6 text-center">
                   <svg className="w-8 h-8 text-cream-300 mb-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
@@ -1985,17 +2034,31 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
           {wishlistWithCoords.length > 0 && (
             <div ref={wishMapContainerRef} className="shrink-0 px-4 pb-2">
               <div className="relative rounded-2xl shadow-sm overflow-hidden" style={{ height: '32vh', minHeight: 220 }}>
-                <div ref={setWishMapNodeRef} style={{ width: '100%', height: '100%' }} />
+                {isNative() ? (
+                  <MapEmbedView
+                    mode="wish"
+                    center={wishlistWithCoords[0] ? { lat: wishlistWithCoords[0].lat, lng: wishlistWithCoords[0].lng } : { lat: SEOUL.lat, lng: SEOUL.lng }}
+                    level={6}
+                    pins={nativeWishPins}
+                    userLoc={userLocation}
+                    fly={wishFlyTarget}
+                    selectedId={highlightedWishId}
+                    onPinClick={handleNativeWishPin}
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                ) : (
+                  <div ref={setWishMapNodeRef} style={{ width: '100%', height: '100%' }} />
+                )}
                 <div className="absolute top-3 left-3 z-10 pointer-events-none bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
                   <p className="text-xs font-medium text-warm-dark">가고 싶은 곳 {wishlistWithCoords.length}곳</p>
                 </div>
-                {!wishMapReady && !wishMapFailed && (
+                {!isNative() && !wishMapReady && !wishMapFailed && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-cream-50/90 z-10 pointer-events-none">
                     <div className="w-5 h-5 border-2 border-cream-200 border-t-warm-brown rounded-full animate-spin mb-2" />
                     <p className="text-xs text-warm-light">지도 불러오는 중...</p>
                   </div>
                 )}
-                {wishMapFailed && (
+                {!isNative() && wishMapFailed && (
                   <div className="absolute inset-0 flex items-center justify-center bg-cream-50 z-10">
                     <p className="text-xs text-warm-light text-center px-4">지도를 불러올 수 없어요</p>
                   </div>

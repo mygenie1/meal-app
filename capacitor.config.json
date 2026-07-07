@@ -3,7 +3,8 @@
   "appName": "식탁일기",
   "webDir": "dist",
   "server": {
-    "iosScheme": "capacitor"
+    "iosScheme": "capacitor",
+    "allowNavigation": ["www.siktakilgi.com"]
   },
   "experimental": {
     "ios": {
