@@ -38,7 +38,7 @@ workflows:
         bundle_identifier: com.siktakilgi.app
       xcode: latest
       cocoapods: default   # SPM 프로젝트라 실제로 pod 은 안 쓰지만, 기본값 유지(무해)
-      node: 20             # 프로젝트 LTS. 필요 시 22 로 변경 가능
+      node: 22             # Capacitor CLI 가 NodeJS >=22.0.0 요구 (node 20 이면 cap sync 거부)
       vars:
         BUNDLE_ID: "com.siktakilgi.app"
         APPLE_TEAM_ID: "WT3BMTN5A2"
