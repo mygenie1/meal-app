@@ -1,8 +1,19 @@
 import { defineConfig } from 'vite'
+import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // 멀티페이지: index.html(앱) + map-embed.html(카카오맵 iframe 프록시, 경량 vanilla).
+  // map-embed 는 iOS 에서 iframe 으로 로드됨 — 실제 origin(www)에서 서빙되어 카카오 도메인 검증 통과.
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        'map-embed': fileURLToPath(new URL('./map-embed.html', import.meta.url)),
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -53,7 +64,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // 랜딩 목업(public/landing/*)은 비로그인 화면에서만 쓰이고 용량이 커서 프리캐시 제외 →
         // 설치형 PWA가 불필요하게 ~4MB를 받지 않게. 랜딩 방문 시 일반 네트워크로 로드됨.
-        globIgnores: ['**/landing/**'],
+        // map-embed.html: iOS iframe 전용 페이지 → 항상 네트워크 최신 로드(프리캐시 제외).
+        globIgnores: ['**/landing/**', 'map-embed.html'],
         // SPA: 오프라인에서도 라우팅 유지
         navigateFallback: 'index.html',
         // /admin 경로는 SW 캐시 폴백에서 제외 → 항상 네트워크에서 최신 번들 로드

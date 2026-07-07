@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>지도</title>
+    <!--
+      카카오맵 iframe 프록시 embed 페이지 (Phase 1).
+      이 페이지는 https://www.siktakilgi.com/map-embed.html 로 서빙되며,
+      iframe 안에서도 문서 origin = www.siktakilgi.com(카카오 등록 도메인) → SDK 도메인 검증 통과.
+      React 앱 번들 미포함(경량). %VITE_KAKAO_MAP_KEY% 는 index.html 과 동일하게 빌드타임 주입.
+    -->
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #f5ede0; }
+      #map { width: 100%; height: 100%; }
+      #err {
+        position: absolute; inset: 0; display: none;
+        align-items: center; justify-content: center; text-align: center;
+        font-family: system-ui, sans-serif; color: #a07850; font-size: 13px; padding: 24px;
+      }
+    </style>
+    <!-- 카카오 SDK: index.html 과 동일 (services 포함, autoload=false) -->
+    <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=%VITE_KAKAO_MAP_KEY%&libraries=services&autoload=false"></script>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="err">지도를 불러올 수 없어요.</div>
+    <script type="module" src="/src/map-embed/main.js"></script>
+  </body>
+</html>
