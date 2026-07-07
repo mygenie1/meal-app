@@ -1,0 +1,111 @@
+# Codemagic CI/CD — iOS 빌드 파이프라인 (Phase B)
+# 식탁일기 iOS (Capacitor 8 · SPM · dist 번들 방식)
+#
+# 이 파일은 Codemagic 전용이다. 웹/Vercel/안드로이드 TWA에는 아무 영향 없음.
+#
+# 사전 조건 (완료된 것):
+#  - App Store Connect API 키가 Codemagic integration 이름 "codemagic" 으로 등록됨
+#  - App Store Connect 에 앱 등록됨 (식탁일기, Bundle ID com.siktakilgi.app)
+#  - App ID(com.siktakilgi.app) 에 Push Notifications capability 애플 콘솔에서 활성화됨
+#  - GoogleService-Info.plist 레포 커밋 + pbxproj 배선 완료
+#  - Info.plist: 커스텀 스킴 / 위치권한 / remote-notification 백그라운드 모드 이미 있음
+#
+# ★ 구조 메모 (실패 로그 보고 조정할 지점):
+#  - 이 프로젝트는 Capacitor 8 "SPM" 방식 → Podfile/CocoaPods 없음 → pod install 하지 않음.
+#  - 그래서 빌드는 workspace(App.xcworkspace)가 아니라 PROJECT(App.xcodeproj)로 한다.
+#    (App.xcworkspace 는 CocoaPods 프로젝트에만 생기며, 여기엔 존재하지 않음)
+#  - scheme / target 이름은 "App" (확인 완료). 공유 scheme 미커밋이라 xcodebuild 가 자동 생성.
+#  - Windows 에서 SPM 심링크를 못 만들어 CapApp-SPM/Package.swift 에 플러그인 미등록 상태로 커밋됨.
+#    → 반드시 Mac(여기)에서 `npx cap sync ios` 를 실행해 플러그인 3종(messaging/browser/app)을 재등록해야 함.
+
+workflows:
+  ios-release:
+    name: iOS Release → TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    integrations:
+      app_store_connect: codemagic  # Codemagic 에 등록한 App Store Connect API 키 integration 이름
+
+    environment:
+      xcode: latest
+      cocoapods: default   # SPM 프로젝트라 실제로 pod 은 안 쓰지만, 기본값 유지(무해)
+      node: 20             # 프로젝트 LTS. 필요 시 22 로 변경 가능
+      vars:
+        BUNDLE_ID: "com.siktakilgi.app"
+        APPLE_TEAM_ID: "WT3BMTN5A2"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_SCHEME: "App"
+        # ★ APP_STORE_APPLE_ID: App Store Connect > 앱 > 앱 정보 > "Apple ID" 의 숫자 값으로 채울 것.
+        #   (선택 사항 — publishing 단계에서 앱 자동 매칭에 사용. 비워두면 Bundle ID 로 매칭 시도)
+        APP_STORE_APPLE_ID: "0000000000"  # TODO: App Store Connect 에서 확인한 숫자 ID 로 교체
+
+    scripts:
+      # 1) 코드 서명 — Codemagic 자동 서명
+      #    Distribution 인증서 + App Store 프로비저닝 프로파일 자동 생성/취득.
+      #    App ID 에 Push Notifications 가 이미 활성화돼 있어 프로파일에 자동 포함됨.
+      - name: Fetch signing files (Distribution cert + App Store profile)
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+      - name: Initialize keychain & add certificates
+        script: |
+          keychain initialize
+          keychain add-certificates
+
+      # 2) 의존성 설치 + 웹 빌드 (dist 생성)
+      - name: Install npm dependencies
+        script: npm ci
+
+      - name: Build web (dist)
+        script: npm run build
+
+      # 3) ★ Capacitor 동기화 — 플러그인 SPM 재등록 + Package.swift 재생성 + dist 번들 복사
+      #    Windows 심링크 문제로 커밋된 Package.swift 는 플러그인 미등록 상태 → Mac 에서 재생성 필수.
+      - name: Capacitor sync iOS
+        script: |
+          npx cap sync ios
+          # SPM 방식이라 CocoaPods 없음 → pod install 하지 않음.
+          # (혹시 향후 Pods 방식으로 전환하면 여기에 `cd ios/App && pod install` 추가)
+
+      # 프로비저닝 프로파일을 Xcode 프로젝트에 주입 (manual signing 으로 전환)
+      - name: Set up code signing (use-profiles)
+        script: |
+          xcode-project use-profiles
+
+      # 4) 빌드 번호 자동 증가 — 애플은 중복 빌드번호 거부.
+      #    App Store Connect 상 최신 빌드번호 + 1 로 설정.
+      - name: Set build number
+        script: |
+          cd $CM_BUILD_DIR
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0")
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then LATEST=0; fi
+          NEW_BUILD=$(($LATEST + 1))
+          echo "Setting CFBundleVersion to $NEW_BUILD"
+          agvtool new-version -all $NEW_BUILD
+        # NOTE: APP_STORE_APPLE_ID 미설정 시 위 조회가 실패 → LATEST=0 → 빌드번호 1.
+        #       그래도 중복이면 실패하므로, 안전하게 timestamp 방식으로 바꾸려면 아래로 교체:
+        #         agvtool new-version -all $(date +%s)
+
+      # 5) IPA 빌드 — SPM 프로젝트이므로 --project 사용 (workspace 아님)
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+
+    # 6) 성공 시 TestFlight 업로드
+    publishing:
+      app_store_connect:
+        auth: integration          # integration "codemagic" 의 API 키 사용
+        submit_to_testflight: true
+        # 내부 테스터 그룹에 자동 배포하려면 아래 주석 해제 후 그룹명 입력:
+        # beta_groups:
+        #   - "Internal Testers"
