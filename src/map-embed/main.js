@@ -1,10 +1,14 @@
-// ── 카카오맵 iframe 프록시 embed 스크립트 (Phase 2) ─────────────────────────
+// ── 카카오맵 iframe 프록시 embed 스크립트 (Phase 3) ─────────────────────────
 // 목적: iOS Capacitor(capacitor://localhost)에서 카카오 JS SDK 가 도메인 검증에 막히는 문제를,
 //       실제 등록 도메인(www.siktakilgi.com)에서 서빙되는 이 페이지를 iframe 으로 임베드해 우회.
 //       iframe 문서 origin = www.siktakilgi.com 이므로 카카오 referer 검증 통과.
 //
 // Phase 2 범위: init/setPins → 태그/모드별 핀 렌더, 핀 클릭 → 부모로 {type:'pinClick', id},
-//               panTo/userLoc 처리, select 하이라이트. (검색/역지오코딩 RPC = Phase 3)
+//               panTo/userLoc 처리, select 하이라이트.
+// Phase 3 범위(추가): 검색/역지오코딩 RPC.
+//   요청 {type:'search',  reqId, query}     → 응답 {type:'search:result',  reqId, places:[...]}
+//   요청 {type:'geocode', reqId, lat, lng}  → 응답 {type:'geocode:result', reqId, address, road, region}
+//   실패 시 동일 result 타입에 error 필드 포함(빈 결과와 구분). reqId 로 부모가 요청↔응답 매칭.
 //
 // vanilla 모듈(React 미포함). 웹/안드로이드 기존 인라인 지도와 무관(신설 페이지).
 
@@ -141,6 +145,90 @@ function handleInit(data) {
   if (data.userLoc) setUserLoc(data.userLoc.lat, data.userLoc.lng)
 }
 
+// ── 검색 / 역지오코딩 RPC (Phase 3) ───────────────────────────────────────
+// SDK 는 libraries=services 로 로드됨 → kakao.maps.load 완료 후 services 사용 가능.
+// 인스턴스는 지연 생성 후 재사용.
+let placesSvc = null
+let geocoderSvc = null
+function getPlaces() {
+  if (!placesSvc) placesSvc = new window.kakao.maps.services.Places()
+  return placesSvc
+}
+function getGeocoder() {
+  if (!geocoderSvc) geocoderSvc = new window.kakao.maps.services.Geocoder()
+  return geocoderSvc
+}
+function servicesReady() {
+  return !!(window.kakao && window.kakao.maps && window.kakao.maps.services)
+}
+
+// 카카오 place 원형 필드만 화이트리스트로 복사(postMessage structured clone 안전 + Phase 4 에서
+// 기존 searchKakaoPlaces 소비 형태 place_name/x/y/place_url 그대로 유지).
+function normalizePlace(p) {
+  return {
+    id: p.id,
+    place_name: p.place_name,
+    category_name: p.category_name,
+    category_group_name: p.category_group_name,
+    phone: p.phone,
+    address_name: p.address_name,
+    road_address_name: p.road_address_name,
+    x: p.x, // 경도(lng, 문자열)
+    y: p.y, // 위도(lat, 문자열)
+    place_url: p.place_url,
+  }
+}
+
+function handleSearch(d) {
+  const reqId = d.reqId
+  const query = (d.query || '').trim()
+  const size = d.size || 5
+  if (!query) { post({ type: 'search:result', reqId, places: [], error: 'empty query' }); return }
+  if (!servicesReady()) { post({ type: 'search:result', reqId, places: [], error: 'services unavailable' }); return }
+  try {
+    getPlaces().keywordSearch(query, (result, status) => {
+      const S = window.kakao.maps.services.Status
+      if (status === S.OK) {
+        post({ type: 'search:result', reqId, places: result.slice(0, size).map(normalizePlace) })
+      } else if (status === S.ZERO_RESULT) {
+        post({ type: 'search:result', reqId, places: [] })
+      } else {
+        post({ type: 'search:result', reqId, places: [], error: 'status:' + status })
+      }
+    }, { size })
+  } catch (err) {
+    post({ type: 'search:result', reqId, places: [], error: String((err && err.message) || err) })
+  }
+}
+
+function handleGeocode(d) {
+  const reqId = d.reqId
+  const lat = d.lat, lng = d.lng
+  if (lat == null || lng == null) { post({ type: 'geocode:result', reqId, address: null, error: 'no coords' }); return }
+  if (!servicesReady()) { post({ type: 'geocode:result', reqId, address: null, error: 'services unavailable' }); return }
+  try {
+    // ★ coord2Address(x=lng, y=lat, cb) — 인자 순서 경도 먼저.
+    getGeocoder().coord2Address(lng, lat, (result, status) => {
+      const S = window.kakao.maps.services.Status
+      if (status === S.OK && result[0]) {
+        const r = result[0]
+        const road = r.road_address // 도로명(없을 수 있음)
+        const addr = r.address       // 지번
+        post({
+          type: 'geocode:result', reqId,
+          address: (road && road.address_name) || (addr && addr.address_name) || null,
+          road: road ? road.address_name : null,
+          region: addr ? addr.address_name : null,
+        })
+      } else {
+        post({ type: 'geocode:result', reqId, address: null, error: 'status:' + status })
+      }
+    })
+  } catch (err) {
+    post({ type: 'geocode:result', reqId, address: null, error: String((err && err.message) || err) })
+  }
+}
+
 // 부모 → embed 수신
 window.addEventListener('message', (e) => {
   if (!PARENT_ALLOWLIST.includes(e.origin)) return
@@ -165,6 +253,12 @@ window.addEventListener('message', (e) => {
       break
     case 'userLoc':
       setUserLoc(d.lat, d.lng)
+      break
+    case 'search':
+      handleSearch(d)
+      break
+    case 'geocode':
+      handleGeocode(d)
       break
     default:
       break

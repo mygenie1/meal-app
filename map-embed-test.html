@@ -5,18 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>map-embed 테스트</title>
     <!--
-      ★ Phase 2 브라우저 검증용 임시 테스트 하네스. (Phase 4 완료 후 제거 예정)
+      ★ Phase 2~3 브라우저 검증용 임시 테스트 하네스. (Phase 4 완료 후 제거 예정)
       부모(이 페이지) ↔ /map-embed.html iframe 사이 postMessage 를 실측:
-        init/setPins/panTo/userLoc/select 전송 → 핀 표시 → 핀 클릭 → pinClick 수신 로그.
+        Phase 2: init/setPins/panTo/userLoc/select 전송 → 핀 표시 → 핀 클릭 → pinClick 수신 로그.
+        Phase 3: search(키워드)/geocode(좌표→주소) RPC — src/lib/mapEmbedRpc.js 유틸을 그대로 import 해 검증.
       기존 웹 지도(MealMap)는 전혀 건드리지 않음 — 이 페이지는 독립 검증 경로.
     -->
     <style>
       * { box-sizing: border-box; }
       body { margin: 0; font-family: system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; }
       header { padding: 10px 12px; background: #6b4f3a; color: #fff; font-size: 14px; font-weight: 700; }
-      .bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-bottom: 1px solid #eee; }
+      .bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-bottom: 1px solid #eee; align-items: center; }
       button { font-size: 13px; padding: 7px 11px; border: 1px solid #d9c4a8; background: #faf7f0; border-radius: 8px; cursor: pointer; }
       button:hover { background: #f5ede0; }
+      input { font-size: 13px; padding: 7px 9px; border: 1px solid #d9c4a8; border-radius: 8px; }
+      .bar label { font-size: 12px; color: #6b4f3a; font-weight: 700; }
       .stage { flex: 1; display: flex; min-height: 0; }
       iframe { flex: 1; border: none; border-right: 1px solid #eee; }
       #log { width: 300px; overflow: auto; padding: 10px; font: 12px/1.5 monospace; background: #1e1e1e; color: #b5e853; white-space: pre-wrap; }
@@ -24,7 +27,7 @@
     </style>
   </head>
   <body>
-    <header>map-embed 브릿지 테스트 (Phase 2)</header>
+    <header>map-embed 브릿지 테스트 (Phase 2~3)</header>
     <div class="bar">
       <button onclick="sendInit('meals')">init: meals(핀4)</button>
       <button onclick="sendInit('wish')">init: wish(핀3)</button>
@@ -33,6 +36,17 @@
       <button onclick="sendUserLoc(37.5665,126.9780)">userLoc 서울시청</button>
       <button onclick="sendSelect()">select 첫핀</button>
       <button onclick="clearLog()">로그 지우기</button>
+    </div>
+    <!-- Phase 3: 검색/역지오코딩 RPC (createMapEmbedRpc 유틸 경유) -->
+    <div class="bar">
+      <label>검색</label>
+      <input id="q" placeholder="예: 스타벅스 강남" size="18" onkeydown="if(event.key==='Enter')doSearch()" />
+      <button onclick="doSearch()">search RPC</button>
+      <label style="margin-left:10px">역지오코딩</label>
+      <input id="glat" value="37.5665" size="9" />
+      <input id="glng" value="126.9780" size="9" />
+      <button onclick="doGeocode()">geocode RPC</button>
+      <button onclick="doTimeout()">타임아웃 테스트</button>
     </div>
     <div class="stage">
       <iframe id="frame"></iframe>
@@ -91,6 +105,51 @@
           sendInit('meals')
         }
       })
+    </script>
+
+    <!-- Phase 3: 실제 Phase 4 용 RPC 유틸(src/lib/mapEmbedRpc.js)을 그대로 import 해 검증 -->
+    <script type="module">
+      import { createMapEmbedRpc } from '/src/lib/mapEmbedRpc.js'
+
+      // 하네스 iframe(#frame)을 대상으로 RPC 클라이언트 구성. targetOrigin = 부모 origin(same-origin).
+      const rpc = createMapEmbedRpc({
+        getTarget: () => document.getElementById('frame').contentWindow,
+        targetOrigin: location.origin,
+        timeout: 8000,
+      })
+
+      window.doSearch = async () => {
+        const q = document.getElementById('q').value
+        log('→ search ' + JSON.stringify(q))
+        try {
+          const r = await rpc.search(q)
+          if (r.error) { log('← search:result error=' + r.error); return }
+          log('← search:result (' + r.places.length + '건): ' +
+            JSON.stringify(r.places.map((p) => p.place_name)))
+          r.places.forEach((p) => log('   · ' + p.place_name + ' | ' +
+            (p.road_address_name || p.address_name) + ' | ' + p.y + ',' + p.x))
+        } catch (e) { log('✖ search ' + e.message) }
+      }
+
+      window.doGeocode = async () => {
+        const lat = parseFloat(document.getElementById('glat').value)
+        const lng = parseFloat(document.getElementById('glng').value)
+        log('→ geocode ' + lat + ',' + lng)
+        try {
+          const r = await rpc.geocode(lat, lng)
+          if (r.error) { log('← geocode:result error=' + r.error); return }
+          log('← geocode:result 주소=' + r.address + ' | 도로=' + r.road + ' | 지번=' + r.region)
+        } catch (e) { log('✖ geocode ' + e.message) }
+      }
+
+      // 타임아웃/reject 경로 검증 — 응답하지 않는 더미 대상 + 짧은 timeout.
+      window.doTimeout = async () => {
+        const t = createMapEmbedRpc({ getTarget: () => ({ postMessage() {} }), targetOrigin: location.origin, timeout: 800 })
+        log('→ (타임아웃 테스트) search "x" / timeout 800ms')
+        try { await t.search('x'); log('← (예상외) 응답 받음') }
+        catch (e) { log('✔ 타임아웃 reject 정상: ' + e.message) }
+        finally { t.destroy() }
+      }
     </script>
   </body>
 </html>
