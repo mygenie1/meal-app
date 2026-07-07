@@ -15,6 +15,17 @@ body {
   color: #3d2b1f;
 }
 
+/* ── iOS WKWebView 고무줄(rubber-band) 바운스 차단 ──────────────
+   body 문서 스크롤을 최상단/최하단 너머로 당기면 iOS가 고무줄 바운스를
+   일으키고, 이때 position:fixed 하단 네비바가 함께 밀려 "떴다 붙었다" 함.
+   루트 스크롤러의 세로 오버스크롤을 막아 바운스 자체를 제거 → 네비바 고정.
+   - 세로만(-y) 대상 → 가로 스크롤 캐러셀(통계/필터)은 영향 없음.
+   - 웹/안드로이드엔 무해(오히려 앱다운 동작). 네비바 레이아웃은 그대로. */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+
 #root {
   min-height: 100svh;
 }
