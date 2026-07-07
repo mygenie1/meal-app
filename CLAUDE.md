@@ -35,7 +35,7 @@ Supabase 백엔드 연결 완료. Vercel 배포 완료. PWA 설치 가능.
 | 스타일 | Tailwind CSS 3 |
 | 라우팅 | react-router-dom 7 |
 | 날짜 | date-fns 4 (locale: ko) |
-| 지도 | Kakao Maps SDK (`window.kakao.maps`) — index.html `<script>` 태그로 로드 |
+| 지도 | Kakao Maps SDK (`window.kakao.maps`) — index.html `<script>` 태그로 로드. ★ iOS(Capacitor)는 origin 거부 → `map-embed.html` iframe 프록시 경유(isNative 분기, "A3-2" 참조) |
 | 지오코딩 | Kakao Local API (`/v2/local/geo/coord2address`) + Nominatim 폴백 |
 | 식당 자동완성 | Kakao Local API (`https://dapi.kakao.com/v2/local/search/keyword.json`) |
 | 고유ID | uuid 14 |
@@ -118,6 +118,11 @@ meal-app/
 │   ├── main.jsx                         React 진입점
 │   ├── index.css                        Tailwind 지시어, 전역 스타일, Safe Area, Kakao 오버라이드
 │   │
+│   ├── map-embed/
+│   │   └── main.js                      ★ map-embed.html(루트, Vite 멀티페이지 엔트리)의 vanilla 스크립트
+│   │                                    카카오 SDK 로드 + init/setPins/panTo/userLoc/select 렌더 + search/geocode RPC
+│   │                                    부모(capacitor://localhost) ↔ iframe postMessage 브릿지 (React 미포함, www 배포)
+│   │
 │   ├── lib/
 │   │   ├── supabase.js                  Supabase 클라이언트 초기화 (15초 타임아웃 fetch 래퍼)
 │   │   ├── uploadPhoto.js               사진 업로드 + 썸네일 헬퍼
@@ -138,10 +143,13 @@ meal-app/
 │   │   │                                linkify(text) — https:// URL → <a>, \n → <br/>
 │   │   │                                <a> onClick stopPropagation — 부모 버튼 클릭 차단
 │   │   │                                적용: MealDetailModal(review/memo/댓글), FeedCard, DayDetail, MealMap 위시 댓글
-│   │   └── firebase.js                  Firebase FCM 클라이언트 (동적 import — Vercel 빌드 충돌 방지)
-│   │                                    getMessagingInstance() — 브라우저 런타임에만 firebase/messaging 로드
-│   │                                    requestFCMToken() — 권한 요청 + SW 등록 + 토큰 발급 (단계별 로그)
-│   │                                    onFCMMessage(callback) — 포그라운드 메시지 리스너
+│   │   ├── firebase.js                  Firebase FCM 클라이언트 (동적 import — Vercel 빌드 충돌 방지)
+│   │   │                                getMessagingInstance() — 브라우저 런타임에만 firebase/messaging 로드
+│   │   │                                requestFCMToken() — 권한 요청 + SW 등록 + 토큰 발급 (단계별 로그)
+│   │   │                                onFCMMessage(callback) — 포그라운드 메시지 리스너
+│   │   ├── platform.js                  isNative() — Capacitor 네이티브 여부 (웹=false)
+│   │   ├── mapEmbed.js                  map-embed iframe 상수(EMBED_ORIGIN/EMBED_URL) + embedSearch/embedGeocode(isNative 분기)
+│   │   └── mapEmbedRpc.js               createMapEmbedRpc — 부모↔embed iframe 검색/지오코딩 RPC(reqId 매칭+타임아웃)
 │   │
 │   ├── context/
 │   │   └── AppContext.jsx               전체 상태 관리 + Supabase CRUD + Realtime 구독
@@ -193,12 +201,16 @@ meal-app/
 │   │   │   │                            호출 측에서 URL 해석 완료된 문자열 배열을 받음
 │   │   │   ├── FullscreenViewer.jsx     사진 전체화면 뷰어
 │   │   │   ├── StarRating.jsx           별점 입력/표시 (1~5, 클릭 토글)
-│   │   │   └── BannerSlot.jsx           위치별 배너 표시 컴포넌트
-│   │   │                                slot prop으로 banners 테이블에서 is_active 배너 1개 조회
-│   │   │                                info 타입: 텍스트 카드 (title + body)
-│   │   │                                image 타입: 이미지 + 선택적 link_url (새 탭)
-│   │   │                                disclosure 있으면 배너 아래 작은 회색 텍스트로 고지 문구 표시
-│   │   │                                fixed prop: BottomNav 바로 위 고정 표시 (z-[49])
+│   │   │   ├── BannerSlot.jsx           위치별 배너 표시 컴포넌트
+│   │   │   │                            slot prop으로 banners 테이블에서 is_active 배너 1개 조회
+│   │   │   │                            info 타입: 텍스트 카드 (title + body)
+│   │   │   │                            image 타입: 이미지 + 선택적 link_url (새 탭)
+│   │   │   │                            disclosure 있으면 배너 아래 작은 회색 텍스트로 고지 문구 표시
+│   │   │   │                            fixed prop: BottomNav 바로 위 고정 표시 (z-[49])
+│   │   │   ├── MapEmbedRpcProvider.jsx   ★ 네이티브 전용 — map-embed 숨김 iframe 상시 mount + useMapEmbedRpc() context
+│   │   │   │                            (웹은 children 그대로 통과 → rpc=null). MealForm/위시폼 검색·지오코딩 위임
+│   │   │   └── MapEmbedView.jsx          ★ 네이티브 전용 — 보이는 지도 iframe. props→postMessage(init/setPins/panTo/
+│   │   │                                userLoc/select), pinClick 수신. e.source로 자기 iframe만 처리(다중 격리)
 │   │   │
 │   │   ├── Calendar/
 │   │   │   └── CalendarGrid.jsx         월간 달력 그리드
@@ -325,9 +337,11 @@ meal-app/
 ├── delete-account-migration.sql         meals/comments/ratings FK → ON DELETE SET NULL,
 │                                        notifications.user_id FK → ON DELETE CASCADE
 ├── .env                                 환경변수 (gitignore, Vercel에 별도 설정)
+├── map-embed.html                       ★ 카카오맵 iframe 프록시 페이지 (Vite 멀티페이지 엔트리, www 배포). src/map-embed/main.js 로드
+├── capacitor.config.json                iOS 네이티브 설정 (iosScheme:capacitor, server.allowNavigation:[www.siktakilgi.com] — iframe 로드 허용)
 ├── tailwind.config.js                   커스텀 색상(cream, warm) + 폰트 정의
 ├── postcss.config.js
-├── vite.config.js                       PWA 플러그인 (Workbox globIgnores:['**/landing/**'] — 목업 프리캐시 제외)
+├── vite.config.js                       PWA(Workbox) + 멀티페이지 input(index/map-embed). navigateFallbackDenylist에 map-embed 등재
 └── package.json
 ```
 
@@ -957,16 +971,39 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 - Info.plist `CFBundleURLTypes`에 `com.siktakilgi.app` 스킴. Supabase Redirect URLs에 `com.siktakilgi.app://login-callback` 추가(완료). 카카오 콘솔은 변경 불필요(커스텀 스킴은 Supabase→앱 구간).
 - 이메일 로그인이 폴백 → OAuth 최악에도 앱 사용 가능.
 
-### A3-2 — 카카오 지도 origin (★ 불확실, Phase C 실측)
-- iOS는 `capacitor://` 강제라 Kakao(http(s) 도메인만 허용)가 거부할 수 있음. `server.hostname` 트릭이 유일한 무료 시도책이나 **WKWebView Referer 동작에 따라 되거나 안 됨 → 실기기 실측만이 답.**
-- hostname 최초 설정이라 세션 마이그레이션 이슈 없음(네이티브 미출시). GPS는 hostname 무관(capacitor://는 secure context)하나 Info.plist 위치 설명 필요(추가 완료).
-- 실패 시 폴백(지도 degrade/"카카오맵 앱으로 열기" 링크) **설계만**(구현은 실측 실패 후). 4.2 심사는 네이티브 푸시로 방어.
+### A3-2 — 카카오 지도 origin → ★ iframe 프록시로 해결 (map-embed, Phase 1~4 완료)
+- 문제: iOS는 `capacitor://localhost` origin 강제 → 카카오 JS SDK 가 등록 도메인(http(s))만 허용해 거부.
+  `server.hostname` 위장 트릭은 불확실 → **폐기**(capacitor.config hostname 없음 = localhost 원복, ed78f35).
+- 해결: **카카오 등록 도메인(www.siktakilgi.com)에서 서빙되는 경량 `map-embed.html` 을 iframe 으로 임베드.**
+  iframe 문서 origin = www → SDK referer 검증 통과. 부모(capacitor://localhost) ↔ iframe postMessage 브릿지.
+- GPS 는 hostname 무관(capacitor:// 도 secure context) — 부모가 취득해 `userLoc` 으로 iframe 전달. Info.plist 위치 설명 추가 완료.
+
+#### map-embed iframe 프록시 구조 (★ iOS 카카오 지도/검색 = 전부 이 경로)
+- **embed 페이지**: `map-embed.html`(Vite 멀티페이지 엔트리) + `src/map-embed/main.js`(vanilla, React 미포함).
+  카카오 SDK(services 포함, autoload=false) 로드, `%VITE_KAKAO_MAP_KEY%` 빌드타임 주입. **www 로 배포**(Vercel).
+  ★ SW `navigateFallbackDenylist` 에 `/map-embed(-test)?\.html` 등재 필수 — 없으면 Workbox 가 index.html 로 폴백(0ced35c/3b49b2c).
+- **프로토콜**(부모 `src:'siktak'` → embed, embed `src:'siktak-embed'` → 부모):
+  - 렌더: `init`/`setPins`/`panTo`/`userLoc`/`select` → embed, `ready`/`pinClick` ← embed.
+  - RPC: `search`(keywordSearch)/`geocode`(coord2Address, reqId 매칭+타임아웃) ↔ `search:result`/`geocode:result`.
+  - `PARENT_ALLOWLIST` 에 `capacitor://localhost` 등재(부모 origin 검증). embed forward addressSearch 없음 → 지오코딩은 keywordSearch 첫 결과로 근사.
+- **부모 클라이언트**:
+  - `src/lib/mapEmbed.js` — `EMBED_ORIGIN='https://www.siktakilgi.com'`·`EMBED_URL`·`NATIVE_PARENT_ORIGIN`, `embedSearch/embedGeocode`(isNative면 RPC, 아니면 웹 폴백).
+  - `src/lib/mapEmbedRpc.js` — `createMapEmbedRpc({getTarget,targetOrigin,timeout})`, reqId nonce 매칭.
+  - `components/common/MapEmbedRpcProvider.jsx` — 네이티브 전용 **숨김 iframe 1개 상시 mount**(App 루트) + `useMapEmbedRpc()` context. 웹은 children 그대로 통과(rpc=null).
+  - `components/common/MapEmbedView.jsx` — 네이티브 전용 **보이는 지도 iframe**. props(pins/userLoc/fly/selectedId)→postMessage, pinClick 수신. `e.source` 로 자기 iframe 만 처리(다중 iframe 격리 필수).
+- **연결(Phase 4, 전부 `isNative()` 분기 — 웹/안드로이드/TWA 100% 기존 인라인 지도·검색 유지)**:
+  - 지도 A/B: MealMap 맛집/위시 지도 → MapEmbedView(클러스터→대표핀, pinClick→기존 handlePinClick/위시 하이라이트).
+  - 지도 C: MealDetailModal `SmallMap` → MapEmbedView(detail, 단일 핀).
+  - 검색/지오코딩 D~G: MealForm/위시폼 → 숨김 iframe RPC. 입력창·드롭다운·place_url·차감 흐름 그대로, 응답 소스만 교체.
+- **capacitor.config**: `server.allowNavigation:["www.siktakilgi.com"]`(iframe 원격 로드 허용). hostname 없음(localhost).
+- **★ 축소 패리티(iOS 한정, 현재 배포 프로토콜만 — embed/www 무변경)**: 클러스터 카운트 배지 없음 / 맛집 목록 뷰포트(bounds) 필터 대신 전체 표시 / 지도 배경클릭 선택해제 없음. 완전 패리티는 embed 프로토콜 확장(bounds/mapClick/카운트)+www 재배포로 **Phase 4b**.
+- **★ 미검증(Phase C 첫 iOS 실기기)**: ① allowNavigation 으로 iframe 이 WKWebView 안에서 실제 로드되는지, ② iframe origin=www 로 카카오 도메인 검증 통과하는지 — iframe 설계의 핵심 미지수. 실패 시 degrade/"카카오맵 앱으로 열기" 폴백은 설계만.
 
 ### Phase B (Codemagic/Mac) 이월 — 빌드 시 필수
 - ★ **`npx cap sync ios` 반드시 실행** — Windows 심링크 실패로 `ios/App/CapApp-SPM/Package.swift`에 플러그인(messaging/browser/app) 미등록 → Mac에서 재생성해야 3종 포함(안 하면 푸시·OAuth·앱 누락 빌드).
 - **Push Notifications capability + `aps-environment` entitlement** + 서명/프로비저닝(App Store Connect API 키).
 - (완료·코드 반영) `Info.plist` `NSLocationWhenInUseUsageDescription`(지도 GPS)·`UIBackgroundModes: remote-notification`. GoogleService-Info.plist 배선·커밋.
-- **Phase C**: SE2 실기기로 로그인(OAuth)/푸시/딥링크/**지도 origin** 실측.
+- **Phase C**: SE2 실기기로 로그인(OAuth)/푸시/딥링크/**map-embed iframe 지도·검색**(로드·카카오 origin 통과·핀/클릭/GPS/검색) 실측.
 
 ---
 
@@ -1070,6 +1107,11 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 | Supabase OAuth를 PKCE로 가정 | 우리는 `flowType` 미설정 → **implicit flow**(토큰이 URL 해시). 네이티브 복귀는 `exchangeCodeForSession`(PKCE)이 아니라 해시 파싱 후 `setSession`. flowType 바꾸면 웹까지 영향 |
 | 알림 토글 껐는데 boot가 토큰 재등록 | 토글 OFF로 토큰 삭제해도 boot가 무조건 `registerFCMToken` 호출하면 되살아남. boot 등록을 `localStorage notif_enabled!=='false'` 게이트로 감쌀 것 |
 | capacitor.config가 웹에 영향 준다는 오해 | `capacitor.config`는 Capacitor 네이티브 빌드만 읽음. 웹(vite/dist/Vercel)·안드로이드 TWA는 안 읽음. `server.hostname`/plist 등 iOS 설정은 웹 무영향 |
+| iOS 카카오 지도/검색이 kakao 직접호출로 남음 | 네이티브는 `window.kakao` 도메인 검증에 막힘 → MealMap/MealForm/SmallMap/위시폼은 **`isNative()` 분기**로 map-embed iframe/RPC 경유(`MapEmbedView`·`embedSearch`·`embedGeocode`). 웹은 rpc=null → 기존 직접호출 |
+| map-embed iframe src 상대경로 | 네이티브에서 `/map-embed.html`은 `capacitor://localhost`로 로드돼 **똑같이 카카오에 막힘**. 반드시 절대 URL `https://www.siktakilgi.com/map-embed.html`(`EMBED_URL`) 사용 |
+| map-embed 다중 iframe 메시지 혼선 | 지도 iframe + 숨김 RPC iframe 공존 → `MapEmbedView`는 `e.source`로 자기 iframe만, `mapEmbedRpc`는 `reqId`로만 매칭해 격리. ready/pinClick(reqId 없음)과 search:result(reqId 있음) 구분 |
+| embed 프로토콜엔 forward addressSearch 없음 | 지오코딩(주소→좌표)은 `search`(keywordSearch) 첫 결과 좌표로 **근사**(`embedGeocode`). 장소 선택 시엔 좌표가 직접 오므로 폴백 용도 |
+| map-embed 프로토콜 확장 시 | iframe은 **배포된 www embed**를 로드 → 프로토콜 추가(bounds/mapClick/카운트)는 **www 재배포 선행** 후에야 네이티브가 사용 가능(Phase 4b) |
 
 ---
 
@@ -1244,6 +1286,10 @@ npm run dev
 | 레시피 사소 UX 2건 | RecipeDetailModal handleRecord: addMeal 성공 시에만 토스트+뷰전환(실패 재시도, 반환값 유지). statusOf incart 감지를 buildBuyText 규칙과 통일(분량 포함 재료 중복담기 방지) |
 | iOS Info.plist Phase B 키 | NSLocationWhenInUseUsageDescription(지도 GPS)+UIBackgroundModes remote-notification(백그라운드 푸시) 추가. 기존 커스텀 스킴 보존. 웹 무영향 |
 | leaveSpace stale closure 수정 | spaces.filter를 functional setState로 → RPC 대기 중 Realtime 갱신 유실 방지. 대체 현재스페이스는 로컬 실재 스페이스로 |
+| 카카오맵 iframe 프록시 Phase 1~2 | iOS capacitor:// origin 카카오 거부 우회 — www 서빙 `map-embed.html`(경량 vanilla) iframe 임베드. init/setPins 핀 렌더 + pinClick postMessage 브릿지. SW denylist(map-embed) + Vercel rewrite 정적 서빙 |
+| 카카오맵 iframe Phase 3 | 검색/지오코딩 RPC — embed에 `search`(keywordSearch)/`geocode`(coord2Address) reqId 매칭+타임아웃, 부모 `mapEmbedRpc` 클라이언트. 테스트 하네스로 브라우저 검증 |
+| 카카오맵 iframe Phase 4 (iOS 연결) | isNative() 분기로 지도 A/B/C(MealMap 2지도+MealDetailModal 미니맵)→MapEmbedView, 검색/지오코딩 D~G(MealForm/위시폼)→숨김 iframe RPC(MapEmbedRpcProvider). 웹/안드로이드 100% 인라인 유지. capacitor allowNavigation+하네스 제거. 축소 패리티(Phase C 실측 예정) |
+| iOS 홈 네비바 밀림 수정 | 홈만 내부 스크롤 컨테이너(h-[100svh]+overflow-y-auto overscroll-contain, MapPage 패턴)로 전환 → body 스크롤 제거로 긴 관성 스크롤 중 fixed 네비바 컴포지팅 드리프트 원천 차단. bounces=false(a04f7de)로도 안 잡히던 홈 고유 증상 |
 
 ---
 
@@ -1255,9 +1301,10 @@ npm run dev
   - 테스터: 가족·친구 → 품앗이 커뮤니티 → 유료 대행 순. 14일 중 업데이트 1회 권장(레시피 추가가 근거)
   - 프로덕션 신청 설문 성의껏(PWA/TWA 약점 → 거절 사유 잘 답할 것)
 
-**iOS 앱스토어 (Capacitor) — Phase A1~A3 완료, Phase B(빌드) 예정** 📱
-- 코드/설정 준비 완료(위 "iOS 앱 (Capacitor)" 섹션 참조): 번들·게이트·네이티브 푸시·OAuth·지도 origin·Info.plist 키.
-- **다음: Phase B(Codemagic 빌드)** — `cap sync ios`(플러그인 SPM 등록) + Push capability/`aps-environment` entitlement + 서명. → **Phase C**(SE2 실기기)로 로그인/푸시/딥링크/지도 실측.
+**iOS 앱스토어 (Capacitor) — Phase A1~A3 + 카카오맵 iframe Phase 1~4 완료, Phase B(빌드) 예정** 📱
+- 코드/설정 준비 완료(위 "iOS 앱 (Capacitor)" 섹션 참조): 번들·게이트·네이티브 푸시·OAuth·Info.plist 키.
+- **카카오 지도 origin = map-embed iframe 프록시로 해결**(Phase 1~4): 지도 3곳+검색/지오코딩 전부 isNative() 분기로 iframe 경유. 웹/안드로이드 무변경. (위 "A3-2" 섹션 참조)
+- **다음: Phase B(Codemagic 빌드)** — `cap sync ios`(플러그인 SPM 등록) + Push capability/`aps-environment` entitlement + 서명. → **Phase C**(SE2 실기기)로 로그인/푸시/딥링크 + **map-embed 지도·검색(로드/카카오 origin 통과/핀·클릭·GPS)** 실측. 실패 시 축소 패리티 보강/폴백은 Phase 4b.
 
 **출시 전 체크리스트** (우선순위순)
 1. ★ **비공개 테스트 12명/14일 채우기 → 프로덕션 신청 (1순위)**
@@ -1290,3 +1337,8 @@ npm run dev
   - 가벼운 억제법 조사 완료(2026-06-25) — 웹/메타(overscroll-behavior 등)/매니페스트(display
     fullscreen·minimal-ui)/TWA(Chrome 강제·WebView 폴백)로는 불가하거나 효과 불확실+재패키징·부작용 큼.
     배포 가능한 유일 해법은 #7 내부 스크롤 리팩터링뿐임을 확인. (다음엔 재조사 불필요)
+  - **부분 적용됨(de2f2b5)**: iOS 네이티브에서 홈 하단 네비바가 긴 관성 스크롤 중 밀려 "뜨던" 문제
+    (홈만 발생 — 유일하게 길고 이미지 많은 body 스크롤 페이지)를 위해 **HomePage만** 내부 스크롤
+    컨테이너(`h-[100svh]` + 내부 `overflow-y-auto overscroll-contain`, MapPage 패턴)로 전환.
+    네이티브 `bounces=false`(a04f7de)로도 안 잡히던 컴포지팅 드리프트를 body 스크롤 제거로 원천 차단.
+    나머지 탭의 전면 리팩터링(삼성 인터넷 억제 포함)은 여전히 출시 후 숙제.
