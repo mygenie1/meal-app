@@ -76,11 +76,13 @@ workflows:
       #    App Store Connect 상 최신 빌드번호 + 1 로 설정.
       - name: Set build number
         script: |
-          cd $CM_BUILD_DIR
+          # 최신 빌드번호 조회는 레포 루트 어디서든 가능 (API 호출).
           LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0")
           if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then LATEST=0; fi
           NEW_BUILD=$(($LATEST + 1))
           echo "Setting CFBundleVersion to $NEW_BUILD"
+          # ★ agvtool 은 .xcodeproj 가 있는 디렉토리에서 실행해야 함 (App.xcodeproj = ios/App/).
+          cd "$CM_BUILD_DIR/ios/App"
           agvtool new-version -all $NEW_BUILD
         # NOTE: APP_STORE_APPLE_ID 미설정 시 위 조회가 실패 → LATEST=0 → 빌드번호 1.
         #       그래도 중복이면 실패하므로, 안전하게 timestamp 방식으로 바꾸려면 아래로 교체:
