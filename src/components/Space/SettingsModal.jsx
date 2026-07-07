@@ -427,7 +427,7 @@ export default function SettingsModal({ isOpen, onClose }) {
                   </svg>
                   <p className="text-sm text-warm-dark">앱 버전</p>
                 </div>
-                <span className="text-xs text-cream-400 font-mono">v{version}</span>
+                <span className="text-xs text-cream-400 font-mono">v{version} · {import.meta.env.VITE_BUILD_ID || 'dev'}</span>
               </div>
             </div>
           </section>

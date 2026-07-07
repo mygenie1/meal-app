@@ -75,6 +75,13 @@ workflows:
       - name: Install npm dependencies
         script: npm ci
 
+      # ★ 빌드 마커 — 현재 커밋 해시(짧은)를 vite 빌드에 주입.
+      #   $CM_ENV 에 쓰면 이후 스텝(npm run build)의 환경에 반영됨 → import.meta.env.VITE_BUILD_ID 로 노출.
+      #   설정 모달 하단에 표시 → 다음 빌드가 최신 코드인지 눈으로 확정(수동 빌드라 커밋 반영 불확실 대응).
+      - name: Inject build marker (commit hash)
+        script: |
+          echo "VITE_BUILD_ID=${CM_COMMIT:0:7}" >> $CM_ENV
+
       - name: Build web (dist)
         script: npm run build
 
