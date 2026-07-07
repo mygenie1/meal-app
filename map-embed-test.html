@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>map-embed 테스트</title>
+    <!--
+      ★ Phase 2 브라우저 검증용 임시 테스트 하네스. (Phase 4 완료 후 제거 예정)
+      부모(이 페이지) ↔ /map-embed.html iframe 사이 postMessage 를 실측:
+        init/setPins/panTo/userLoc/select 전송 → 핀 표시 → 핀 클릭 → pinClick 수신 로그.
+      기존 웹 지도(MealMap)는 전혀 건드리지 않음 — 이 페이지는 독립 검증 경로.
+    -->
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; }
+      header { padding: 10px 12px; background: #6b4f3a; color: #fff; font-size: 14px; font-weight: 700; }
+      .bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-bottom: 1px solid #eee; }
+      button { font-size: 13px; padding: 7px 11px; border: 1px solid #d9c4a8; background: #faf7f0; border-radius: 8px; cursor: pointer; }
+      button:hover { background: #f5ede0; }
+      .stage { flex: 1; display: flex; min-height: 0; }
+      iframe { flex: 1; border: none; border-right: 1px solid #eee; }
+      #log { width: 300px; overflow: auto; padding: 10px; font: 12px/1.5 monospace; background: #1e1e1e; color: #b5e853; white-space: pre-wrap; }
+      @media (max-width: 700px) { .stage { flex-direction: column; } #log { width: auto; height: 160px; } iframe { border-right: none; border-bottom: 1px solid #eee; } }
+    </style>
+  </head>
+  <body>
+    <header>map-embed 브릿지 테스트 (Phase 2)</header>
+    <div class="bar">
+      <button onclick="sendInit('meals')">init: meals(핀4)</button>
+      <button onclick="sendInit('wish')">init: wish(핀3)</button>
+      <button onclick="sendSetPins()">setPins 갱신</button>
+      <button onclick="sendPanTo(37.4979,127.0276,3)">panTo 강남</button>
+      <button onclick="sendUserLoc(37.5665,126.9780)">userLoc 서울시청</button>
+      <button onclick="sendSelect()">select 첫핀</button>
+      <button onclick="clearLog()">로그 지우기</button>
+    </div>
+    <div class="stage">
+      <iframe id="frame"></iframe>
+      <div id="log"></div>
+    </div>
+
+    <script>
+      // 부모 origin 을 embed 에 전달(응답 targetOrigin 검증용) + iframe src
+      var frame = document.getElementById('frame')
+      frame.src = './map-embed.html?parentOrigin=' + encodeURIComponent(location.origin)
+      var EMBED_ORIGIN = location.origin // 배포/로컬 모두 same-origin
+
+      // 샘플 데이터
+      var MEAL_PINS = [
+        { id: 'm1', lat: 37.5665, lng: 126.9780, tag: '외식', title: '서울시청 맛집' },
+        { id: 'm2', lat: 37.5700, lng: 126.9820, tag: '카페', title: '광화문 카페' },
+        { id: 'm3', lat: 37.5610, lng: 126.9750, tag: '집밥', title: '집' },
+        { id: 'm4', lat: 37.5640, lng: 126.9880, tag: '배달', title: '배달집' },
+      ]
+      var WISH_PINS = [
+        { id: 'w1', lat: 37.5651, lng: 126.9895, category: '한식', name: '가고싶은 한식' },
+        { id: 'w2', lat: 37.5680, lng: 126.9770, category: '일식', name: '가고싶은 일식' },
+        { id: 'w3', lat: 37.5600, lng: 126.9820, category: '카페', name: '가고싶은 카페' },
+      ]
+
+      function log(m) {
+        var el = document.getElementById('log')
+        el.textContent += m + '\n'
+        el.scrollTop = el.scrollHeight
+      }
+      function clearLog() { document.getElementById('log').textContent = '' }
+
+      function send(msg) {
+        frame.contentWindow.postMessage(Object.assign({ v: 1, src: 'siktak' }, msg), EMBED_ORIGIN)
+        log('→ ' + JSON.stringify(msg))
+      }
+      function sendInit(mode) {
+        send({ type: 'init', mode: mode, center: { lat: 37.5665, lng: 126.9780 }, level: 5,
+               pins: mode === 'wish' ? WISH_PINS : MEAL_PINS })
+      }
+      function sendSetPins() {
+        send({ type: 'setPins', pins: MEAL_PINS.concat([{ id: 'm5', lat: 37.5720, lng: 126.9760, tag: '외식', title: '새 핀' }]) })
+      }
+      function sendPanTo(lat, lng, level) { send({ type: 'panTo', lat: lat, lng: lng, level: level }) }
+      function sendUserLoc(lat, lng) { send({ type: 'userLoc', lat: lat, lng: lng }) }
+      function sendSelect() { send({ type: 'select', id: 'm1' }) }
+
+      // embed → 부모 수신 (origin + 스키마 가드)
+      window.addEventListener('message', function (e) {
+        if (e.origin !== EMBED_ORIGIN) return
+        var d = e.data
+        if (!d || d.src !== 'siktak-embed') return
+        log('← ' + JSON.stringify(d))
+        if (d.type === 'ready') {
+          log('(ready 수신 → init:meals 자동 전송)')
+          sendInit('meals')
+        }
+      })
+    </script>
+  </body>
+</html>
