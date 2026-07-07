@@ -38,7 +38,7 @@ workflows:
         XCODE_SCHEME: "App"
         # ★ APP_STORE_APPLE_ID: App Store Connect > 앱 > 앱 정보 > "Apple ID" 의 숫자 값으로 채울 것.
         #   (선택 사항 — publishing 단계에서 앱 자동 매칭에 사용. 비워두면 Bundle ID 로 매칭 시도)
-        APP_STORE_APPLE_ID: "0000000000"  # TODO: App Store Connect 에서 확인한 숫자 ID 로 교체
+        APP_STORE_APPLE_ID: "6787975420"  # App Store Connect 식탁일기 앱의 Apple ID
 
     scripts:
       # 1) 코드 서명 — Codemagic 자동 서명
