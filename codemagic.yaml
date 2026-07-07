@@ -28,6 +28,26 @@ workflows:
       app_store_connect: codemagic  # Codemagic 에 등록한 App Store Connect API 키 integration 이름
 
     environment:
+      # ★ VITE_ 빌드타임 환경변수 — Codemagic UI 의 환경변수 그룹에서 주입.
+      #   이게 없으면 vite build 가 Supabase URL/키를 빈 값으로 번들 → 런타임에
+      #   createClient 가 throw → React 마운트 실패 → iOS 흰 화면(백스크린).
+      #   .env 는 계속 gitignore(레포에 값 안 남김) → 빌드 env 는 이 그룹으로만 공급.
+      #
+      #   ▶ Codemagic 대시보드 → 앱 → Environment variables 에서 아래 그룹을 만들고
+      #     (그룹명 "siktakilgi_env") 다음 변수들을 입력할 것. (Secure 체크 권장)
+      #     빌드 환경에 주입되므로 아래 npm run build(vite)가 자동으로 읽음.
+      #       - VITE_SUPABASE_URL                 (★필수 — 없으면 흰 화면)
+      #       - VITE_SUPABASE_ANON_KEY            (★필수 — 없으면 흰 화면)
+      #       - VITE_KAKAO_MAP_KEY                (카카오 지도 SDK)
+      #       - VITE_FIREBASE_API_KEY             (FCM 푸시)
+      #       - VITE_FIREBASE_PROJECT_ID          (FCM 푸시)
+      #       - VITE_FIREBASE_MESSAGING_SENDER_ID (FCM 푸시)
+      #       - VITE_FIREBASE_APP_ID              (FCM 푸시)
+      #       - VITE_FIREBASE_VAPID_KEY           (웹푸시 VAPID)
+      #       - VITE_PUBLIC_SITE_URL              (선택 — 초대/공유 링크 도메인, 미입력 시 코드 fallback)
+      groups:
+        - siktakilgi_env
+
       # ★ 표준 자동 서명 (declarative) — Codemagic 이 UI(Code signing identities)에서
       #   생성한 Apple Distribution 인증서(개인 키 포함)와 App Store 프로파일을 자동으로
       #   가져와 keychain 에 넣어줌. 스크립트로 fetch-signing-files/keychain 을 직접 돌릴 필요 없음.
