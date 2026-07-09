@@ -9,6 +9,9 @@
 //   요청 {type:'search',  reqId, query}     → 응답 {type:'search:result',  reqId, places:[...]}
 //   요청 {type:'geocode', reqId, lat, lng}  → 응답 {type:'geocode:result', reqId, address, road, region}
 //   실패 시 동일 result 타입에 error 필드 포함(빈 결과와 구분). reqId 로 부모가 요청↔응답 매칭.
+// Phase 4b 범위(추가): 뷰포트 통지.
+//   embed → 부모 {type:'boundsChanged', bounds:{swLat,swLng,neLat,neLng}, center:{lat,lng}, level}
+//   idle(이동/줌 종료) 시 디바운스 송신 + 초기 렌더 후 1회. 부모가 웹의 map.getBounds() 필터를 그대로 재현.
 //
 // vanilla 모듈(React 미포함). 웹/안드로이드 기존 인라인 지도와 무관(신설 페이지).
 
@@ -70,6 +73,30 @@ function pinHTML(pin, selected) {
   return makeMealPin(TAG_COLORS[pin.tag] || '#a07850', selected)
 }
 
+// ── 뷰포트(bounds) 통지 (Phase 4b) ────────────────────────────────────────
+// 부모(MealMap)가 웹의 kakao map.getBounds() 기반 목록 필터와 동일하게 동작하도록,
+// 현재 보이는 영역을 알려준다. idle 은 이동/줌이 멈춘 뒤 발화하지만, 연속 제스처에서
+// 여러 번 튈 수 있어 짧은 디바운스를 덧댄다.
+let boundsTimer = null
+function postBounds() {
+  if (!map) return
+  const b = map.getBounds()
+  if (!b) return
+  const sw = b.getSouthWest()
+  const ne = b.getNorthEast()
+  const c = map.getCenter()
+  post({
+    type: 'boundsChanged',
+    bounds: { swLat: sw.getLat(), swLng: sw.getLng(), neLat: ne.getLat(), neLng: ne.getLng() },
+    center: { lat: c.getLat(), lng: c.getLng() },
+    level: map.getLevel(),
+  })
+}
+function postBoundsDebounced() {
+  if (boundsTimer) clearTimeout(boundsTimer)
+  boundsTimer = setTimeout(() => { boundsTimer = null; postBounds() }, 120)
+}
+
 function renderMap(center, level) {
   const container = document.getElementById('map')
   map = new window.kakao.maps.Map(container, {
@@ -77,6 +104,10 @@ function renderMap(center, level) {
     level: level || 5,
   })
   window.kakao.maps.event.trigger(map, 'resize')
+  window.kakao.maps.event.addListener(map, 'idle', postBoundsDebounced)
+  // 초기 1회 — 생성 직후엔 컨테이너 레이아웃이 덜 잡혀 bounds 가 퇴화할 수 있어 한 틱 뒤에.
+  // 이후 idle 이 한 번 더 정정하므로 안전.
+  setTimeout(postBounds, 60)
 }
 
 function clearPins() {

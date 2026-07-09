@@ -1281,6 +1281,8 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
   }, [pins])
 
   // 지도 뷰포트(bounds) 안에 있는 핀만 목록에 표시. bounds 미확정 시 전체 표시.
+  // 웹/안드로이드는 kakao map 'idle' → setMapBounds, 네이티브는 embed iframe 의
+  // boundsChanged 메시지 → setMapBounds. 필터 자체는 아래 한 곳으로 공유.
   const visiblePins = useMemo(() => {
     if (!mapBounds) return filteredPins
     return filteredPins.filter(({ coords }) =>
@@ -1937,6 +1939,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
                   fly={flyTarget}
                   selectedId={selectedClusterKey}
                   onPinClick={handleNativeMealPin}
+                  onBoundsChange={setMapBounds}
                   style={{ width: '100%', height: '100%' }}
                 />
               ) : (

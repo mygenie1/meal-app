@@ -983,7 +983,8 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
   카카오 SDK(services 포함, autoload=false) 로드, `%VITE_KAKAO_MAP_KEY%` 빌드타임 주입. **www 로 배포**(Vercel).
   ★ SW `navigateFallbackDenylist` 에 `/map-embed(-test)?\.html` 등재 필수 — 없으면 Workbox 가 index.html 로 폴백(0ced35c/3b49b2c).
 - **프로토콜**(부모 `src:'siktak'` → embed, embed `src:'siktak-embed'` → 부모):
-  - 렌더: `init`/`setPins`/`panTo`/`userLoc`/`select` → embed, `ready`/`pinClick` ← embed.
+  - 렌더: `init`/`setPins`/`panTo`/`userLoc`/`select` → embed, `ready`/`pinClick`/`boundsChanged` ← embed.
+  - `boundsChanged`(Phase 4b): embed 가 지도 `idle` 시 `{bounds:{swLat,swLng,neLat,neLng}, center, level}` 송신(120ms 디바운스, 초기 렌더 후 1회). 부모 `MapEmbedView onBoundsChange` → `MealMap setMapBounds` → 웹과 **동일한 `visiblePins` 필터** 재사용.
   - RPC: `search`(keywordSearch)/`geocode`(coord2Address, reqId 매칭+타임아웃) ↔ `search:result`/`geocode:result`.
   - `PARENT_ALLOWLIST` 에 `capacitor://localhost` 등재(부모 origin 검증). embed forward addressSearch 없음 → 지오코딩은 keywordSearch 첫 결과로 근사.
 - **부모 클라이언트**:
@@ -996,7 +997,8 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
   - 지도 C: MealDetailModal `SmallMap` → MapEmbedView(detail, 단일 핀).
   - 검색/지오코딩 D~G: MealForm/위시폼 → 숨김 iframe RPC. 입력창·드롭다운·place_url·차감 흐름 그대로, 응답 소스만 교체.
 - **capacitor.config**: `server.allowNavigation:["www.siktakilgi.com"]`(iframe 원격 로드 허용). hostname 없음(localhost).
-- **★ 축소 패리티(iOS 한정, 현재 배포 프로토콜만 — embed/www 무변경)**: 클러스터 카운트 배지 없음 / 맛집 목록 뷰포트(bounds) 필터 대신 전체 표시 / 지도 배경클릭 선택해제 없음. 완전 패리티는 embed 프로토콜 확장(bounds/mapClick/카운트)+www 재배포로 **Phase 4b**.
+- **★ 축소 패리티(iOS 한정)**: ~~맛집 목록 bounds 필터~~ → **Phase 4b 에서 복원됨**(`boundsChanged`). 남은 것: 클러스터 카운트 배지 없음 / 지도 배경클릭 선택해제 없음. 이 둘의 완전 패리티는 embed 프로토콜 추가 확장(mapClick/카운트)+www 재배포 필요.
+- **★ Phase 4b 배포 순서**: embed(`map-embed.html`/`src/map-embed/main.js`) 변경은 **www(Vercel)에 먼저 배포**돼야 iframe 이 새 프로토콜을 쓴다. 앱(네이티브)만 먼저 올리면 `boundsChanged` 를 아무도 안 보내 `mapBounds=null` → 전체 표시로 **graceful degrade**(깨지진 않음).
 - **★ 미검증(Phase C 첫 iOS 실기기)**: ① allowNavigation 으로 iframe 이 WKWebView 안에서 실제 로드되는지, ② iframe origin=www 로 카카오 도메인 검증 통과하는지 — iframe 설계의 핵심 미지수. 실패 시 degrade/"카카오맵 앱으로 열기" 폴백은 설계만.
 
 ### Phase B (Codemagic/Mac) 이월 — 빌드 시 필수
@@ -1289,6 +1291,7 @@ npm run dev
 | 카카오맵 iframe 프록시 Phase 1~2 | iOS capacitor:// origin 카카오 거부 우회 — www 서빙 `map-embed.html`(경량 vanilla) iframe 임베드. init/setPins 핀 렌더 + pinClick postMessage 브릿지. SW denylist(map-embed) + Vercel rewrite 정적 서빙 |
 | 카카오맵 iframe Phase 3 | 검색/지오코딩 RPC — embed에 `search`(keywordSearch)/`geocode`(coord2Address) reqId 매칭+타임아웃, 부모 `mapEmbedRpc` 클라이언트. 테스트 하네스로 브라우저 검증 |
 | 카카오맵 iframe Phase 4 (iOS 연결) | isNative() 분기로 지도 A/B/C(MealMap 2지도+MealDetailModal 미니맵)→MapEmbedView, 검색/지오코딩 D~G(MealForm/위시폼)→숨김 iframe RPC(MapEmbedRpcProvider). 웹/안드로이드 100% 인라인 유지. capacitor allowNavigation+하네스 제거. 축소 패리티(Phase C 실측 예정) |
+| 카카오맵 iframe Phase 4b | bounds 필터 복원. embed 가 지도 idle 시 `boundsChanged`(bounds/center/level, 120ms 디바운스 + 초기 1회) 송신 → MapEmbedView `onBoundsChange` → MealMap `setMapBounds`. 웹의 `visiblePins` 필터를 그대로 공유(웹/안드로이드 `idle`→`getBounds` 경로 무변경, 회귀 0). embed 는 www 선배포 필요, 미배포 시 전체 표시로 graceful degrade |
 | iOS 홈 네비바 밀림 수정 | 홈만 내부 스크롤 컨테이너(h-[100svh]+overflow-y-auto overscroll-contain, MapPage 패턴)로 전환 → body 스크롤 제거로 긴 관성 스크롤 중 fixed 네비바 컴포지팅 드리프트 원천 차단. bounces=false(a04f7de)로도 안 잡히던 홈 고유 증상 |
 
 ---

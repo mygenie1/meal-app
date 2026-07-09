@@ -14,6 +14,7 @@ export default function MapEmbedView({
   fly,           // [lat, lng] | null — panTo 트리거
   selectedId,    // 하이라이트할 핀 id
   onPinClick,    // (id) => void
+  onBoundsChange, // ({swLat,swLng,neLat,neLng}) => void — 지도 이동/줌 종료 시 보이는 영역
   style,
   className,
 }) {
@@ -24,6 +25,8 @@ export default function MapEmbedView({
   stateRef.current = { mode, pins, userLoc, center, level, selectedId }
   const onPinClickRef = useRef(onPinClick)
   onPinClickRef.current = onPinClick
+  const onBoundsChangeRef = useRef(onBoundsChange)
+  onBoundsChangeRef.current = onBoundsChange
 
   function post(msg) {
     const w = iframeRef.current?.contentWindow
@@ -52,6 +55,8 @@ export default function MapEmbedView({
         }, EMBED_ORIGIN)
       } else if (d.type === 'pinClick') {
         onPinClickRef.current?.(d.id)
+      } else if (d.type === 'boundsChanged') {
+        if (d.bounds) onBoundsChangeRef.current?.(d.bounds)
       }
     }
     window.addEventListener('message', onMsg)
