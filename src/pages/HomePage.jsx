@@ -423,13 +423,11 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex flex-col h-[100svh]">
+    <>
       {Header}
 
-      {/* 홈만 내부 스크롤 컨테이너로 전환 — body 문서 스크롤을 없애 iOS 고정 네비바가
-          긴 관성 스크롤 중 밀려 "뜨는" 컴포지팅 드리프트를 원천 차단(MapPage와 동일 패턴).
-          웹/안드로이드엔 표준 내부 스크롤이라 무해. 다른 탭·셸 파일은 불변. */}
-      <div className="flex-1 overflow-y-auto overscroll-contain">
+      {/* 스크롤은 앱 셸(App.jsx <main>)의 단일 내부 스크롤 컨테이너가 담당 —
+          전 탭 공통으로 body 문서 스크롤을 제거해 iOS 고정 네비바 드리프트를 차단. */}
       <div className="pb-28">
         {/* 날짜 + 인사 */}
         <div className="px-4 pt-5 pb-3">
@@ -826,7 +824,6 @@ export default function HomePage() {
           </div>
         )}
       </div>
-      </div>
 
       {selectedMeal && (
         <MealDetailModal
@@ -861,6 +858,6 @@ export default function HomePage() {
         onSave={updateRecipe}
         onDelete={async r => { await deleteRecipe(r.id); setSearchRecipeId(null) }}
       />
-    </div>
+    </>
   )
 }

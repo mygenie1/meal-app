@@ -365,7 +365,7 @@ function AppContent() {
 
   return (
     <MapEmbedRpcProvider>
-    <div className="min-h-svh max-w-lg mx-auto flex flex-col bg-cream-50">
+    <div className="h-[100svh] max-w-lg mx-auto flex flex-col bg-cream-50 overflow-hidden">
       {updateReady && <UpdateBanner onReload={handleUpdate} />}
 
       {loadError && !errorDismissed && (
@@ -375,7 +375,10 @@ function AppContent() {
           onDismiss={() => setErrorDismissed(true)}
         />
       )}
-      <main className="flex-1 flex flex-col">
+      {/* 단일 내부 스크롤 컨테이너 — body 문서 스크롤 제거로 iOS 고정 네비바
+          컴포지팅 드리프트를 전 탭에서 원천 차단(홈에서 검증된 패턴을 셸로 통일).
+          웹/안드로이드엔 표준 내부 스크롤이라 무해. sticky 헤더/무한스크롤/portal 모달 호환. */}
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/calendar" element={<CalendarPage />} />
