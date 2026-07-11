@@ -68,8 +68,9 @@ warm-light #a07850  보조 텍스트, 레이블
 
 ### 레이아웃
 - 최대 너비 `max-w-lg` (512px), 모바일 우선
+- ★ **단일 내부 스크롤 셸**(App.jsx): outer `h-[100svh] overflow-hidden`, `<main>` `flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col`. **body 문서 스크롤 없음** — 전 탭이 main 안에서만 스크롤(iOS fixed 네비바 드리프트 방지). 각 페이지는 content+`pb-28`만 반환하면 됨(HomePage/Calendar/Ingredients/Spaces). 전체높이 비스크롤 페이지(MapPage 맵탭)는 `h-full`로 main을 채움
 - 하단 탭 고정 (`fixed bottom-0`), pb-28로 콘텐츠가 탭에 가리지 않게
-- 헤더 `sticky top-0`, `backdrop-blur-sm`으로 스크롤 시 반투명
+- 헤더 `sticky top-0`, `backdrop-blur-sm`으로 스크롤 시 반투명 (sticky는 셸 `<main>` 스크롤 컨테이너 기준)
 
 ### 컴포넌트 규칙
 - 모서리: `rounded-2xl` (카드, 입력, 버튼)
@@ -1005,6 +1006,8 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 - ★ **`npx cap sync ios` 반드시 실행** — Windows 심링크 실패로 `ios/App/CapApp-SPM/Package.swift`에 플러그인(messaging/browser/app) 미등록 → Mac에서 재생성해야 3종 포함(안 하면 푸시·OAuth·앱 누락 빌드).
 - **Push Notifications capability + `aps-environment` entitlement** + 서명/프로비저닝(App Store Connect API 키).
 - (완료·코드 반영) `Info.plist` `NSLocationWhenInUseUsageDescription`(지도 GPS)·`UIBackgroundModes: remote-notification`. GoogleService-Info.plist 배선·커밋.
+- (완료·코드 반영, 65b767e) **앱 아이콘** — `@capacitor/assets`(devDep)로 `assets/icon.png`(1024²) → `ios/App/App/Assets.xcassets/AppIcon.appiconset`(단일 1024² RGB, 알파 없음=iOS 요구 충족) 생성. 소스는 `assets/`(관례 위치) 커밋, 느슨한 `ios/icon-1024.png` 제거. ★ 도구가 Splash도 재생성하므로 아이콘만 쓸 땐 **Splash.imageset 변경분은 원복**(런치스크린 무변경). 재생성: `npx capacitor-assets generate --ios --iconBackgroundColor '#fdfcf9'`.
+- (완료·코드 반영, 65b767e) **암호화 수출규정** — `Info.plist` `ITSAppUsesNonExemptEncryption = false`(표준 HTTPS만 → 면제). App Store Connect 제출 시 암호화 문항 자동 처리.
 - **Phase C**: SE2 실기기로 로그인(OAuth)/푸시/딥링크/**map-embed iframe 지도·검색**(로드·카카오 origin 통과·핀/클릭/GPS/검색) 실측.
 
 ---
@@ -1114,6 +1117,8 @@ iOS 웹푸시 전제: **iOS 16.4+ & 홈화면 추가 PWA(standalone) & 사용자
 | map-embed 다중 iframe 메시지 혼선 | 지도 iframe + 숨김 RPC iframe 공존 → `MapEmbedView`는 `e.source`로 자기 iframe만, `mapEmbedRpc`는 `reqId`로만 매칭해 격리. ready/pinClick(reqId 없음)과 search:result(reqId 있음) 구분 |
 | embed 프로토콜엔 forward addressSearch 없음 | 지오코딩(주소→좌표)은 `search`(keywordSearch) 첫 결과 좌표로 **근사**(`embedGeocode`). 장소 선택 시엔 좌표가 직접 오므로 폴백 용도 |
 | map-embed 프로토콜 확장 시 | iframe은 **배포된 www embed**를 로드 → 프로토콜 추가(bounds/mapClick/카운트)는 **www 재배포 선행** 후에야 네이티브가 사용 가능(Phase 4b) |
+| 페이지에 자체 `h-[100svh]`/스크롤 컨테이너 추가 | 스크롤은 앱 셸 `<main>`(단일 내부 스크롤)이 담당 → 페이지가 또 `h-[100svh]`+`overflow-y-auto`를 만들면 **이중 스크롤**. 페이지는 content+`pb-28`만, 전체높이 비스크롤은 `h-full`(main 채움)로 |
+| @capacitor/assets가 Splash까지 재생성 | `generate --ios`는 `assets/icon.png`만 있어도 **Splash.imageset을 아이콘으로 덮어씀**(런치스크린 변경). 아이콘만 원하면 **Splash 변경분 원복**(`git checkout Splash.imageset/Contents.json` + 새 Default@*.png 삭제). 아이콘 소스는 `assets/` 관례 위치에 |
 
 ---
 
@@ -1293,6 +1298,8 @@ npm run dev
 | 카카오맵 iframe Phase 4 (iOS 연결) | isNative() 분기로 지도 A/B/C(MealMap 2지도+MealDetailModal 미니맵)→MapEmbedView, 검색/지오코딩 D~G(MealForm/위시폼)→숨김 iframe RPC(MapEmbedRpcProvider). 웹/안드로이드 100% 인라인 유지. capacitor allowNavigation+하네스 제거. 축소 패리티(Phase C 실측 예정) |
 | 카카오맵 iframe Phase 4b | bounds 필터 복원. embed 가 지도 idle 시 `boundsChanged`(bounds/center/level, 120ms 디바운스 + 초기 1회) 송신 → MapEmbedView `onBoundsChange` → MealMap `setMapBounds`. 웹의 `visiblePins` 필터를 그대로 공유(웹/안드로이드 `idle`→`getBounds` 경로 무변경, 회귀 0). embed 는 www 선배포 필요, 미배포 시 전체 표시로 graceful degrade |
 | iOS 홈 네비바 밀림 수정 | 홈만 내부 스크롤 컨테이너(h-[100svh]+overflow-y-auto overscroll-contain, MapPage 패턴)로 전환 → body 스크롤 제거로 긴 관성 스크롤 중 fixed 네비바 컴포지팅 드리프트 원천 차단. bounces=false(a04f7de)로도 안 잡히던 홈 고유 증상 |
+| 전 탭 네비바 고정(셸 통일) | 홈만 고쳤던 내부 스크롤을 앱 셸로 통일 — App.jsx outer `h-[100svh] overflow-hidden` + `<main>` `flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col`(단일 스크롤 컨테이너). 전 탭 body 스크롤 제거→네비바 드리프트/삼성 "맨위로" 겹침 동시 해소. main이 원래 flex flex-col이라 자식 레이아웃 불변(스크롤 주체만 body→main). HomePage 자체 래퍼 제거, MapPage 맵탭 h-screen→h-full. 웹/안드로이드 회귀 0 |
+| iOS 앱 아이콘 + 암호화 plist | @capacitor/assets로 assets/icon.png→AppIcon.appiconset(1024² RGB 알파없음) 생성(소스 assets/ 관례위치, Splash 변경분 원복). Info.plist ITSAppUsesNonExemptEncryption=false. 웹/안드로이드 무영향 |
 
 ---
 
@@ -1331,7 +1338,7 @@ npm run dev
 
 ## 출시 후 개선 숙제
 
-- **삼성 인터넷 "맨 위로" 버튼이 하단 네비바 가운데(달력 탭)와 겹침**
+- **삼성 인터넷 "맨 위로" 버튼이 하단 네비바 가운데(달력 탭)와 겹침** — ✅ 해결됨(65b767e, 전 탭 셸 통일)
   - 삼성 인터넷 브라우저의 기본 "맨 위로" 버튼이 하단 네비바 가운데(달력 탭)와 겹침.
     우리 DOM이 아니라 브라우저 크롬 영역이라 CSS/JS로 직접 제거 불가. 근본 해결책은
     body 스크롤 → 내부 컨테이너 스크롤(height:100svh; overflow-y:auto) 리팩터링이나,
@@ -1340,8 +1347,16 @@ npm run dev
   - 가벼운 억제법 조사 완료(2026-06-25) — 웹/메타(overscroll-behavior 등)/매니페스트(display
     fullscreen·minimal-ui)/TWA(Chrome 강제·WebView 폴백)로는 불가하거나 효과 불확실+재패키징·부작용 큼.
     배포 가능한 유일 해법은 #7 내부 스크롤 리팩터링뿐임을 확인. (다음엔 재조사 불필요)
-  - **부분 적용됨(de2f2b5)**: iOS 네이티브에서 홈 하단 네비바가 긴 관성 스크롤 중 밀려 "뜨던" 문제
-    (홈만 발생 — 유일하게 길고 이미지 많은 body 스크롤 페이지)를 위해 **HomePage만** 내부 스크롤
-    컨테이너(`h-[100svh]` + 내부 `overflow-y-auto overscroll-contain`, MapPage 패턴)로 전환.
-    네이티브 `bounces=false`(a04f7de)로도 안 잡히던 컴포지팅 드리프트를 body 스크롤 제거로 원천 차단.
-    나머지 탭의 전면 리팩터링(삼성 인터넷 억제 포함)은 여전히 출시 후 숙제.
+  - **전 탭 셸 통일 완료(65b767e)**: 처음엔 홈만 내부 스크롤 전환(de2f2b5)이었으나 다른 탭
+    (달력/재료/스페이스/지도-위시)이 여전히 body 스크롤이라 네비바가 "됐다 안 됐다" 불안정.
+    → **앱 셸(`App.jsx`)에서 단일 내부 스크롤 컨테이너로 통일**: outer `h-[100svh] overflow-hidden`,
+    `<main>` `flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col`. 이제 **모든 탭**이
+    body 스크롤 없이 main 내부에서만 스크롤 → fixed 네비바 컴포지팅 드리프트 원천 차단.
+    - ★ **핵심 안전점**: `<main>`은 이전에도 `flex flex-col`이었음 → 자식 flex 레이아웃 불변,
+      **스크롤 주체만 body→main으로 이동**. sticky 헤더/무한스크롤(뷰포트 root+rootMargin)/portal
+      모달/가로 캐러셀/빈상태 flex-1 센터링 전부 그대로. fixed BottomNav·배너는 `overflow-hidden`
+      으로 안 잘림(조상에 transform/filter 없음).
+    - 페이지 조정: HomePage는 자체 `h-[100svh]`+내부 스크롤 래퍼 제거(셸이 담당),
+      MapPage 맵탭 `h-screen`→`h-full`(main 높이에 맞춤), Calendar/Ingredients/Spaces는 무변경.
+    - ★ **삼성 인터넷 "맨 위로" 겹침도 이 리팩터링으로 함께 해소**(body 스크롤 제거가 근본 해법이었음).
+      위 조사에서 "유일 해법 = 내부 스크롤 리팩터링"으로 결론냈던 그 작업이 전 탭에 적용됨.
