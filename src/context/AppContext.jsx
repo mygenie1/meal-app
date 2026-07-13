@@ -11,6 +11,21 @@ const SPACE_KEY = 'mealapp_current_space'
 const NOTIF_PAGE_INITIAL = 4
 const NOTIF_PAGE_SIZE = 10
 
+// ── Apple 로그인 nonce ────────────────────────────────────────────────
+// ★ 플러그인에는 sha256 해시된 nonce 를, Supabase 에는 원본 nonce 를 넘겨야 한다.
+//   애플이 id_token 안에 sha256(nonce) 를 넣어 서명하고, Supabase 가 우리가 준 원본을
+//   해시해서 대조하기 때문. 둘을 바꿔 넣으면 검증에 실패한다.
+function randomNonce(bytes = 32) {
+  const buf = new Uint8Array(bytes)
+  crypto.getRandomValues(buf)
+  return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function sha256Hex(str) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str))
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+}
+
 // 이메일 계정의 카카오 CDN URL은 빈 문자열로 반환
 function getUserAvatarUrl(user) {
   const provider = user?.app_metadata?.provider
@@ -822,6 +837,63 @@ export function AppProvider({ children }) {
     if (error) console.error('카카오 로그인 오류:', error)
   }
 
+  // Apple 로그인 (iOS 네이티브 전용 — 앱스토어 4.8 대응)
+  // ★ 카카오와 경로가 다르다: 브라우저·커스텀 스킴 딥링크·setSession 이 전부 불필요.
+  //   네이티브 ASAuthorization 시트가 준 identityToken 을 Supabase 에 바로 넘기면
+  //   세션이 생기고 onAuthStateChange(SIGNED_IN) 이 발화 → 기존 boot 경로를 그대로 탄다.
+  // 웹/안드로이드는 isNative()=false 라 이 함수가 아무 것도 하지 않는다(플러그인 import 도 안 됨).
+  async function signInApple() {
+    if (!isNative()) return { ok: false, reason: 'not-native' }
+    try {
+      // 동적 import — 웹 번들에 네이티브 플러그인이 섞이지 않게 (firebase/messaging 패턴과 동일)
+      const { SignInWithApple } = await import('@capacitor-community/apple-sign-in')
+
+      const rawNonce = randomNonce()
+      const hashedNonce = await sha256Hex(rawNonce)
+
+      const result = await SignInWithApple.authorize({
+        // 네이티브 시트에선 clientId/redirectURI 를 쓰지 않지만 타입상 필수 — 웹(P6) 기준값을 넣어둔다
+        clientId: 'com.siktakilgi.web',
+        redirectURI: 'https://jsesigubkqnddcjqusjv.supabase.co/auth/v1/callback',
+        scopes: 'name email',
+        nonce: hashedNonce, // ★ 플러그인엔 해시된 nonce
+      })
+
+      const idToken = result?.response?.identityToken
+      if (!idToken) {
+        console.warn('[Apple] identityToken 없음 — 로그인 화면 유지')
+        return { ok: false, reason: 'no-token' }
+      }
+
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: idToken,
+        nonce: rawNonce, // ★ Supabase 엔 원본 nonce
+      })
+      if (error) {
+        console.error('[Apple] signInWithIdToken 실패:', error)
+        return { ok: false, reason: 'supabase-error', message: error.message }
+      }
+
+      // ★ 애플은 이름을 "최초 1회"만 돌려준다 — 여기서 저장하지 않으면 영영 복구할 수 없다.
+      //   재로그인 시엔 null 이 오므로 사용자가 나중에 바꾼 닉네임을 덮어쓰지 않는다.
+      const given = (result.response.givenName || '').trim()
+      const family = (result.response.familyName || '').trim()
+      const name = `${family}${given}`.trim()
+      if (name) {
+        const { error: upErr } = await supabase.auth.updateUser({ data: { name } })
+        if (upErr) console.error('[Apple] 이름 저장 실패:', upErr)
+      }
+
+      return { ok: true }
+    } catch (e) {
+      // 사용자가 시트를 취소한 경우가 대부분 — 조용히 로그인 화면 유지(무한 루프 방지).
+      // 이메일/카카오 로그인이 그대로 폴백이 된다.
+      console.warn('[Apple] 로그인 취소/오류:', e?.message || e)
+      return { ok: false, reason: 'cancelled' }
+    }
+  }
+
   // 로그아웃
   async function signOut() {
     await supabase.auth.signOut()
@@ -1540,6 +1612,7 @@ export function AppProvider({ children }) {
         user,
         authLoading,
         signIn,
+        signInApple,
         signOut,
         deleteAccount,
         updateProfile,
