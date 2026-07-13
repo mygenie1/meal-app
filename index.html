@@ -52,16 +52,40 @@
 
     <title>식탁일기 - 함께한 식사의 기록</title>
 
-    <!-- 카카오맵 SDK: https 명시 (// 프로토콜 상대 URL은 Mixed Content 오류 유발) -->
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=%VITE_KAKAO_MAP_KEY%&libraries=services&autoload=false"></script>
-
-    <!-- 카카오 SDK 로드 확인 로그 -->
+    <!-- 카카오맵 SDK: ★ async 주입 (동기 <script> 금지)
+         dapi.kakao.com 은 국내 인프라라 해외에서 느리거나 응답이 지연될 수 있는데,
+         동기 <script> 였을 때는 그 응답을 기다리느라 /src/main.jsx 자체가 실행되지 않아
+         앱 부팅이 통째로 막혔다(해외 심사 기기 무한 스피너의 증폭 요인).
+         이제 SDK 는 부팅 크리티컬 패스 밖이며, 준비 상태는 window.__kakaoSdkReady 로 노출한다.
+         소비처는 src/lib/kakaoSdk.js 의 loadKakaoSdk() 를 await 해서 사용한다.
+         네이티브(capacitor://)는 카카오가 origin 을 거부하므로 아예 로드하지 않는다(map-embed iframe 경유). -->
     <script>
-      document.addEventListener('DOMContentLoaded', function () {
-        console.log('[Kakao] DOMContentLoaded — kakao:', typeof window.kakao, '| maps:', typeof window.kakao?.maps, '| load fn:', typeof window.kakao?.maps?.load)
-      })
-      window.addEventListener('load', function () {
-        console.log('[Kakao] window.load — kakao:', typeof window.kakao, '| maps:', typeof window.kakao?.maps, '| Map:', typeof window.kakao?.maps?.Map)
+      window.__kakaoSdkReady = new Promise(function (resolve) {
+        var isNativeApp =
+          location.protocol === 'capacitor:' ||
+          location.protocol === 'ionic:' ||
+          !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
+
+        if (isNativeApp) {
+          console.log('[Kakao] 네이티브 — SDK 로드 스킵 (map-embed iframe 경유)')
+          resolve(false)
+          return
+        }
+
+        var s = document.createElement('script')
+        s.async = true
+        s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=%VITE_KAKAO_MAP_KEY%&libraries=services&autoload=false'
+        s.onload = function () {
+          console.log('[Kakao] SDK 로드 완료 — maps:', typeof window.kakao?.maps)
+          resolve(true)
+        }
+        s.onerror = function () {
+          console.warn('[Kakao] SDK 로드 실패 — 지도/검색 없이 앱은 계속 동작')
+          resolve(false)
+        }
+        // 응답이 아예 안 와도 앱은 계속 — 지도만 실패 처리된다 (부팅은 막지 않음)
+        setTimeout(function () { resolve(false) }, 10000)
+        document.head.appendChild(s)
       })
     </script>
   </head>

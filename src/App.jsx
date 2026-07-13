@@ -109,6 +109,15 @@ function AppContent() {
   const [errorDismissed, setErrorDismissed] = useState(false)
   const [updateReady, setUpdateReady] = useState(false)
   const [tutorialCompleted, setTutorialCompleted] = useState(false)
+  const [showGateRetry, setShowGateRetry] = useState(false)
+
+  // 로그인 게이트 스피너가 5초 넘게 돌면 사용자가 직접 빠져나올 수단을 준다.
+  // (AppContext 의 워치독이 자동 이탈을 보장하지만, 그전에도 손으로 재시도할 수 있게)
+  useEffect(() => {
+    if (!(authLoading || loading)) return
+    const t = setTimeout(() => setShowGateRetry(true), 5000)
+    return () => clearTimeout(t)
+  }, [authLoading, loading])
 
   // 로그인한 user.id 기반으로 튜토리얼 완료 여부 확인
   useEffect(() => {
@@ -344,6 +353,19 @@ function AppContent() {
                 }`}
               />
             ))}
+          </div>
+        )}
+
+        {/* 이탈 경로 — 스피너에 갇히지 않게 (앱스토어 2.1(a) 재발 방지) */}
+        {showGateRetry && (
+          <div className="flex flex-col items-center gap-3 mt-4">
+            <p className="text-xs text-warm-light">연결이 오래 걸리고 있어요</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-warm-brown text-white px-6 py-2.5 rounded-full text-sm font-medium hover:bg-warm-dark transition-colors active:scale-95"
+            >
+              다시 시도
+            </button>
           </div>
         )}
       </div>

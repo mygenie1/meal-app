@@ -15,6 +15,7 @@ import { isNative } from '../../lib/platform'
 import MapEmbedView from '../common/MapEmbedView'
 import { useMapEmbedRpc } from '../common/MapEmbedRpcProvider'
 import { embedSearch, embedGeocode } from '../../lib/mapEmbed'
+import { loadKakaoSdk } from '../../lib/kakaoSdk'
 
 // ── 상수 ──────────────────────────────────────────────────────
 const TAG_COLORS = { 집밥: '#2f9e5f', 외식: '#d6862c', 카페: '#d15c87', 배달: '#5276c4' }
@@ -31,7 +32,9 @@ const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i
 
 // ── Kakao 지오코딩 ─────────────────────────────────────────────
 async function geocodeKakao(query) {
-  if (!window.kakao?.maps || !query.trim()) return null
+  if (!query.trim()) return null
+  // SDK 는 async 로드 → 아직 안 붙었을 수 있으니 준비를 기다린다 (실패 시 false → 기존과 동일하게 null)
+  if (!(await loadKakaoSdk())) return null
   return new Promise(resolve => {
     window.kakao.maps.load(() => {
       const geocoder = new window.kakao.maps.services.Geocoder()
@@ -54,7 +57,8 @@ async function geocodeKakao(query) {
 
 // ── Kakao 장소 검색 ────────────────────────────────────────────
 async function searchKakaoPlaces(query) {
-  if (!window.kakao?.maps || !query.trim()) return []
+  if (!query.trim()) return []
+  if (!(await loadKakaoSdk())) return []
   return new Promise(resolve => {
     window.kakao.maps.load(() => {
       const ps = new window.kakao.maps.services.Places()
@@ -1306,14 +1310,18 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
   // ── 맛집 지도 초기화 (현재 위치 우선) ─────────────────────────
   useEffect(() => {
     if (!mapContainer) return
-    if (!window.kakao?.maps) { setMapInitFailed(true); return }
 
     let destroyed = false
     const failTimer = setTimeout(() => {
       if (!destroyed && !kakaoMapRef.current) setMapInitFailed(true)
     }, 10000)
 
-    window.kakao.maps.load(() => {
+    // SDK 가 async 로드라 아직 없을 수 있음 → 준비를 기다린 뒤 초기화 (실패하면 기존과 동일하게 실패 표시)
+    loadKakaoSdk().then(ok => {
+      if (destroyed) return
+      if (!ok) { clearTimeout(failTimer); setMapInitFailed(true); return }
+
+      window.kakao.maps.load(() => {
       clearTimeout(failTimer)
       if (destroyed) return
 
@@ -1346,6 +1354,7 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
           { enableHighAccuracy: false, timeout: 4000, maximumAge: 60000 }
         )
       }
+      })
     })
 
     return () => {
@@ -1363,28 +1372,32 @@ export default function MealMap({ onViewMeal, onTabChange, initialTab, wishRando
   // ── 가고 싶은 곳 지도 초기화 ──────────────────────────────────
   useEffect(() => {
     if (!wishMapNode) return
-    if (!window.kakao?.maps) { setWishMapFailed(true); return }
 
     let destroyed = false
     const failTimer = setTimeout(() => {
       if (!destroyed && !wishKakaoMapRef.current) setWishMapFailed(true)
     }, 8000)
 
-    window.kakao.maps.load(() => {
-      clearTimeout(failTimer)
+    loadKakaoSdk().then(ok => {
       if (destroyed) return
-      try {
-        const firstItem = wishlistWithCoords[0]
-        const center = firstItem
-          ? new window.kakao.maps.LatLng(firstItem.lat, firstItem.lng)
-          : new window.kakao.maps.LatLng(SEOUL.lat, SEOUL.lng)
-        const map = new window.kakao.maps.Map(wishMapNode, { center, level: 6 })
-        wishKakaoMapRef.current = map
-        setWishMapReady(true)
-      } catch (e) {
-        console.error('[WishMap] 초기화 실패:', e)
-        setWishMapFailed(true)
-      }
+      if (!ok) { clearTimeout(failTimer); setWishMapFailed(true); return }
+
+      window.kakao.maps.load(() => {
+        clearTimeout(failTimer)
+        if (destroyed) return
+        try {
+          const firstItem = wishlistWithCoords[0]
+          const center = firstItem
+            ? new window.kakao.maps.LatLng(firstItem.lat, firstItem.lng)
+            : new window.kakao.maps.LatLng(SEOUL.lat, SEOUL.lng)
+          const map = new window.kakao.maps.Map(wishMapNode, { center, level: 6 })
+          wishKakaoMapRef.current = map
+          setWishMapReady(true)
+        } catch (e) {
+          console.error('[WishMap] 초기화 실패:', e)
+          setWishMapFailed(true)
+        }
+      })
     })
 
     return () => {

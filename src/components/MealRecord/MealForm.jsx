@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase'
 import { sendNotification, buildFromUser, getSpaceMemberIds } from '../../lib/notify'
 import { useMapEmbedRpc } from '../common/MapEmbedRpcProvider'
 import { embedSearch, embedGeocode } from '../../lib/mapEmbed'
+import { loadKakaoSdk } from '../../lib/kakaoSdk'
 
 // 모바일 여부 — 모바일은 클립보드 paste가 잘 안 되므로 안내 문구 숨김
 const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
@@ -40,7 +41,9 @@ function compressImage(file) {
 
 // ─── Kakao SDK geocoding ──────────────────────────────────────────────────
 async function geocodeKakao(query) {
-  if (!window.kakao?.maps || !query.trim()) return null
+  if (!query.trim()) return null
+  // SDK 는 async 로드 → 준비를 기다린다 (미로드/실패 시 false → 기존과 동일하게 null)
+  if (!(await loadKakaoSdk())) return null
   return new Promise(resolve => {
     window.kakao.maps.load(() => {
       const geocoder = new window.kakao.maps.services.Geocoder()
@@ -57,7 +60,8 @@ async function geocodeKakao(query) {
 
 // ─── Kakao SDK 장소 검색 ──────────────────────────────────────────────────
 async function searchKakaoPlaces(query) {
-  if (!window.kakao?.maps || !query.trim()) return []
+  if (!query.trim()) return []
+  if (!(await loadKakaoSdk())) return []
   return new Promise(resolve => {
     window.kakao.maps.load(() => {
       const ps = new window.kakao.maps.services.Places()

@@ -182,14 +182,22 @@ export function AppProvider({ children }) {
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && currentUser) {
         if (!hasBootedRef.current) {
           hasBootedRef.current = true
-          boot(0, currentUser)
-          // ★ 사용자가 설정에서 알림을 끈 상태(notif_enabled==='false')면 boot에서 재등록 안 함
-          //   — 토글 OFF로 삭제한 토큰이 다음 실행 때 되살아나지 않게.
-          // 웹: prompt:false(granted일 때만 조용히 등록, 자동 프롬프트 없음 — 기존 동작 유지)
-          // 네이티브(iOS): prompt:true — 네이티브는 권한 요청에 제스처 불필요(OS 시스템 프롬프트)
-          if (localStorage.getItem('notif_enabled') !== 'false') {
-            registerFCMToken(currentUser.id, { prompt: isNative() })
-          }
+          // ★ 이 콜백은 GoTrue 의 auth lock 을 잡은 채로 실행된다(signInWithPassword 가 락 안에서 emit).
+          //   여기서 supabase 호출(boot 의 .from(), registerFCMToken 의 .from())을 바로 시작하면
+          //   PostgREST 가 요청 전에 auth.getSession() 으로 같은 락을 다시 잡으려다 데드락에 빠질 수 있다
+          //   — 프로미스가 영영 pending 이라 fetch 타임아웃(AbortController)도 무력하고,
+          //   boot 의 catch/재시도/에러배너에 도달하지 못해 로그인 스피너가 무한히 돈다.
+          //   Supabase 공식 권고대로 콜백 안에서는 React 상태만 만지고, 실제 supabase 호출은 밖으로 defer.
+          setTimeout(() => {
+            boot(0, currentUser)
+            // ★ 사용자가 설정에서 알림을 끈 상태(notif_enabled==='false')면 boot에서 재등록 안 함
+            //   — 토글 OFF로 삭제한 토큰이 다음 실행 때 되살아나지 않게.
+            // 웹: prompt:false(granted일 때만 조용히 등록, 자동 프롬프트 없음 — 기존 동작 유지)
+            // 네이티브(iOS): prompt:true — 네이티브는 권한 요청에 제스처 불필요(OS 시스템 프롬프트)
+            if (localStorage.getItem('notif_enabled') !== 'false') {
+              registerFCMToken(currentUser.id, { prompt: isNative() })
+            }
+          }, 0)
         }
       } else if (event === 'INITIAL_SESSION' && !currentUser) {
         setLoading(false)
@@ -203,6 +211,36 @@ export function AppProvider({ children }) {
     return () => subscription.unsubscribe()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ── 로그인 게이트 워치독 ──────────────────────────────────────────────
+  // App.jsx 는 (authLoading || loading) 동안 전체화면 스피너를 띄우는데, 두 플래그 모두
+  // "정상 경로"에서만 해제된다. supabase-js 초기화나 boot 가 어떤 이유로든 끝나지 않으면
+  // 앱이 스피너에 영구히 갇힌다(= 앱스토어 2.1(a) 리젝 증상). 근본 원인이 무엇이든
+  // 갇히지만은 않도록 강제 이탈 경로를 둔다.
+
+  // 인증 초기화(INITIAL_SESSION emit)가 안 끝나면 → 세션 없음으로 간주하고 로그인 화면으로.
+  // 뒤늦게 세션이 복구되면 onAuthStateChange 가 정상적으로 user 를 채우고 boot 이 돈다.
+  useEffect(() => {
+    if (!authLoading) return
+    const t = setTimeout(() => {
+      console.warn('[Auth] 초기화 8초 초과 — 세션 없음으로 간주하고 로그인 화면 표시')
+      setAuthLoading(false)
+      setLoading(false)
+    }, 8000)
+    return () => clearTimeout(t)
+  }, [authLoading])
+
+  // boot 이 어떤 경로로든 끝나지 않으면 → 빈 상태로 앱 오픈 + 에러 배너(재시도 가능).
+  // 정상적으로는 boot 의 타임아웃/재시도/catch 가 먼저 끝난다(최악 ~20초). 이건 최후의 백스톱.
+  useEffect(() => {
+    if (authLoading || !loading) return
+    const t = setTimeout(() => {
+      console.warn('[boot] 워치독 발동 — 빈 상태로 앱 오픈')
+      setLoadError('연결이 지연되고 있어요')
+      setLoading(false)
+    }, 25000)
+    return () => clearTimeout(t)
+  }, [authLoading, loading])
 
   // Supabase Realtime 구독 — 다른 기기/사용자의 변경사항 실시간 반영
   // spacesChannel: 나가기/참가 후 DB 직접 재조회 방식으로 대체하여 제거
@@ -377,7 +415,19 @@ export function AppProvider({ children }) {
   }, [user?.id])
 
   const MAX_RETRIES = 3
-  const RETRY_DELAYS = [1500, 3000, 5000]
+  const RETRY_DELAYS = [800, 1500, 3000]
+  // boot 쿼리 자체의 상한. supabase.js 의 15초 fetch 타임아웃은 "fetch 가 발사된 뒤"에만 작동하므로,
+  // fetch 이전 단계(auth lock 대기 등)에서 멈추면 무력하다. 그 경우에도 반드시 catch 로 빠져나오게
+  // Promise.race 로 강제 상한을 건다. 최악 소요 = 6+0.8+6+1.5+6 ≈ 20초 → 그 뒤엔 앱이 열린다.
+  const BOOT_TIMEOUT_MS = 6000
+
+  function withTimeout(promise, ms, label) {
+    let timer
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} 시간 초과 (${Math.round(ms / 1000)}초)`)), ms)
+    })
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+  }
 
   // iOS/Android 네이티브(Capacitor) FCM 토큰 등록 — @capacitor-firebase/messaging.
   // APNs→FCM 스위즐링으로 통합 FCM 토큰을 발급받아 기존 send-push(FCM v1) 백엔드를 그대로 재사용.
@@ -528,10 +578,14 @@ export function AppProvider({ children }) {
       // spaces 테이블 직접 조회 대신 space_members 기반으로 명시적 조회.
       // 이렇게 해야 나간 스페이스가 새로고침 후 다시 나타나는 버그를 방지할 수 있음.
       // spaces 테이블 RLS에만 의존하면 정책 설정 상태에 따라 모든 스페이스가 반환될 수 있음.
-      const { data: memberships, error } = await supabase
-        .from('space_members')
-        .select('spaces(*)')
-        .eq('user_id', currentUser?.id)
+      const { data: memberships, error } = await withTimeout(
+        supabase
+          .from('space_members')
+          .select('spaces(*)')
+          .eq('user_id', currentUser?.id),
+        BOOT_TIMEOUT_MS,
+        'spaces 조회'
+      )
 
       if (error) throw new Error(error.message || 'spaces 조회 오류')
 
