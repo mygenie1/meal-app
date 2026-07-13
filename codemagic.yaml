@@ -16,7 +16,16 @@
 #    (App.xcworkspace 는 CocoaPods 프로젝트에만 생기며, 여기엔 존재하지 않음)
 #  - scheme / target 이름은 "App" (확인 완료). 공유 scheme 미커밋이라 xcodebuild 가 자동 생성.
 #  - Windows 에서 SPM 심링크를 못 만들어 CapApp-SPM/Package.swift 에 플러그인 미등록 상태로 커밋됨.
-#    → 반드시 Mac(여기)에서 `npx cap sync ios` 를 실행해 플러그인 3종(messaging/browser/app)을 재등록해야 함.
+#    → 반드시 Mac(여기)에서 `npx cap sync ios` 를 실행해 플러그인 4종을 재등록해야 함:
+#      messaging / browser / app / apple-sign-in(★ Sign in with Apple, 4.8 대응으로 추가)
+#
+# ★ Entitlements (ios/App/App/App.entitlements, pbxproj CODE_SIGN_ENTITLEMENTS 배선 완료):
+#    - com.apple.developer.applesignin = Default  (Sign in with Apple)
+#    - aps-environment = production               (원격 푸시 — 이전엔 entitlements 파일 자체가 없었음)
+#    → 두 capability 모두 프로비저닝 프로파일에 포함돼야 서명이 통과한다. App ID 에는 둘 다
+#      활성화돼 있으나, 기존 프로파일이 capability 활성화 이전에 만들어졌다면 재생성이 필요하다.
+#      서명 실패 시 App Store Connect 에서 com.siktakilgi.app 프로파일을 삭제 → Codemagic 이
+#      ios_signing 블록으로 새로 발급받게 하면 최신 capability 가 반영된다.
 
 workflows:
   ios-release:

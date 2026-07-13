@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sign in with Apple (앱스토어 4.8 — 소셜 로그인 제공 시 개인정보 보호 대안 로그인 필수).
+	     "Default" = 표준 Sign in with Apple. 이게 없으면 네이티브 ASAuthorization 시트가 뜨지 않는다.
+	     App ID(com.siktakilgi.app)에 Sign in with Apple capability 활성화 완료(P0). -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+
+	<!-- 원격 푸시(APNs → FCM 스위즐링). App Store 배포 프로파일은 production 환경으로 서명된다.
+	     ※ 이 앱은 지금까지 entitlements 파일 자체가 없어 aps-environment 없이 서명돼 왔다
+	       (= iOS 푸시가 동작하지 않는 상태). Apple 로그인 때문에 프로파일을 어차피 갱신하므로
+	       이번에 함께 배선한다. -->
+	<key>aps-environment</key>
+	<string>production</string>
+</dict>
+</plist>
