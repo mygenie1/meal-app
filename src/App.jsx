@@ -27,6 +27,7 @@ import AdminBannersPage from './pages/admin/AdminBannersPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
 import AccountDeletionPage from './pages/AccountDeletionPage'
+import DebugAppleOverlay from './components/common/DebugAppleOverlay' // DEBUG-APPLE
 
 function OfflineBanner() {
   return (
@@ -479,6 +480,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <GAListener />
+      <DebugAppleOverlay /> {/* DEBUG-APPLE — 로그인 전 화면에서도 보여야 하므로 라우팅 밖에 둠 */}
       <RootRouter />
     </BrowserRouter>
   )
