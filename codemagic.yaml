@@ -57,14 +57,22 @@ workflows:
       groups:
         - siktakilgi_env
 
-      # ★ 표준 자동 서명 (declarative) — Codemagic 이 UI(Code signing identities)에서
-      #   생성한 Apple Distribution 인증서(개인 키 포함)와 App Store 프로파일을 자동으로
-      #   가져와 keychain 에 넣어줌. 스크립트로 fetch-signing-files/keychain 을 직접 돌릴 필요 없음.
-      #   (첫 빌드 실패 원인: 수동 fetch-signing-files 는 개인 키가 없어
-      #    "Cannot save Signing Certificates without certificate private key" → 이 블록으로 해결)
+      # ★ 수동 서명 (manual reference) — Codemagic UI(Code signing identities)에
+      #   업로드/Fetch 해둔 특정 인증서·프로파일을 reference name 으로 고정 지정.
+      #   자동(declarative) 모드(distribution_type + bundle_identifier)는 빌드마다
+      #   App Store Connect API 로 프로파일을 자체 조회/발급하는데, capability(Sign in
+      #   with Apple 등) 갱신 전에 만들어진 낡은 프로파일을 계속 재사용하는 문제가 있어
+      #   수동 참조로 전환함. ★ provisioning_profiles/certificates 는 distribution_type/
+      #   bundle_identifier 와 상호 배타적 — 두 방식을 섞으면 Codemagic 이 설정을 거부함
+      #   (공식 문서: https://docs.codemagic.io/yaml-code-signing/signing-ios/).
+      #   - provisioning_profiles: siktakilgi_st (com.siktakilgi.app, Sign in with Apple
+      #     + Push + In-App Purchase capability 포함, Codemagic UI 에서 Fetch 완료)
+      #   - certificates: codemagic_st (Apple Distribution, 개인 키 포함, 기존 빌드 서명 성공 실적)
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.siktakilgi.app
+        provisioning_profiles:
+          - siktakilgi_st
+        certificates:
+          - codemagic_st
       xcode: latest
       cocoapods: default   # SPM 프로젝트라 실제로 pod 은 안 쓰지만, 기본값 유지(무해)
       node: 22             # Capacitor CLI 가 NodeJS >=22.0.0 요구 (node 20 이면 cap sync 거부)
