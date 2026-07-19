@@ -139,6 +139,20 @@ workflows:
             --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
 
+      # 6) ★ 검증 전용(진단) — App.entitlements/pbxproj/프로바이저닝 프로파일은 소스 단계일 뿐,
+      #    실제로 서명이 끝난 IPA 바이너리에 com.apple.developer.applesignin 이 들어갔는지는
+      #    보장하지 않는다. export/재서명 단계에서 탈락했을 가능성을 로그로 직접 확인한다.
+      #    빌드를 절대 실패시키지 않는 진단 전용 스텝 — 전부 || true 로 감싸 publishing 을 막지 않는다.
+      - name: Verify signed entitlements
+        script: |
+          IPA=$(find build/ios/ipa -name "*.ipa" | head -1)
+          mkdir -p /tmp/ipa && unzip -q "$IPA" -d /tmp/ipa || true
+          APP=$(find /tmp/ipa/Payload -name "*.app" | head -1)
+          echo "=== codesign entitlements (실제 서명된 값) ==="
+          codesign -d --entitlements :- "$APP" || true
+          echo "=== embedded provisioning profile entitlements ==="
+          security cms -D -i "$APP/embedded.mobileprovision" | plutil -p - | grep -A3 applesignin || true
+
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
