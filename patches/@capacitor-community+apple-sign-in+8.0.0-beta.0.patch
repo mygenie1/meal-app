@@ -1,0 +1,57 @@
+diff --git a/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift b/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift
+index f53087c..740990a 100644
+--- a/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift
++++ b/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift
+@@ -10,6 +10,13 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin {
+         CAPPluginMethod(name: "authorize", returnType: CAPPluginReturnPromise),
+     ]
+ 
++    // ★ PATCH(siktakilgi): ASAuthorizationController를 authorize() 지역 변수로만 두면
++    //   performRequests() 직후 함수가 리턴할 때 ARC가 컨트롤러를 회수할 수 있다.
++    //   그 경우 시스템 인증(Apple ID/FaceID)은 성공하는데 델리게이트는
++    //   didCompleteWithError(canceled, code 1001)를 받는다 — 인스턴스 프로퍼티로
++    //   강한 참조를 유지해서 콜백이 끝날 때까지 살아있게 한다.
++    private var authorizationController: ASAuthorizationController?
++
+     @objc func authorize(_ call: CAPPluginCall) {
+         let appleIDProvider = ASAuthorizationAppleIDProvider()
+         let request = appleIDProvider.createRequest()
+@@ -22,9 +29,11 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin {
+ 
+         self.bridge?.saveCall(call)
+ 
+-        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+-        authorizationController.delegate = self
+-        authorizationController.performRequests()
++        let controller = ASAuthorizationController(authorizationRequests: [request])
++        controller.delegate = self
++        controller.presentationContextProvider = self
++        self.authorizationController = controller
++        controller.performRequests()
+     }
+ 
+     func getRequestedScopes(from call: CAPPluginCall) -> [ASAuthorization.Scope]? {
+@@ -71,6 +80,7 @@ extension SignInWithApple: ASAuthorizationControllerDelegate {
+ 
+         call.resolve(result)
+         self.bridge?.releaseCall(call)
++        self.authorizationController = nil // ★ PATCH(siktakilgi): 콜백 완료 후 참조 정리
+     }
+ 
+     public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+@@ -81,5 +91,15 @@ extension SignInWithApple: ASAuthorizationControllerDelegate {
+         }
+         call.reject(error.localizedDescription)
+         self.bridge?.releaseCall(call)
++        self.authorizationController = nil // ★ PATCH(siktakilgi): 콜백 완료 후 참조 정리
++    }
++}
++
++// ★ PATCH(siktakilgi): presentationContextProvider 미설정 상태였음 — Apple 권장대로
++//   프레젠테이션 앵커(윈도우)를 명시적으로 제공해서 멀티씬/WebView 환경에서의
++//   불안정성을 줄인다. Capacitor 브리지의 루트 뷰컨트롤러 윈도우를 사용.
++extension SignInWithApple: ASAuthorizationControllerPresentationContextProviding {
++    public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
++        return self.bridge?.viewController?.view.window ?? ASPresentationAnchor()
+     }
+ }
