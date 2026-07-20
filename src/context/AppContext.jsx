@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { requestFCMToken, onFCMMessage } from '../lib/firebase'
 import { isNative } from '../lib/platform'
 import { logApple } from '../lib/debugAppleLog' // DEBUG-APPLE
+import { isEmailConflictError, EMAIL_CONFLICT_MESSAGE } from '../lib/oauthConflict'
 
 const AppContext = createContext(null)
 
@@ -11,6 +12,21 @@ const SPACE_KEY = 'mealapp_current_space'
 // 알림 무한 스크롤: 최초 4개, 이후 묶음 10개씩
 const NOTIF_PAGE_INITIAL = 4
 const NOTIF_PAGE_SIZE = 10
+
+// ── Apple 로그인 nonce ────────────────────────────────────────────────
+// ★ 플러그인에는 sha256 해시된 nonce 를, Supabase 에는 원본 nonce 를 넘겨야 한다.
+//   애플이 id_token 안에 sha256(nonce) 를 넣어 서명하고, Supabase 가 우리가 준 원본을
+//   해시해서 대조하기 때문. 둘을 바꿔 넣으면 검증에 실패한다.
+function randomNonce(bytes = 32) {
+  const buf = new Uint8Array(bytes)
+  crypto.getRandomValues(buf)
+  return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function sha256Hex(str) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str))
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+}
 
 // 이메일 계정의 카카오 CDN URL은 빈 문자열로 반환
 function getUserAvatarUrl(user) {
@@ -830,37 +846,79 @@ export function AppProvider({ children }) {
   }
 
   // Apple 로그인 (iOS 네이티브 전용 — 앱스토어 4.8 대응)
-  // ★ 웹 OAuth 방식 — 카카오 signIn()과 완전히 동일한 구조(브라우저 + 커스텀 스킴 딥링크 + setSession).
-  //   네이티브 ASAuthorization 시트(@capacitor-community/apple-sign-in)가 Capacitor 8 + WKWebView
-  //   환경에서 AKAuthenticationError -7003 / AuthorizationError 1001로 계속 실패해(entitlement·
-  //   프로파일·서명·nonce·플러그인 전부 실측 정상 확인됨) 웹 OAuth로 우회.
-  //   Apple Services ID(com.siktakilgi.web) + Supabase Apple provider(Client IDs=
-  //   com.siktakilgi.app,com.siktakilgi.web / Secret Key / Return URL) 콘솔 설정 완료.
-  // 웹/안드로이드는 isNative()=false 라 이 함수가 아무 것도 하지 않는다.
+  // ★ 카카오와 경로가 다르다: 브라우저·커스텀 스킴 딥링크·setSession 이 전부 불필요.
+  //   네이티브 ASAuthorization 시트가 준 identityToken 을 Supabase 에 바로 넘기면
+  //   세션이 생기고 onAuthStateChange(SIGNED_IN) 이 발화 → 기존 boot 경로를 그대로 탄다.
+  //   (한때 웹 OAuth로 우회했었으나 — patches/ 의 presentationAnchor 폴백이 빈 UIWindow를
+  //   반환해 시스템 인증은 성공해도 델리게이트가 1001을 받던 버그가 원인으로 확인돼 패치 수정 후 네이티브로 복귀)
+  // 웹/안드로이드는 isNative()=false 라 이 함수가 아무 것도 하지 않는다(플러그인 import 도 안 됨).
   async function signInApple() {
     if (!isNative()) return { ok: false, reason: 'not-native' }
-    logApple('1. signInWithOAuth 호출') // DEBUG-APPLE
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'apple',
-      options: {
-        redirectTo: 'com.siktakilgi.app://login-callback',
-        skipBrowserRedirect: true,
-      },
-    })
-    if (error) {
-      logApple(`CATCH: signInWithOAuth error=${error.message}`) // DEBUG-APPLE
-      console.error('[Apple] 로그인 오류(native):', error)
-      return { ok: false, reason: 'supabase-error', message: error.message }
+    try {
+      logApple('1. authorize 호출 직전') // DEBUG-APPLE
+      // 동적 import — 웹 번들에 네이티브 플러그인이 섞이지 않게 (firebase/messaging 패턴과 동일)
+      const { SignInWithApple } = await import('@capacitor-community/apple-sign-in')
+
+      const rawNonce = randomNonce()
+      const hashedNonce = await sha256Hex(rawNonce)
+
+      const result = await SignInWithApple.authorize({
+        // 네이티브 시트에선 clientId/redirectURI 를 쓰지 않지만 타입상 필수 — 웹(P6) 기준값을 넣어둔다
+        clientId: 'com.siktakilgi.web',
+        redirectURI: 'https://jsesigubkqnddcjqusjv.supabase.co/auth/v1/callback',
+        scopes: 'name email',
+        nonce: hashedNonce, // ★ 플러그인엔 해시된 nonce
+      })
+
+      const idToken = result?.response?.identityToken
+      logApple(`2. authorize 반환 / identityToken=${idToken ? idToken.slice(0, 20) + '...' : 'NULL'}`) // DEBUG-APPLE
+      if (!idToken) {
+        console.warn('[Apple] identityToken 없음 — 로그인 화면 유지')
+        return { ok: false, reason: 'no-token' }
+      }
+
+      logApple('3. signInWithIdToken 호출 직전') // DEBUG-APPLE
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: idToken,
+        nonce: rawNonce, // ★ Supabase 엔 원본 nonce
+      })
+      logApple(
+        error
+          ? `4. signInWithIdToken 반환 / error=${error.message}`
+          : `4. signInWithIdToken 반환 / user.id=${data?.session?.user?.id || 'NULL'}`
+      ) // DEBUG-APPLE
+      if (error) {
+        console.error('[Apple] signInWithIdToken 실패:', error)
+        // 카카오 등 다른 provider로 이미 가입된 이메일이면 Supabase 가 자동 계정 연결을 거부한다 —
+        // App.jsx appUrlOpen(카카오 웹 OAuth 경로)과 동일한 판정 로직을 공용 모듈로 공유
+        if (isEmailConflictError(error.message)) {
+          setOauthConflictMessage(EMAIL_CONFLICT_MESSAGE)
+          return { ok: false, reason: 'email-conflict', message: error.message }
+        }
+        return { ok: false, reason: 'supabase-error', message: error.message }
+      }
+
+      // ★ 애플은 이름을 "최초 1회"만 돌려준다 — 여기서 저장하지 않으면 영영 복구할 수 없다.
+      //   재로그인 시엔 null 이 오므로 사용자가 나중에 바꾼 닉네임을 덮어쓰지 않는다.
+      const given = (result.response.givenName || '').trim()
+      const family = (result.response.familyName || '').trim()
+      const name = `${family}${given}`.trim()
+      if (name) {
+        logApple('5. updateUser 호출 직전') // DEBUG-APPLE
+        const { error: upErr } = await supabase.auth.updateUser({ data: { name } })
+        logApple(upErr ? `5. updateUser 반환 / error=${upErr.message}` : '5. updateUser 반환 / 성공') // DEBUG-APPLE
+        if (upErr) console.error('[Apple] 이름 저장 실패:', upErr)
+      }
+
+      return { ok: true }
+    } catch (e) {
+      // 사용자가 시트를 취소한 경우가 대부분 — 조용히 로그인 화면 유지(무한 루프 방지).
+      // 이메일/카카오 로그인이 그대로 폴백이 된다.
+      logApple(`CATCH: ${e?.name || ''} ${e?.message || e}`) // DEBUG-APPLE
+      console.warn('[Apple] 로그인 취소/오류:', e?.message || e)
+      return { ok: false, reason: 'cancelled' }
     }
-    if (data?.url) {
-      logApple('2. data.url 수신 / Browser.open') // DEBUG-APPLE
-      const { Browser } = await import('@capacitor/browser')
-      await Browser.open({ url: data.url })
-    }
-    // 이름/이메일은 Apple이 최초 로그인 시 서버로 보낸 user 파라미터를 Supabase가
-    // user_metadata(name/full_name)에 자동 반영 — 별도 updateUser 불필요.
-    // 표시 쪽은 이미 user.user_metadata?.name || user.user_metadata?.full_name 폴백 보유.
-    return { ok: true }
   }
 
   // 로그아웃

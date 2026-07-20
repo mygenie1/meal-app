@@ -1,10 +1,16 @@
 diff --git a/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift b/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift
-index f53087c..740990a 100644
+index f53087c..fd781f7 100644
 --- a/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift
 +++ b/node_modules/@capacitor-community/apple-sign-in/ios/Sources/SignInWithApple/Plugin.swift
-@@ -10,6 +10,13 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin {
+@@ -1,4 +1,5 @@
+ import Foundation
++import UIKit
+ import Capacitor
+ import AuthenticationServices
+ 
+@@ -10,6 +11,13 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin {
          CAPPluginMethod(name: "authorize", returnType: CAPPluginReturnPromise),
-     ]
+     ] 
  
 +    // ★ PATCH(siktakilgi): ASAuthorizationController를 authorize() 지역 변수로만 두면
 +    //   performRequests() 직후 함수가 리턴할 때 ARC가 컨트롤러를 회수할 수 있다.
@@ -16,7 +22,7 @@ index f53087c..740990a 100644
      @objc func authorize(_ call: CAPPluginCall) {
          let appleIDProvider = ASAuthorizationAppleIDProvider()
          let request = appleIDProvider.createRequest()
-@@ -22,9 +29,11 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin {
+@@ -22,9 +30,11 @@ public class SignInWithApple: CAPPlugin, CAPBridgedPlugin {
  
          self.bridge?.saveCall(call)
  
@@ -31,7 +37,7 @@ index f53087c..740990a 100644
      }
  
      func getRequestedScopes(from call: CAPPluginCall) -> [ASAuthorization.Scope]? {
-@@ -71,6 +80,7 @@ extension SignInWithApple: ASAuthorizationControllerDelegate {
+@@ -71,6 +81,7 @@ extension SignInWithApple: ASAuthorizationControllerDelegate {
  
          call.resolve(result)
          self.bridge?.releaseCall(call)
@@ -39,7 +45,7 @@ index f53087c..740990a 100644
      }
  
      public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-@@ -81,5 +91,15 @@ extension SignInWithApple: ASAuthorizationControllerDelegate {
+@@ -81,5 +92,40 @@ extension SignInWithApple: ASAuthorizationControllerDelegate {
          }
          call.reject(error.localizedDescription)
          self.bridge?.releaseCall(call)
@@ -52,6 +58,31 @@ index f53087c..740990a 100644
 +//   불안정성을 줄인다. Capacitor 브리지의 루트 뷰컨트롤러 윈도우를 사용.
 +extension SignInWithApple: ASAuthorizationControllerPresentationContextProviding {
 +    public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-+        return self.bridge?.viewController?.view.window ?? ASPresentationAnchor()
++        if let window = self.bridge?.viewController?.view.window {
++            return window
++        }
++        // ★ PATCH(siktakilgi): view.window 가 nil일 때 ASPresentationAnchor()(빈 UIWindow)로
++        //   폴백하면 어떤 scene에도 속하지 않은 유령 윈도우가 생긴다. 시스템 인증(AuthKit)은
++        //   내부적으로 자격을 성공적으로 준비했다고 로그를 남기지만(맥 Console "Successfully
++        //   created"), 그 유령 윈도우엔 실제로 표시할 화면이 없어 사용자가 상호작용할 수
++        //   없고 결국 델리게이트가 1001("작업을 완료할 수 없음")을 받는다.
++        //   → 연결된 scene들 중 foreground-active 상태의 key window를 직접 찾아 진짜
++        //   앵커를 반환한다.
++        if let activeWindow = UIApplication.shared.connectedScenes
++            .compactMap({ $0 as? UIWindowScene })
++            .first(where: { $0.activationState == .foregroundActive })?
++            .windows
++            .first(where: { $0.isKeyWindow }) {
++            return activeWindow
++        }
++        // 최후의 폴백: foreground-active scene을 못 찾았어도, 빈 UIWindow보다는
++        // 연결된 scene 중 실제로 존재하는 윈도우를 쓰는 편이 안전하다.
++        if let anyWindow = UIApplication.shared.connectedScenes
++            .compactMap({ $0 as? UIWindowScene })
++            .flatMap({ $0.windows })
++            .first {
++            return anyWindow
++        }
++        return ASPresentationAnchor()
      }
  }
