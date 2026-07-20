@@ -103,8 +103,15 @@ function UpdateBanner({ onReload }) {
   )
 }
 
+// 카카오 등 다른 provider로 이미 가입된 이메일에 애플 등 새 provider로 로그인 시도하면
+// Supabase 가 자동 계정 연결(auth-identity-linking)을 거부하며 콜백에 error/error_description을
+// 실어 돌려준다 — 정확한 문구/코드가 버전마다 달라 폭넓게 키워드로 매칭한다.
+// (오탐 시엔 안내 문구가 한 번 더 보이는 정도라 안전 — 진짜 취소는 애초에 error 파라미터 없이 옴)
+const EMAIL_CONFLICT_ERROR_RE = /email|already|multiple.?accounts|identity_already_exists|linking/i
+const EMAIL_CONFLICT_MESSAGE = '이미 가입된 이메일이에요. 기존에 사용하던 방식(카카오 등)으로 로그인해 주세요.'
+
 function AppContent() {
-  const { user, authLoading, loading, loadError, retryAttempt, reload, joinByCode } = useApp()
+  const { user, authLoading, loading, loadError, retryAttempt, reload, joinByCode, setOauthConflictMessage } = useApp()
   const navigate = useNavigate()
   const location = useLocation()
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
@@ -279,6 +286,10 @@ function AppContent() {
           // ★ DEBUG-APPLE: 이전엔 이 케이스가 침묵 처리됐음 — 원인 진단을 위해 콘솔/오버레이에 노출
           console.error('[OAuth-native] OAuth 에러 콜백:', oauthError)
           logApple(`CATCH: OAuth error=${oauthError}`) // DEBUG-APPLE
+          // 이메일 중복/계정 연결 충돌로 보이면 사용자에게 안내 — 그 외(진짜 서버 오류 등)는 기존처럼 조용히 유지
+          if (EMAIL_CONFLICT_ERROR_RE.test(oauthError)) {
+            setOauthConflictMessage(EMAIL_CONFLICT_MESSAGE)
+          }
         } else {
           // 취소/에러 — 조용히 로그인 화면 유지 (무한 루프 방지). 이메일 로그인이 폴백.
           console.warn('[OAuth-native] 토큰 없음(취소/에러), 로그인 화면 유지')

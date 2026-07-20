@@ -140,6 +140,9 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const hasBootedRef = useRef(false)
+  // 카카오 등 다른 provider로 이미 가입된 이메일에 애플 등으로 로그인 시도 →
+  // Supabase 가 자동 계정 연결을 거부한 경우의 사용자 안내 문구 (App.jsx appUrlOpen 이 설정, LoginPage 가 토스트로 표시)
+  const [oauthConflictMessage, setOauthConflictMessage] = useState('')
 
   const [spaces, setSpaces] = useState([])
   const [currentSpaceId, setCurrentSpaceId] = useState(
@@ -1577,6 +1580,8 @@ export function AppProvider({ children }) {
       value={{
         user,
         authLoading,
+        oauthConflictMessage,
+        setOauthConflictMessage,
         signIn,
         signInApple,
         signOut,

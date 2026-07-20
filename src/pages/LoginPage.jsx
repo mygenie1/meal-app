@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import { supabase } from '../lib/supabase'
 import { isNative } from '../lib/platform'
@@ -59,7 +59,7 @@ const FEATURES = [
 ]
 
 export default function LoginPage() {
-  const { signIn, signInApple } = useApp()
+  const { signIn, signInApple, oauthConflictMessage, setOauthConflictMessage } = useApp()
   const [appleLoading, setAppleLoading] = useState(false)
   const [authTab, setAuthTab] = useState('kakao')
   const [emailMode, setEmailMode] = useState('login')
@@ -161,8 +161,21 @@ export default function LoginPage() {
     document.getElementById('start')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  // 카카오로 이미 가입된 이메일에 애플로 로그인 시도 → 계정 연결 충돌 안내 토스트 자동 소거
+  useEffect(() => {
+    if (!oauthConflictMessage) return
+    const t = setTimeout(() => setOauthConflictMessage(''), 4500)
+    return () => clearTimeout(t)
+  }, [oauthConflictMessage, setOauthConflictMessage])
+
   return (
     <div className="min-h-svh bg-cream-50">
+      {/* 계정 연결 충돌 토스트 — 탭 상태와 무관하게 항상 노출 (기존 토스트 관례: RecipeDetailModal/SpaceManager) */}
+      {oauthConflictMessage && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-10 z-[95] px-5 py-3 rounded-2xl bg-warm-dark text-white text-sm font-medium shadow-lg text-center max-w-[85%] pointer-events-none">
+          {oauthConflictMessage}
+        </div>
+      )}
       <div className="w-full pb-12">
         {/* ── 히어로 (모바일: 세로 적층 / 데스크탑: 좌우 분할) ── */}
         <header className="px-6" style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top))' }}>
