@@ -27,8 +27,6 @@ import AdminBannersPage from './pages/admin/AdminBannersPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
 import AccountDeletionPage from './pages/AccountDeletionPage'
-import DebugAppleOverlay from './components/common/DebugAppleOverlay' // DEBUG-APPLE
-import { logApple } from './lib/debugAppleLog' // DEBUG-APPLE
 import { isEmailConflictError, EMAIL_CONFLICT_MESSAGE } from './lib/oauthConflict'
 
 function OfflineBanner() {
@@ -246,23 +244,20 @@ function AppContent() {
   // 카카오/애플 OAuth 딥링크 복귀 (네이티브): 커스텀 스킴(com.siktakilgi.app://login-callback)으로
   // 302된 해시 토큰(#access_token&refresh_token)을 파싱 → setSession → onAuthStateChange(SIGNED_IN)
   // → 기존 boot. 웹은 detectSessionInUrl이 처리하므로 이 리스너는 네이티브에서만 등록.
-  // ★ 카카오/애플 공용 리스너(둘 다 이 스킴으로 옴). access_token/refresh_token 성공 경로는
-  //   기존과 100% 동일 — 아래는 DEBUG-APPLE 진단 로그 + 에러 노출만 추가(카카오 무변경).
+  // ★ 카카오/애플 공용 리스너(둘 다 이 스킴으로 옴).
   useEffect(() => {
     if (!isNative()) return
     let handle
     import('@capacitor/app').then(({ App: CapApp }) => {
       CapApp.addListener('appUrlOpen', async ({ url }) => {
         if (!url || !url.startsWith('com.siktakilgi.app://')) return
-        logApple(`3. 콜백 수신: ${url.slice(0, 100)}`) // DEBUG-APPLE — 카카오 콜백도 같이 찍힘(진단용, 임시)
         // in-app 브라우저 닫기 (실패해도 무시)
         try {
           const { Browser } = await import('@capacitor/browser')
           await Browser.close()
         } catch { /* ignore */ }
         // implicit flow: 토큰이 URL 해시로 실려 옴 (#access_token=...&refresh_token=...)
-        // ★ DEBUG-APPLE: 에러(error/error_description)도 fragment 또는 query에 같은 방식으로 실려서
-        //   돌아온다 — 기존엔 이걸 전혀 안 읽고 else 블록에서 console.warn만 하고 조용히 버렸음.
+        // 에러(error/error_description)도 fragment 또는 query에 같은 방식으로 실려서 돌아온다.
         const fragParams = new URLSearchParams(url.split('#')[1] || '')
         const queryParams = new URLSearchParams(url.split('#')[0].split('?')[1] || '')
         const access_token = fragParams.get('access_token')
@@ -270,16 +265,11 @@ function AppContent() {
         const oauthError =
           fragParams.get('error_description') || fragParams.get('error') ||
           queryParams.get('error_description') || queryParams.get('error')
-        const allParamKeys = [...new Set([...fragParams.keys(), ...queryParams.keys()])]
-        logApple(`3a. token 있음? ${access_token ? 'Y' : 'N'} / error: ${oauthError || '(없음)'}`) // DEBUG-APPLE
-        logApple(`3b. 파라미터 키: ${allParamKeys.join(', ') || '(없음)'}`) // DEBUG-APPLE
         if (access_token && refresh_token) {
           const { error } = await supabase.auth.setSession({ access_token, refresh_token })
           if (error) console.error('[OAuth-native] setSession 실패:', error)
         } else if (oauthError) {
-          // ★ DEBUG-APPLE: 이전엔 이 케이스가 침묵 처리됐음 — 원인 진단을 위해 콘솔/오버레이에 노출
           console.error('[OAuth-native] OAuth 에러 콜백:', oauthError)
-          logApple(`CATCH: OAuth error=${oauthError}`) // DEBUG-APPLE
           // 이메일 중복/계정 연결 충돌로 보이면 사용자에게 안내 — 그 외(진짜 서버 오류 등)는 기존처럼 조용히 유지
           // (오탐 시엔 안내 문구가 한 번 더 보이는 정도라 안전 — 진짜 취소는 애초에 error 파라미터 없이 옴)
           if (isEmailConflictError(oauthError)) {
@@ -503,7 +493,6 @@ export default function App() {
   return (
     <BrowserRouter>
       <GAListener />
-      <DebugAppleOverlay /> {/* DEBUG-APPLE — 로그인 전 화면에서도 보여야 하므로 라우팅 밖에 둠 */}
       <RootRouter />
     </BrowserRouter>
   )

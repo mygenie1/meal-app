@@ -2,7 +2,6 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { requestFCMToken, onFCMMessage } from '../lib/firebase'
 import { isNative } from '../lib/platform'
-import { logApple } from '../lib/debugAppleLog' // DEBUG-APPLE
 import { isEmailConflictError, EMAIL_CONFLICT_MESSAGE } from '../lib/oauthConflict'
 
 const AppContext = createContext(null)
@@ -196,7 +195,6 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const currentUser = session?.user ?? null
-      logApple(`onAuthStateChange: event=${event}, user=${currentUser?.id || 'null'}`) // DEBUG-APPLE
       setUser(currentUser)
       setAuthLoading(false)
 
@@ -245,7 +243,6 @@ export function AppProvider({ children }) {
     if (!authLoading) return
     const t = setTimeout(() => {
       console.warn('[Auth] 초기화 8초 초과 — 세션 없음으로 간주하고 로그인 화면 표시')
-      logApple('[Auth] 초기화 8초 초과 — 세션 없음으로 간주') // DEBUG-APPLE
       setAuthLoading(false)
       setLoading(false)
     }, 8000)
@@ -258,7 +255,6 @@ export function AppProvider({ children }) {
     if (authLoading || !loading) return
     const t = setTimeout(() => {
       console.warn('[boot] 워치독 발동 — 빈 상태로 앱 오픈')
-      logApple('[boot] 워치독 발동 — 빈 상태로 앱 오픈') // DEBUG-APPLE
       setLoadError('연결이 지연되고 있어요')
       setLoading(false)
     }, 25000)
@@ -855,7 +851,6 @@ export function AppProvider({ children }) {
   async function signInApple() {
     if (!isNative()) return { ok: false, reason: 'not-native' }
     try {
-      logApple('1. authorize 호출 직전') // DEBUG-APPLE
       // 동적 import — 웹 번들에 네이티브 플러그인이 섞이지 않게 (firebase/messaging 패턴과 동일)
       const { SignInWithApple } = await import('@capacitor-community/apple-sign-in')
 
@@ -871,23 +866,16 @@ export function AppProvider({ children }) {
       })
 
       const idToken = result?.response?.identityToken
-      logApple(`2. authorize 반환 / identityToken=${idToken ? idToken.slice(0, 20) + '...' : 'NULL'}`) // DEBUG-APPLE
       if (!idToken) {
         console.warn('[Apple] identityToken 없음 — 로그인 화면 유지')
         return { ok: false, reason: 'no-token' }
       }
 
-      logApple('3. signInWithIdToken 호출 직전') // DEBUG-APPLE
-      const { data, error } = await supabase.auth.signInWithIdToken({
+      const { error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: idToken,
         nonce: rawNonce, // ★ Supabase 엔 원본 nonce
       })
-      logApple(
-        error
-          ? `4. signInWithIdToken 반환 / error=${error.message}`
-          : `4. signInWithIdToken 반환 / user.id=${data?.session?.user?.id || 'NULL'}`
-      ) // DEBUG-APPLE
       if (error) {
         console.error('[Apple] signInWithIdToken 실패:', error)
         // 카카오 등 다른 provider로 이미 가입된 이메일이면 Supabase 가 자동 계정 연결을 거부한다 —
@@ -905,9 +893,7 @@ export function AppProvider({ children }) {
       const family = (result.response.familyName || '').trim()
       const name = `${family}${given}`.trim()
       if (name) {
-        logApple('5. updateUser 호출 직전') // DEBUG-APPLE
         const { error: upErr } = await supabase.auth.updateUser({ data: { name } })
-        logApple(upErr ? `5. updateUser 반환 / error=${upErr.message}` : '5. updateUser 반환 / 성공') // DEBUG-APPLE
         if (upErr) console.error('[Apple] 이름 저장 실패:', upErr)
       }
 
@@ -915,7 +901,6 @@ export function AppProvider({ children }) {
     } catch (e) {
       // 사용자가 시트를 취소한 경우가 대부분 — 조용히 로그인 화면 유지(무한 루프 방지).
       // 이메일/카카오 로그인이 그대로 폴백이 된다.
-      logApple(`CATCH: ${e?.name || ''} ${e?.message || e}`) // DEBUG-APPLE
       console.warn('[Apple] 로그인 취소/오류:', e?.message || e)
       return { ok: false, reason: 'cancelled' }
     }
